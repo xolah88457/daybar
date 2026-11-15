@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "countdown": {
+    "startDate": "2026-09-09",
+    "endDate": "2027-05-24",
+    "title": "End of University"
+  },
+  "habits": {
+    "startDate": "2026-10-30",
+    "endDate": "",
+    "title": "Daily Tasks",
+    "logId": "Daily_Tasks",
+    "tasks": [
+      "Coursework",
+      "Live Trading",
+      "Trade Review",
+      "Apostles work"
+    ],
+    "archivedTasks": [],
+    "dayCompleteMin": 1,
+    "focusThresholds": {}
+  },
+  "focus": {
+    "title": "Focus",
+    "focusOptions": [
+      25,
+      50
+    ],
+    "breakOptions": [
+      5,
+      10
+    ],
+    "longBreakOptions": [
+      15,
+      30
+    ],
+    "blockMinutes": 25,
+    "alerts": true
+  },
+  "sleep": {
+    "title": "Time",
+    "awakeHours": 16,
+    "sleepHours": 8,
+    "targetWake": "08:00",
+    "targetBed": "",
+    "stepMinutes": 15,
+    "averageDays": 7,
+    "bedtimeAlerts": true,
+    "routineMinutes": 120,
+    "noPhoneMinutes": 60
+  },
+  "appearance": {
+    "background": "#0d1117",
+    "text": "#ffffff",
+    "green": "#39d353",
+    "blue": "#58a6ff",
+    "red": "#ff5c5c",
+    "orange": "#ff9f43",
+    "yellow": "#f2cc60",
+    "emptyOpacity": 0.05,
+    "minDoneOpacity": 0.3,
+    "futureOpacity": 0.12,
+    "rows": 7,
+    "cellSize": 10,
+    "gap": 2,
+    "radius": 2
+  }
+}

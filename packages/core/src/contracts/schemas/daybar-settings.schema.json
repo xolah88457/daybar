@@ -1,0 +1,450 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "default": 1,
+      "type": "number",
+      "const": 1
+    },
+    "countdown": {
+      "default": {
+        "startDate": "2026-09-09",
+        "endDate": "2027-05-24",
+        "title": "End of University"
+      },
+      "type": "object",
+      "properties": {
+        "startDate": {
+          "default": "2026-09-09",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "endDate": {
+          "default": "2027-05-24",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "title": {
+          "default": "End of University",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "startDate",
+        "endDate",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "habits": {
+      "default": {
+        "startDate": "2026-10-30",
+        "endDate": "",
+        "title": "Daily Tasks",
+        "logId": "Daily_Tasks",
+        "tasks": [
+          "Coursework",
+          "Live Trading",
+          "Trade Review",
+          "Apostles work"
+        ],
+        "archivedTasks": [],
+        "dayCompleteMin": 1,
+        "focusThresholds": {}
+      },
+      "type": "object",
+      "properties": {
+        "startDate": {
+          "default": "2026-10-30",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "endDate": {
+          "default": "",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            {
+              "type": "string",
+              "const": ""
+            }
+          ]
+        },
+        "title": {
+          "default": "Daily Tasks",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "logId": {
+          "default": "Daily_Tasks",
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_]+$"
+        },
+        "tasks": {
+          "default": [
+            "Coursework",
+            "Live Trading",
+            "Trade Review",
+            "Apostles work"
+          ],
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "archivedTasks": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "dayCompleteMin": {
+          "default": 1,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "focusThresholds": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          }
+        }
+      },
+      "required": [
+        "startDate",
+        "endDate",
+        "title",
+        "logId",
+        "tasks",
+        "archivedTasks",
+        "dayCompleteMin",
+        "focusThresholds"
+      ],
+      "additionalProperties": false
+    },
+    "focus": {
+      "default": {
+        "title": "Focus",
+        "focusOptions": [
+          25,
+          50
+        ],
+        "breakOptions": [
+          5,
+          10
+        ],
+        "longBreakOptions": [
+          15,
+          30
+        ],
+        "blockMinutes": 25,
+        "alerts": true
+      },
+      "type": "object",
+      "properties": {
+        "title": {
+          "default": "Focus",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "focusOptions": {
+          "default": [
+            25,
+            50
+          ],
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 240
+          }
+        },
+        "breakOptions": {
+          "default": [
+            5,
+            10
+          ],
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 240
+          }
+        },
+        "longBreakOptions": {
+          "default": [
+            15,
+            30
+          ],
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 240
+          }
+        },
+        "blockMinutes": {
+          "default": 25,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 240
+        },
+        "alerts": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "title",
+        "focusOptions",
+        "breakOptions",
+        "longBreakOptions",
+        "blockMinutes",
+        "alerts"
+      ],
+      "additionalProperties": false
+    },
+    "sleep": {
+      "default": {
+        "title": "Time",
+        "awakeHours": 16,
+        "sleepHours": 8,
+        "targetWake": "08:00",
+        "targetBed": "",
+        "stepMinutes": 15,
+        "averageDays": 7,
+        "bedtimeAlerts": true,
+        "routineMinutes": 120,
+        "noPhoneMinutes": 60
+      },
+      "type": "object",
+      "properties": {
+        "title": {
+          "default": "Time",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "awakeHours": {
+          "default": 16,
+          "type": "number",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "sleepHours": {
+          "default": 8,
+          "type": "number",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "targetWake": {
+          "default": "08:00",
+          "type": "string",
+          "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+        },
+        "targetBed": {
+          "default": "",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+            },
+            {
+              "type": "string",
+              "const": ""
+            }
+          ]
+        },
+        "stepMinutes": {
+          "default": 15,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 240
+        },
+        "averageDays": {
+          "default": 7,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365
+        },
+        "bedtimeAlerts": {
+          "default": true,
+          "type": "boolean"
+        },
+        "routineMinutes": {
+          "default": 120,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "noPhoneMinutes": {
+          "default": 60,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1440
+        }
+      },
+      "required": [
+        "title",
+        "awakeHours",
+        "sleepHours",
+        "targetWake",
+        "targetBed",
+        "stepMinutes",
+        "averageDays",
+        "bedtimeAlerts",
+        "routineMinutes",
+        "noPhoneMinutes"
+      ],
+      "additionalProperties": false
+    },
+    "appearance": {
+      "default": {
+        "background": "#0d1117",
+        "text": "#ffffff",
+        "green": "#39d353",
+        "blue": "#58a6ff",
+        "red": "#ff5c5c",
+        "orange": "#ff9f43",
+        "yellow": "#f2cc60",
+        "emptyOpacity": 0.05,
+        "minDoneOpacity": 0.3,
+        "futureOpacity": 0.12,
+        "rows": 7,
+        "cellSize": 10,
+        "gap": 2,
+        "radius": 2
+      },
+      "type": "object",
+      "properties": {
+        "background": {
+          "default": "#0d1117",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "text": {
+          "default": "#ffffff",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "green": {
+          "default": "#39d353",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "blue": {
+          "default": "#58a6ff",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "red": {
+          "default": "#ff5c5c",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "orange": {
+          "default": "#ff9f43",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "yellow": {
+          "default": "#f2cc60",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "emptyOpacity": {
+          "default": 0.05,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "minDoneOpacity": {
+          "default": 0.3,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "futureOpacity": {
+          "default": 0.12,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rows": {
+          "default": 7,
+          "type": "number",
+          "const": 7
+        },
+        "cellSize": {
+          "default": 10,
+          "type": "number",
+          "minimum": 3,
+          "maximum": 30
+        },
+        "gap": {
+          "default": 2,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "radius": {
+          "default": 2,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "background",
+        "text",
+        "green",
+        "blue",
+        "red",
+        "orange",
+        "yellow",
+        "emptyOpacity",
+        "minDoneOpacity",
+        "futureOpacity",
+        "rows",
+        "cellSize",
+        "gap",
+        "radius"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "countdown",
+    "habits",
+    "focus",
+    "sleep",
+    "appearance"
+  ],
+  "additionalProperties": false
+}
