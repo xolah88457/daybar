@@ -117,6 +117,7 @@ test('Storage: failed replacement restores original and leaves recovery backup',
 
 test('Focus: legacy baseline, duplicate settlement, partial credits add into blocks, task thresholds', async () => {
   const r = await run('Focus Timer',{settings:{focus:{blockMinutes:25,alerts:false},habits:{tasks:['A'],focusThresholds:{A:25}}}});
+  // Legacy data: no sessions, no baseline - valid for upgrade
   r.store.put('focus-timer.json',{state:null,days:{[day]:{count:2,minutes:50}}});
   await r.api.startTimer('focus',36,'A'); r.advance(36*60000);
   let data = await r.api.settle();
@@ -228,10 +229,70 @@ test('Sleep settings control plan, awake duration, average window, alert toggles
 test('Focus: tagged sessions without baseline do not manufacture one from derived days', async () => {
   const r = await run('Focus Timer');
   const start=Date.parse('2026-11-15T12:00:00Z');
-  r.store.put('focus-timer.json',{state:null,days:{[day]:{count:99,minutes:2475}},sessions:{[start]:{type:'focus',minutes:25,creditedMinutes:25,end:start+1500000,date:day}}});
+  // Valid fixture: days matches derived from sessions (no baseline)
+  r.store.put('focus-timer.json',{state:null,days:{[day]:{count:1,minutes:25}},sessions:{[start]:{type:'focus',minutes:25,creditedMinutes:25,end:start+1500000,date:day}}});
   const data = await r.api.load(); assert.equal(data.days[day].minutes,25);
   await r.api.startTimer('focus',25);
   const saved=r.store.get('focus-timer.json'); assert.equal(saved.baseline,undefined);
+});
+
+// ===== Cross-client focus integrity (parity with core contracts focusDataSchema / normalizeFocus) =====
+const fstart = Date.parse('2026-11-15T12:00:00Z'); // 2026-11-15 12:00 UTC
+const fsession = () => ({type:'focus',minutes:25,creditedMinutes:25,end:fstart+25*60000,date:day});
+const fdata = () => ({state:null,days:{[day]:{count:1,minutes:25}},sessions:{[fstart]:fsession()}});
+
+test('Focus integrity: malformed timer/key/end/credit/date/overflow/untracked history fail closed and preserve the file', async () => {
+  const mutations = {
+    'timer duration mismatch': d => { d.state = {type:'focus',minutes:25,start:fstart,end:fstart+1}; },
+    'leading-zero session key': d => { d.sessions = {['0'+fstart]: d.sessions[fstart]}; },
+    'non-numeric session key': d => { d.sessions = {'12x': d.sessions[fstart]}; },
+    'session key beyond safe integer': d => { d.sessions = {['9007199254740993']: d.sessions[fstart]}; },
+    'end before key start': d => { d.sessions[fstart].end = fstart - 1; },
+    'end after planned duration': d => { d.sessions[fstart].end = fstart + 25*60000 + 1; },
+    'credit exceeds elapsed whole minutes': d => { d.sessions[fstart].end = fstart + 119999; },
+    'date beyond UTC ±1 day': d => { d.sessions[fstart].date = '2026-11-17'; },
+    'derived total overflows u32': d => { d.baseline = {[day]:{count:0,minutes:4294967295}}; d.sessions[fstart].creditedMinutes = 1; d.sessions[fstart].end = fstart + 60000; d.days = {[day]:{count:0,minutes:1}}; },
+    'stored day minutes beyond u32': d => { d.days = {[day]:{count:0,minutes:4294967296}}; },
+    'untracked history with empty ledger (no baseline guessing)': d => { d.sessions = {}; },
+    'saved days exceed derived ledger': d => { d.days = {[day]:{count:2,minutes:26}}; },
+    'legacy baseline disagrees with days': d => { delete d.sessions; d.baseline = {[day]:{count:2,minutes:49}}; }
+  };
+  for (const [label, mutate] of Object.entries(mutations)) {
+    const r = await run('Focus Timer');
+    const data = fdata(); mutate(data);
+    const raw = JSON.stringify(data);
+    r.store.files.set('/cloud/focus-timer.json', raw);
+    await assert.rejects(r.api.load(), /Invalid\/unknown focus file/, label);
+    assert.equal(r.store.files.get('/cloud/focus-timer.json'), raw, label);
+    assert.equal(r.store.events.filter(e => e[0] === 'write').length, 0, label);
+  }
+});
+
+test('Focus integrity: ±1 UTC-day cross-zone dates, explained ledger without baseline and stale lower summaries are accepted', async () => {
+  // A session end on 2026-11-15 UTC may be recorded on a neighbouring UTC day (other-timezone writer).
+  for (const recorded of ['2026-11-14', day, '2026-11-16']) {
+    const r = await run('Focus Timer');
+    r.store.put('focus-timer.json', {state:null,days:{[recorded]:{count:1,minutes:25}},sessions:{[fstart]:{...fsession(),date:recorded}}});
+    const data = await r.api.load();
+    assert.equal(data.days[recorded].minutes, 25, recorded);
+    assert.equal(r.store.get('focus-timer.json').baseline, undefined, recorded);
+  }
+  // Explained ledger without baseline: days exactly match derived session credits.
+  const r = await run('Focus Timer');
+  assert.equal(r.api.DB.valid('focus', fdata()), true);
+  r.store.put('focus-timer.json', fdata());
+  const data = await r.api.load();
+  assert.equal(data.days[day].minutes, 25);
+  assert.equal(r.store.get('focus-timer.json').baseline, undefined);
+  // Stale LOWER summary stays valid and is regenerated from the ledger without losing credit; load never rewrites the file.
+  const stale = fdata(); stale.days = {};
+  r.store.put('focus-timer.json', stale);
+  const fixed = await r.api.load();
+  assert.deepEqual(plain(fixed.days), {[day]:{count:1,minutes:25}});
+  assert.deepEqual(plain(r.store.get('focus-timer.json').days), {});
+  // Legacy data (no sessions, no baseline) and its exactly-once baseline capture remain valid.
+  assert.equal(r.api.DB.valid('focus', {state:null,days:{[day]:{count:2,minutes:50}}}), true);
+  assert.equal(r.api.DB.valid('focus', {state:null,days:{[day]:{count:2,minutes:50}},sessions:{},baseline:{[day]:{count:2,minutes:50}}}), true);
 });
 
 test('Focus: habit failure preserves credited session; next settle repairs link without duplicate minutes', async () => {

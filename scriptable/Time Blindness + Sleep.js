@@ -10,6 +10,7 @@
 const DB = (() => {
   const object = x => x !== null && typeof x === "object" && !Array.isArray(x);
   const integer = (x, lo = 0, hi = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(x) && x >= lo && x <= hi;
+  const u32 = x => Number.isInteger(x) && x >= 0 && x <= 4294967295;
   const number = (x, lo, hi) => typeof x === "number" && Number.isFinite(x) && x >= lo && x <= hi;
   const name = x => typeof x === "string" && x.trim().length > 0 && x.trim().length <= 120;
   const date = x => {
@@ -20,13 +21,68 @@ const DB = (() => {
   const fields = (x, allowed, required = allowed) => object(x) && Object.keys(x).every(k => allowed.includes(k)) && required.every(k => Object.prototype.hasOwnProperty.call(x,k));
   const record = (x, k, v) => object(x) && Object.entries(x).every(([a,b]) => k(a) && v(b));
   const names = x => Array.isArray(x) && x.every(name);
-  const day = x => fields(x,["count","minutes"]) && integer(x.count) && integer(x.minutes);
-  const timer = x => fields(x,["type","minutes","start","end","task"],["type","minutes","start","end"]) && ["focus","break"].includes(x.type) && integer(x.minutes,1,240) && integer(x.start) && integer(x.end) && x.end > x.start && (x.task === undefined || name(x.task));
-  const session = x => fields(x,["type","minutes","creditedMinutes","end","date","task"],["type","minutes","creditedMinutes","end","date"]) && ["focus","break"].includes(x.type) && integer(x.minutes,1,240) && integer(x.creditedMinutes,0,x.minutes) && (x.type === "focus" || x.creditedMinutes === 0) && integer(x.end) && date(x.date) && (x.task === undefined || name(x.task));
+  const day = x => fields(x,["count","minutes"]) && u32(x.count) && u32(x.minutes);
+  const timer = x => fields(x,["type","minutes","start","end","task"],["type","minutes","start","end"]) && ["focus","break"].includes(x.type) && u32(x.minutes) && x.minutes >= 1 && x.minutes <= 240 && integer(x.start) && integer(x.end) && x.end - x.start === x.minutes * 60000 && (x.task === undefined || name(x.task));
+  const sessionKey = k => /^(0|[1-9]\d*)$/.test(k);
+  const session = x => fields(x,["type","minutes","creditedMinutes","end","date","task"],["type","minutes","creditedMinutes","end","date"]) && ["focus","break"].includes(x.type) && u32(x.minutes) && x.minutes >= 1 && x.minutes <= 240 && u32(x.creditedMinutes) && x.creditedMinutes <= x.minutes && (x.type === "focus" || x.creditedMinutes === 0) && integer(x.end) && date(x.date) && (x.task === undefined || name(x.task)) && (() => {
+    const endDate = new Date(x.end);
+    const endUTC = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
+    const sessionDate = new Date(x.date + 'T00:00:00Z');
+    const sessionUTC = Date.UTC(sessionDate.getUTCFullYear(), sessionDate.getUTCMonth(), sessionDate.getUTCDate());
+    const diffDays = Math.round((sessionUTC - endUTC) / 86400000);
+    return diffDays >= -1 && diffDays <= 1;
+  })();
   function valid(kind,x) {
     if (kind === "log") return Array.isArray(x) ? x.every(date) : record(x,date,names);
-    if (kind === "focus") return fields(x,["state","days","sessions","baseline"],["state","days"]) && (x.state === null || timer(x.state)) && record(x.days,date,day) && (x.sessions === undefined || record(x.sessions,k => /^\d+$/.test(k),session)) && (x.baseline === undefined || record(x.baseline,date,day));
-    if (kind === "sleep") return fields(x,["wakes","beds","plan"]) && record(x.wakes,date,v => integer(v,0,1439)) && record(x.beds,date,v => integer(v,0,1439)) && (x.plan === null || (fields(x.plan,["start","wake","bed"]) && date(x.plan.start) && integer(x.plan.wake,0,1439) && integer(x.plan.bed,0,1439)));
+    if (kind === "focus") {
+      if (!fields(x,["state","days","sessions","baseline"],["state","days"])) return false;
+      if (x.state !== null && !timer(x.state)) return false;
+      if (!record(x.days,date,day)) return false;
+      const hasSessions = x.sessions !== undefined;
+      const hasBaseline = x.baseline !== undefined;
+      if (!hasSessions && hasBaseline) {
+        for (const [d, dayData] of Object.entries(x.days)) {
+          const baselineDay = x.baseline[d];
+          if (dayData.minutes > 0) {
+            if (!baselineDay || baselineDay.minutes !== dayData.minutes) return false;
+          }
+        }
+        for (const [d, baselineDay] of Object.entries(x.baseline)) {
+          if (baselineDay.minutes > 0 && (!x.days[d] || x.days[d].minutes !== baselineDay.minutes)) return false;
+        }
+      }
+      if (hasSessions) {
+        if (!record(x.sessions, sessionKey, session)) return false;
+        // Validate key-value relationship: key is start timestamp, value has end, minutes, creditedMinutes
+        for (const [startKey, s] of Object.entries(x.sessions)) {
+          const start = Number(startKey);
+          if (!Number.isSafeInteger(start) || start < 0) return false;
+          if (s.end < start || s.end > start + s.minutes * 60000) return false;
+          if (s.creditedMinutes * 60000 > s.end - start) return false;
+        }
+        const derived = {};
+        if (hasBaseline) {
+          for (const [d, dayData] of Object.entries(x.baseline)) derived[d] = { ...dayData };
+        }
+        for (const s of Object.values(x.sessions)) {
+          if (s.type === "focus" && s.creditedMinutes > 0) {
+            const d = s.date;
+            derived[d] = derived[d] || { count: 0, minutes: 0 };
+            derived[d].minutes += s.creditedMinutes;
+          }
+        }
+        for (const [d, dayData] of Object.entries(x.days)) {
+          if (dayData.minutes > 0) {
+            const derivedDay = derived[d];
+            if (!derivedDay || dayData.minutes > derivedDay.minutes) return false;
+          }
+        }
+        for (const t of Object.values(derived)) if (t.minutes > 4294967295) return false;
+      }
+      if (hasBaseline && !record(x.baseline,date,day)) return false;
+      return true;
+    }
+    if (kind === "sleep") return fields(x,["wakes","beds","plan"]) && record(x.wakes,date,v => u32(v) && v <= 1439) && record(x.beds,date,v => u32(v) && v <= 1439) && (x.plan === null || (fields(x.plan,["start","wake","bed"]) && date(x.plan.start) && u32(x.plan.wake) && x.plan.wake <= 1439 && u32(x.plan.bed) && x.plan.bed <= 1439));
     return false;
   }
   const clock = x => typeof x === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(x);
