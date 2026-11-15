@@ -8,6 +8,7 @@ export const plain = value => JSON.parse(JSON.stringify(value));
 export function storage() {
   const files = new Map(), evicted = new Map(), events = [];
   let failMove;
+  let failListContents;
   const manager = root => ({
     documentsDirectory: () => root,
     joinPath: (a,b) => `${a}/${b}`,
@@ -40,6 +41,7 @@ export function storage() {
     remove(p) { files.delete(p); },
     listContents(dir) {
       events.push(['listContents',dir]);
+      if (failListContents) throw new Error('Injected listContents failure');
       const prefix = dir + '/'; // documentsDirectory() returns '/cloud' or '/local'
       return [...files.keys(), ...evicted.keys()]
         .filter(k => k.startsWith(prefix))
@@ -51,7 +53,8 @@ export function storage() {
     put(name,value,root='/cloud') { files.set(`${root}/${name}`,JSON.stringify(value)); },
     get(name,root='/cloud') { return JSON.parse(files.get(`${root}/${name}`)); },
     evict(name,value) { evicted.set(`/cloud/${name}`,JSON.stringify(value)); files.set(`/cloud/.${name}.icloud`,'placeholder'); },
-    failMove(fn) { failMove = fn; }
+    failMove(fn) { failMove = fn; },
+    failListContents(fn) { failListContents = fn; }
   };
 }
 

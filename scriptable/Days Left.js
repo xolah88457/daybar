@@ -54,18 +54,22 @@ const DB = (() => {
   const path = name => fm.joinPath(fm.documentsDirectory(),name);
   const exists = p => fm.fileExists(p) || fm.fileExists(fm.joinPath(fm.documentsDirectory(),"." + p.split("/").pop() + ".icloud"));
   // Detect interrupted write artifacts (.daybar-backup-* / .daybar-temp-*) for THIS exact canonical name.
-  // Excludes our own live temp token to avoid false positives during commit.
+  // Includes evicted placeholders (.name.daybar-backup-TOKEN.icloud). Excludes ONLY our exact live temp file.
   async function checkInterrupted(p, excludeTempToken) {
     const base = p.split("/").pop();
     const dir = fm.documentsDirectory();
     let contents;
-    try { contents = await fm.listContents(dir); } catch (_) { return null; }
+    try { contents = await fm.listContents(dir); } catch (e) { throw new Error("Cannot list iCloud directory to check for interrupted writes: " + e); }
     const backupPrefix = base + ".daybar-backup-";
     const tempPrefix = base + ".daybar-temp-";
+    const evictedBackupPrefix = "." + base + ".daybar-backup-";
+    const evictedTempPrefix = "." + base + ".daybar-temp-";
     const found = [];
     for (const f of contents) {
-      if (f.startsWith(backupPrefix)) found.push(f);
-      else if (f.startsWith(tempPrefix) && (!excludeTempToken || !f.endsWith(excludeTempToken))) found.push(f);
+      const isBackup = f.startsWith(backupPrefix) || (f.startsWith(evictedBackupPrefix) && f.endsWith(".icloud"));
+      const isTemp = f.startsWith(tempPrefix) || (f.startsWith(evictedTempPrefix) && f.endsWith(".icloud"));
+      const isOwnTemp = excludeTempToken && isTemp && (f === tempPrefix + excludeTempToken || f === evictedTempPrefix + excludeTempToken + ".icloud");
+      if (isBackup || (isTemp && !isOwnTemp)) found.push(f);
     }
     if (!found.length) return null;
     return "Unrecovered interrupted write for " + base + "; recovery files: " + found.join(", ") + ". Restore from backup before retrying.";

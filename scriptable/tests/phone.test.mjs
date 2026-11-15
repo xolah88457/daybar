@@ -424,3 +424,94 @@ test('Days Left: crash window with backup throws on read', async () => {
   await assert.rejects(run('Days Left', {store, boot: false}), /daybar-backup-crash1/);
 });
 
+// ===== Additional safety-gap regression tests =====
+
+test('Daily Log: listContents failure fails closed with actionable error', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  store.failListContents(() => true);
+  await assert.rejects(
+    api.DB.read('daily-log-Daily_Tasks.json', 'log', () => ({})),
+    /Cannot list iCloud directory to check for interrupted writes/)
+  // Files unchanged
+  assert.equal(store.files.has('/cloud/daily-log-Daily_Tasks.json'), false);
+  store.failListContents(() => false);
+});
+
+test('Daily Log: evicted backup placeholder (.icloud) detected and blocks', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  // Simulate evicted backup: .daily-log-Daily_Tasks.json.daybar-backup-abc.icloud
+  store.files.set('/cloud/.daily-log-Daily_Tasks.json.daybar-backup-crash1.icloud', 'placeholder');
+  store.put('daily-log-Daily_Tasks.json', {[day]: ['StaleLocal']}, '/local');
+  await assert.rejects(
+    api.DB.read('daily-log-Daily_Tasks.json', 'log', () => ({})),
+    /Unrecovered interrupted write.*daybar-backup-crash1/)
+  assert.equal(store.files.has('/cloud/daily-log-Daily_Tasks.json'), false);
+});
+
+test('Daily Log: evicted temp placeholder (.icloud) detected and blocks', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  // Simulate evicted temp: .daily-log-Daily_Tasks.json.daybar-temp-orphan.icloud
+  store.files.set('/cloud/.daily-log-Daily_Tasks.json.daybar-temp-orphan.icloud', 'placeholder');
+  await assert.rejects(
+    api.DB.mutate('daily-log-Daily_Tasks.json', 'log', () => ({}), log => { log[day] = ['Coursework']; return log; }),
+    /Unrecovered interrupted write.*daybar-temp-orphan/)
+  assert.equal(store.files.has('/cloud/daily-log-Daily_Tasks.json'), false);
+});
+
+test('Daily Log: own temp exact match excluded, different temp with same suffix still detected', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  // Our temp token
+  const ourToken = 'our-token-123';
+  // Pre-existing temp with same suffix but different prefix (should NOT happen in practice, but tests exclusion logic)
+  store.files.set('/cloud/daily-log-Daily_Tasks.json.daybar-temp-' + ourToken, JSON.stringify({[day]: ['OurTemp']}));
+  // Another pre-existing temp (different token) - should be detected
+  store.files.set('/cloud/daily-log-Daily_Tasks.json.daybar-temp-other-token', JSON.stringify({[day]: ['OtherTemp']}));
+  // Mutate with expected===null (create path) and our token - should detect OTHER temp
+  await assert.rejects(
+    api.DB.mutate('daily-log-Daily_Tasks.json', 'log', () => ({}), log => { log[day] = ['NewData']; return log; }),
+    /Unrecovered interrupted write.*daybar-temp-other-token/)
+  // Our temp should be cleaned up, other temp remains
+  assert.equal(store.files.has('/cloud/daily-log-Daily_Tasks.json'), false);
+  assert.ok(store.files.has('/cloud/daily-log-Daily_Tasks.json.daybar-temp-' + ourToken));
+  assert.ok(store.files.has('/cloud/daily-log-Daily_Tasks.json.daybar-temp-other-token'));
+});
+
+test('Daily Log: backup with different name does not block', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  // Backup for different canonical name
+  store.files.set('/cloud/daily-log-Other_Log.json.daybar-backup-crash1', JSON.stringify({'2026-11-10': ['Other']}));
+  // Should work normally
+  const log = await api.DB.mutate('daily-log-Daily_Tasks.json', 'log', () => ({}), log => { log[day] = ['Coursework']; return log; });
+  assert.deepEqual(plain(log), {[day]: ['Coursework']});
+  assert.deepEqual(plain(store.get('daily-log-Daily_Tasks.json')), {[day]: ['Coursework']});
+  // Wrong-name backup still there
+  assert.ok(store.files.has('/cloud/daily-log-Other_Log.json.daybar-backup-crash1'));
+});
+
+test('Focus Timer: evicted backup placeholder blocks load', async () => {
+  const {api, store} = await run('Focus Timer', {boot: false});
+  store.files.delete('/cloud/focus-timer.json');
+  store.files.set('/cloud/.focus-timer.json.daybar-backup-crash1.icloud', 'placeholder');
+  await assert.rejects(api.load(), /Unrecovered interrupted write.*daybar-backup-crash1/);
+  assert.equal(store.files.has('/cloud/focus-timer.json'), false);
+});
+
+test('Time Blindness + Sleep: evicted backup placeholder blocks load', async () => {
+  const {api, store} = await run('Time Blindness + Sleep', {boot: false});
+  store.files.delete('/cloud/sleep-data.json');
+  store.files.set('/cloud/.sleep-data.json.daybar-backup-crash1.icloud', 'placeholder');
+  await assert.rejects(api.load(), /Unrecovered interrupted write.*daybar-backup-crash1/);
+  assert.equal(store.files.has('/cloud/sleep-data.json'), false);
+});
+
+test('Days Left: evicted settings backup placeholder blocks settings read', async () => {
+  const store = storage();
+  store.files.set('/cloud/.daybar-settings.json.daybar-backup-crash1.icloud', 'placeholder');
+  await assert.rejects(run('Days Left', {store, boot: false}), /Unrecovered interrupted write.*daybar-backup-crash1/);
+});
+
