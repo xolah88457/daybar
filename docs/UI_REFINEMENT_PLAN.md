@@ -1,6 +1,6 @@
 # Requested UI refinements
 
-User follow-up: bare 1–6 category navigation, fictional sample content, day/night controls, and monitor-aware card layout. The user selected **Follow macOS Auto** and authorized any working provider after configured Sonnet/Gemini routes failed with quota errors. Do not use RP/GPT routes.
+User follow-up: bare 1–6 category navigation, fictional sample content, day/night controls, and monitor-aware card layout. The user selected **Follow macOS Auto** and authorized working providers after configured Sonnet/Gemini routes failed with quota errors. Do not use RP/GPT or ZAI/GLM routes, including nested scout defaults. Use restricted flat profiles. User-requested ERNIE routes are `cliproxyapi/kilo/baidu/ernie-5.5-flash-preview:free` and `cliproxyapi/openrouter/baidu/ernie-5.5-flash-preview:free`; the former completed the first frontend correction, while the latter returned upstream 429.
 
 ## Shared contract
 

@@ -1,10 +1,13 @@
 # Progress
 
-## User-requested UI refinements — in progress
+## User-requested UI refinements — integrated; browser/native acceptance next
 - Add safe bare **1–6** category navigation; replace active personal-looking sample labels/history with fictional examples; add Day/Night/Auto controls and portrait/landscape-aware card layout.
 - User selected **Follow macOS Auto**: system-managed appearance timing, no Daybar location or network request. User permits any working provider after Sonnet and both Gemini routes returned quota errors; **ZAI/GLM is prohibited**. Current replacements explicitly use Juice.
-- Foundation/contracts/examples and frontend implementation are delegated in isolated worktrees with non-overlapping ownership. Full plan: `docs/UI_REFINEMENT_PLAN.md`.
-- Main quit the app, verified default sandbox-only preferences, and backed up eight known development/app-local JSON files under `/tmp/daybar-fictional-samples-backup-20261115-115838`. No sample files have been replaced yet and no real iCloud directory was accessed.
+- Recovered completed foundation `502cd06` from a parent blocked on dead nested scout sessions; merged as `98bc079`. Main verified **138 core tests in each Toronto/London, core types and 30 Rust tests** (`/tmp/daybar-refinement-foundation-main.log`). All three obsolete waiting panes were closed after preserving their commits and partial frontend changes.
+- Replacement agents use restricted flat profiles with no sub-agent tools, avoiding the bundled scouts' prohibited GLM defaults. Fully qualified ERNIE routes are under `cliproxyapi`; OpenRouter returned upstream 429, while **Kilo ERNIE completed the frontend corrections**. Merged `5978b98`: safe bare 1–6 navigation, Day/Night/Auto, adaptive cards and fictional examples.
+- Main caught a day-theme heatmap opacity override and retained only a visual palette projection for modules; Settings and writes keep raw data. Kilo added regression coverage. The first real export also caught one unclosed CSS block; main fixed it with a Next/PostCSS syntax regression (verified failing before the fix).
+- Final integrated **Node 22.23.5** lint, types, static export and **138 core + 49 desktop + 59 phone = 246 tests in EACH Toronto/London passed** (`/tmp/daybar-refinement-integrated-gates.log`). Actual browser/native layouts, refreshed media, independent final review and rebuilt packaging remain next.
+- Main quit the app, verified default sandbox-only preferences, and backed up eight known development/app-local JSON files under `/tmp/daybar-fictional-samples-backup-20261115-115838`. After validating all four new fixtures with shared schemas, atomically replaced only those eight files with fictional samples (four tasks, five logged dates). Backups remain intact; no real iCloud directory was accessed. Full plan: `docs/UI_REFINEMENT_PLAN.md`.
 - Checks/artifacts described below cover the **previous `9d2d329` candidate**, not these new refinements. Integration, refreshed media, full verification and packaging will be repeated.
 
 ## Foundation — complete

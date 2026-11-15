@@ -466,6 +466,7 @@ h1 {
 .today-countdown {
   grid-column: 2;
   grid-row: 2;
+}
 .section {
   border: 1px solid var(--line);
   border-radius: 7px;
