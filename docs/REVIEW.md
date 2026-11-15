@@ -1,38 +1,21 @@
 # Independent implementation review
 
-**Review basis:** the latest authoritative integration notes and artifacts at `/Users/rta.juice/Coding-Projects/Scriptable_code_conversion/docs/PROGRESS.md`, `/tmp/daybar-native-acceptance.log`, and the core/UI/phone/backend independent review reports in `/tmp`. This is a documentation synthesis of those reviews and the subsequent main-branch corrections, not a new source-code audit. No real iCloud data was accessed.
+**Result: BLOCKED by one P2 error-reporting gap; not a release-readiness approval.** Review basis: settled HEAD `a841ef839223ed77bc49cc7384fe86645a4aae86`, plus the current native, test and packaging logs cited below. No source files were changed during review. No real iCloud data was accessed.
 
-## Findings and dispositions
+## Finding
 
-### Resolved: focus history could be erased during normalization
+**P2 — Confirmation API failures are fail-closed but not shown to the user.** `apps/desktop/src/lib/confirm.ts` rejects if native dialog support is unavailable or `showModal()` fails; protected actions do not proceed. Its ten UI callsites await the helper without catching/reporting rejection, so Daybar's existing inline error notice does not explain the failure and the promise may be unhandled. The helper-level unsupported-dialog test verifies rejection, not UI error reporting. Smallest correction: catch at a shared UI boundary, show an actionable notice and retain the no-action-on-error behavior. Locations and supporting detail are in `/tmp/daybar-final-safety-review.md`.
 
-The original backend review found that a focus file with `sessions: {}` and no `baseline` could cause TypeScript and phone normalization to discard historical `days`, while Rust refused the ambiguous record. Main added shared fail-closed validation and regression coverage (commit `2aa9ac7`), and the matching phone validation was merged as `2d30453`. The latest progress reports 17 regression cases for the shared correction and 59 phone VM tests passing in Toronto, London and UTC. Final integrated rerun after that phone patch is still pending. The corrected rule is documented in `DATA_FORMATS.md`, `CORE_API.md`, and `DECISIONS.md`: preserve the source and require manual recovery rather than infer or erase history.
+## Verified scope
 
-### Resolved: stable daily-log identifier
+- Settled Node 26.13.0 checks passed: lint, typecheck, Toronto and London each 137 core + 37 desktop + 59 phone tests, Rust 29 tests, and static export. Logs: `/tmp/daybar-final-safety-settled-{lint,typecheck,tests,rust,build}.log`. The earlier Node 22.23.5 integrated gates and committed browser smoke also passed: `/tmp/daybar-final-node22-gates.log`, `/tmp/daybar-final-browser.log`.
+- Browser smoke covered six screens, selected task/focus/settings/sleep workflows and widths 375–1280px, with no runtime errors, external requests or storage writes.
+- Native synthetic-sandbox acceptance covered all six screens, external task-file refresh without restart, focus early stop, a five-minute break expiry, tray presets/actions, Cmd+W hide/tray reopen, configured Cmd+Shift+F start/stop, and the native HTML confirmation: Cancel/Escape/default Enter canceled; explicit Confirm started focus. Evidence: `/tmp/daybar-native-acceptance.log`, `/tmp/daybar-native-confirm-dialog.txt`.
+- Safety review rechecked conservative focus-ledger validation/recovery, stable log ID, phone interrupted-write guards and native quiet-time rules. These tests do not create distributed CAS or atomic cross-file writes.
+- An unsigned local arm64 app/DMG build succeeded; app 13.31 MiB, DMG 3.72 MiB; `hdiutil verify` passed. The bundled app launched with app-local sandbox data and retained an active five-minute break across normal Quit/relaunch. This artifact predates the final confirmation-error-path correction and is provisional, not a final release artifact. `/tmp/daybar-unsigned-bundle-retry.log`, `/tmp/daybar-native-acceptance.log`.
 
-The cross-client review found Settings could imply `logId` was editable even though Rust rejected changes. Main made it read-only and demo mutations refuse changes (`8df2bd0`). Keep the stable ID; changing a display title must not orphan the history file.
+## Still unverified
 
-### Resolved: phone interrupted-write recovery window
+No real iCloud folder/device or owner iPhone/Shortcut was used. Hosted CI, final corrected bundle, signing/notarization, Dock hide, login item, OS notification delivery, actual iCloud materialization/convergence, and full native conflict merge/discard workflows are not accepted. Scriptable FileManager lacks atomic replace/CAS; its recovery guard detects interrupted artifacts but does not restore them. Focus-to-habit updates span two files and are repairable, not atomic. Synthetic screenshot/GIF assets do not substitute for owner phone evidence.
 
-The phone review identified that a crash after moving the canonical file to a retained backup could leave no canonical file, allowing stale local migration or empty defaults on a later run. Fail-closed interrupted-write guards were added for the exact file, including evicted recovery artifacts and directory-listing failures. The independent corrected phone review reports 22/22 recovery repro assertions and 57/57 phone tests in Toronto, London and UTC. This detects and refuses; it does not automatically restore or delete artifacts. Manual recovery is required before resuming writes.
-
-### Native HTML confirmation remains pending
-
-Native WKWebView testing found `window.confirm` silently cancels without a visible usable confirmation. A standard HTML-dialog helper is being integrated. The target macOS minimum was raised to 12.3 for the relevant WKWebView baseline, but native confirmation and destructive-action acceptance has **not** passed. Do not treat browser confirmation tests as proof of native behavior.
-
-## Verified behavior versus remaining risk
-
-Main's recorded native synthetic-sandbox acceptance passed six-screen rendering/navigation, external atomic task-file refresh without restart, focus early stop, five-minute break auto-settlement, configured Cmd+Shift+F start/stop, tray start/stop/task actions, changing tray status, and Cmd+W hide followed by tray reopen. Browser smoke covers all six pages and selected workflows. Core and UI independent reviews report passing tests; Rust reports 29 tests. These results do not establish every feature in `VERIFICATION.md`.
-
-Important residual limitations:
-
-- The phone uses temporary files and retained backups, but Scriptable `FileManager` has no atomic replace or shared compare-and-swap. A race remains after the final comparison. iCloud eventual consistency can still produce conflicts.
-- Focus-to-habit completion writes two files; repair is retryable but not atomic, and earned linked tasks can be reasserted after manual unchecking.
-- No real iCloud folder, iPhone, Shortcut or cross-device convergence was tested.
-- Native HTML confirmation/destructive flows, notification delivery, Dock/autostart behavior, shortcut reconfiguration/conflicts, and complete conflict/backup/placeholder acceptance remain pending.
-- A release Rust warm compile passed, but no packaged unsigned app/DMG was built/launched. Hosted CI, signing and notarization are unverified.
-- `menu-bar.gif` is four real native popup states with synthetic data, two seconds each—not a continuous recording or live-countdown proof. The Today screenshot is browser-demo synthetic data. The owner-supplied iPhone image is unavailable.
-
-## Verdict
-
-The reviewed implementation has meaningful passing core, UI, phone, Rust and native sandbox evidence, and three important cross-client safety findings were corrected. The review does **not** support declaring v1 or real-data readiness: finish the native confirmation helper, rerun integrated tests after the phone patch, and complete the still-pending safety, packaging and OS acceptance rows. Use `docs/VERIFICATION.md` for row-level status and `docs/PROGRESS.md` on main for integration chronology.
+Use `docs/VERIFICATION.md` for row-level scoped status; `docs/PROGRESS.md` records the integrated run chronology. No final v1/real-data readiness claim is supported by this review.
