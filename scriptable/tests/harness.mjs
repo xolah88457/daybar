@@ -37,7 +37,14 @@ export function storage() {
       if (!files.has(a) || files.has(b)) throw new Error('Unsafe copy');
       files.set(b,files.get(a));
     },
-    remove(p) { files.delete(p); }
+    remove(p) { files.delete(p); },
+    listContents(dir) {
+      events.push(['listContents',dir]);
+      const prefix = dir + '/'; // documentsDirectory() returns '/cloud' or '/local'
+      return [...files.keys(), ...evicted.keys()]
+        .filter(k => k.startsWith(prefix))
+        .map(k => k.slice(prefix.length));
+    }
   });
   return {
     files, events, FileManager: {iCloud:() => manager('/cloud'), local:() => manager('/local')},

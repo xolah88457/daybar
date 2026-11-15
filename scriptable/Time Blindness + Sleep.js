@@ -55,6 +55,23 @@ const DB = (() => {
   const fm = FileManager.iCloud(), local = FileManager.local();
   const path = name => fm.joinPath(fm.documentsDirectory(),name);
   const exists = p => fm.fileExists(p) || fm.fileExists(fm.joinPath(fm.documentsDirectory(),"." + p.split("/").pop() + ".icloud"));
+  // Detect interrupted write artifacts (.daybar-backup-* / .daybar-temp-*) for THIS exact canonical name.
+  // Excludes our own live temp token to avoid false positives during commit.
+  async function checkInterrupted(p, excludeTempToken) {
+    const base = p.split("/").pop();
+    const dir = fm.documentsDirectory();
+    let contents;
+    try { contents = await fm.listContents(dir); } catch (_) { return null; }
+    const backupPrefix = base + ".daybar-backup-";
+    const tempPrefix = base + ".daybar-temp-";
+    const found = [];
+    for (const f of contents) {
+      if (f.startsWith(backupPrefix)) found.push(f);
+      else if (f.startsWith(tempPrefix) && (!excludeTempToken || !f.endsWith(excludeTempToken))) found.push(f);
+    }
+    if (!found.length) return null;
+    return "Unrecovered interrupted write for " + base + "; recovery files: " + found.join(", ") + ". Restore from backup before retrying.";
+  }
   async function text(p) {
     if (!exists(p)) return null;
     if (!fm.isFileDownloaded(p)) await fm.downloadFileFromiCloud(p);
@@ -62,7 +79,13 @@ const DB = (() => {
     return fm.readString(p);
   }
   async function settings() {
-    const raw = await text(path("daybar-settings.json"));
+    const p = path("daybar-settings.json");
+    const raw = await text(p);
+    if (raw === null) {
+      // Before returning empty settings: refuse if interrupted artifacts exist.
+      const interrupted = await checkInterrupted(p);
+      if (interrupted) throw new Error(interrupted);
+    }
     return raw === null ? {} : validateSettings(JSON.parse(raw));
   }
   function check(kind,value) {
@@ -73,6 +96,9 @@ const DB = (() => {
     const p = path(name);
     let raw = await text(p);
     if (raw === null) {
+      // Before local migration or default: refuse if interrupted artifacts exist.
+      const interrupted = await checkInterrupted(p);
+      if (interrupted) throw new Error(interrupted);
       const old = local.joinPath(local.documentsDirectory(),name);
       if (local.fileExists(old)) {
         raw = local.readString(old);
@@ -91,6 +117,11 @@ const DB = (() => {
     const serialized = JSON.stringify(value);
     fm.writeString(temp,serialized);
     if (await text(p) !== expected) { fm.remove(temp); throw new Error("File changed during edit; retry operation"); }
+    // Recheck for pre-existing interrupted artifacts (not our own temp) before creating canonical.
+    if (expected === null) {
+      const interrupted = await checkInterrupted(p, token);
+      if (interrupted) { fm.remove(temp); throw new Error(interrupted); }
+    }
     // Scriptable has no replace/CAS. Keep the real original until the new move succeeds.
     let movedOriginal = false;
     try {
@@ -101,7 +132,7 @@ const DB = (() => {
       fm.move(temp,p);
     } catch (error) {
       if (movedOriginal && !exists(p)) {
-        try { fm.copy(backup,p); } catch (_) { /* backup remains available for recovery */ }
+        try { fm.copy(backup,p); } catch (___) { /* backup remains available for recovery */ }
       }
       throw new Error("Write failed; original retained at " + (movedOriginal ? backup : p) + ": " + error);
     }

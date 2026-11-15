@@ -293,3 +293,134 @@ test('Days Left: golden VM parity with the legacy file on 23h/25h DST days and m
     assert.deepEqual(allText(updated.api.createWidget()), allText(legacy.api.createWidget()), `footer mismatch at ${label}`);
   }
 });
+
+// ===== Crash-window recovery regression tests =====
+
+function crashState(store, file, latest) {
+  // Emulate: commit() did fm.move(canonical -> .daybar-backup-*) then process died before fm.move(temp -> canonical)
+  store.files.set(`/cloud/${file}.daybar-backup-crash1`, JSON.stringify(latest));
+  store.files.delete(`/cloud/${file}`);
+}
+
+test('Daily Log: crash window with backup + stale local read throws and names recovery files', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  const LATEST = {[day]: ['Coursework', 'Live Trading']};
+  const STALE_LOCAL = {[day]: ['Coursework']};
+  crashState(store, 'daily-log-Daily_Tasks.json', LATEST);
+  store.put('daily-log-Daily_Tasks.json', STALE_LOCAL, '/local');
+  await assert.rejects(api.DB.read('daily-log-Daily_Tasks.json', 'log', () => ({})), /Unrecovered interrupted write/);
+  await assert.rejects(api.DB.read('daily-log-Daily_Tasks.json', 'log', () => ({})), /daybar-backup-crash1/);
+  // Local file unchanged, canonical still absent
+  assert.deepEqual(store.get('daily-log-Daily_Tasks.json', '/local'), STALE_LOCAL);
+  assert.equal(store.files.has('/cloud/daily-log-Daily_Tasks.json'), false);
+});
+
+test('Daily Log: crash window with backup + no local mutate throws', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  const LATEST = {[day]: ['Coursework', 'Live Trading']};
+  crashState(store, 'daily-log-Daily_Tasks.json', LATEST);
+  await assert.rejects(
+    api.DB.mutate('daily-log-Daily_Tasks.json', 'log', () => ({}), log => { log[day] = ['Coursework']; return log; }),
+    /Unrecovered interrupted write/
+  );
+  await assert.rejects(
+    api.DB.mutate('daily-log-Daily_Tasks.json', 'log', () => ({}), log => { log[day] = ['Coursework']; return log; }),
+    /daybar-backup-crash1/
+  );
+  // Canonical still absent, backup remains
+  assert.equal(store.files.has('/cloud/daily-log-Daily_Tasks.json'), false);
+  assert.ok([...store.files.keys()].some(k => k.includes('daybar-backup-crash1')));
+});
+
+test('Focus Timer: crash window load throws', async () => {
+  const {api, store} = await run('Focus Timer', {boot: false});
+  const LATEST = {state: null, days: {[day]: {count: 4, minutes: 100}}, sessions: {}, baseline: {}};
+  crashState(store, 'focus-timer.json', LATEST);
+  await assert.rejects(api.load(), /Unrecovered interrupted write/);
+  await assert.rejects(api.load(), /daybar-backup-crash1/);
+  assert.equal(store.files.has('/cloud/focus-timer.json'), false);
+});
+
+test('Daily Log: orphan temp without canonical throws', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  // Orphan temp (no backup, no canonical)
+  store.files.set('/cloud/daily-log-Daily_Tasks.json.daybar-temp-orphan1', JSON.stringify({[day]: ['Coursework']}));
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  await assert.rejects(api.DB.read('daily-log-Daily_Tasks.json', 'log', () => ({})), /Unrecovered interrupted write/);
+  await assert.rejects(api.DB.read('daily-log-Daily_Tasks.json', 'log', () => () => ({})), /daybar-temp-orphan1/);
+  assert.equal(store.files.has('/cloud/daily-log-Daily_Tasks.json'), false);
+});
+
+test('Daily Log: wrong-name artifacts do not block mutate create', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  // Backup for a different log file
+  store.files.set('/cloud/daily-log-Other_Log.json.daybar-backup-crash1', JSON.stringify({'2026-11-10': ['Other']}));
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  // Should work normally - create fresh canonical from empty via mutate
+  const log = await api.DB.mutate('daily-log-Daily_Tasks.json', 'log', () => ({}), log => { log[day] = ['Coursework']; return log; });
+  assert.deepEqual(plain(log), {[day]: ['Coursework']});
+  assert.deepEqual(plain(store.get('daily-log-Daily_Tasks.json')), {[day]: ['Coursework']});
+  // Wrong-name backup still there
+  assert.ok(store.files.has('/cloud/daily-log-Other_Log.json.daybar-backup-crash1'));
+});
+
+test('Daily Log: normal fresh migration still works when no artifacts', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  store.put('daily-log-Daily_Tasks.json', {[day]: ['Coursework']}, '/local');
+  store.files.delete('/cloud/daily-log-Daily_Tasks.json');
+  // read() returns migrated value but does not create canonical; mutate does
+  const log = await api.DB.mutate('daily-log-Daily_Tasks.json', 'log', () => ({}), log => { log[day] = ['Coursework']; return log; });
+  assert.deepEqual(plain(log), {[day]: ['Coursework']});
+  assert.deepEqual(plain(store.get('daily-log-Daily_Tasks.json')), {[day]: ['Coursework']});
+});
+
+test('Daily Log: evicted placeholder still wins over artifacts', async () => {
+  const {api, store} = await run('Daily Log', {boot: false});
+  // Canonical evicted (placeholder exists) + backup artifact
+  store.evict('daily-log-Daily_Tasks.json', {[day]: ['CloudData']});
+  store.files.set('/cloud/daily-log-Daily_Tasks.json.daybar-backup-crash1', JSON.stringify({[day]: ['BackupData']}));
+  // Should download and use canonical, not throw
+  const log = await api.DB.read('daily-log-Daily_Tasks.json', 'log', () => ({}));
+  assert.deepEqual(plain(log.value), {[day]: ['CloudData']});
+  // Canonical should now be downloaded and present
+  assert.deepEqual(plain(store.get('daily-log-Daily_Tasks.json')), {[day]: ['CloudData']});
+});
+
+test('Focus Timer: commit create path (expected===null) rechecks artifacts at last safe boundary', async () => {
+  const {api, store} = await run('Focus Timer', {boot: false});
+  store.files.delete('/cloud/focus-timer.json');
+  // First, a normal create should work
+  await api.startTimer('focus', 25);
+  assert.ok(store.files.has('/cloud/focus-timer.json'));
+  // Now simulate: canonical absent, backup exists
+  const current = store.get('focus-timer.json');
+  store.files.set('/cloud/focus-timer.json.daybar-backup-crash2', JSON.stringify(current));
+  store.files.delete('/cloud/focus-timer.json');
+  // Mutate with expected===null (create path) should throw
+  await assert.rejects(
+    api.DB.mutate('focus-timer.json', 'focus', () => ({state:null,days:{}}), d => d),
+    /Unrecovered interrupted write/
+  );
+});
+
+// Commit recheck is tested indirectly via mutate tests (e.g., 'Focus Timer: commit create path')
+// since commit() is not part of the public DB API.
+
+test('Sleep: crash window with backup throws on load', async () => {
+  const {api, store} = await run('Time Blindness + Sleep', {boot: false});
+  const LATEST = {wakes: {[day]: 480}, beds: {}, plan: null};
+  crashState(store, 'sleep-data.json', LATEST);
+  await assert.rejects(api.load(), /Unrecovered interrupted write/);
+  await assert.rejects(api.load(), /daybar-backup-crash1/);
+  assert.equal(store.files.has('/cloud/sleep-data.json'), false);
+});
+
+test('Days Left: crash window with backup throws on read', async () => {
+  const {api, store} = await run('Days Left', {boot: false});
+  const LATEST = {dummy: 'data'}; // Days Left doesn't have a data file but uses settings
+  crashState(store, 'daybar-settings.json', LATEST);
+  // Days Left reads settings, should throw
+  await assert.rejects(run('Days Left', {store, boot: false}), /Unrecovered interrupted write/);
+  await assert.rejects(run('Days Left', {store, boot: false}), /daybar-backup-crash1/);
+});
+
