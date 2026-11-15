@@ -12,7 +12,7 @@ const groups: Group[] = ['countdown', 'habits', 'focus', 'sleep', 'appearance'];
 const hints: Record<string, string> = {
   endDate: 'Required for Countdown; leave Habits empty for a rolling window.',
   logId:
-    'Changing this opens a different daily-log file; history is not moved.',
+    'Stable identifier for the habit log file. Cannot be changed here.',
   dayCompleteMin: 'Tasks needed to complete a day.',
   blockMinutes: 'Partial sessions accumulate into whole blocks.',
   targetBed: 'Empty = target wake minus sleep hours.',
@@ -147,7 +147,7 @@ export function SettingsPanel({
                                     : 'text'
                             }
                             step={typeof value === 'number' ? 'any' : undefined}
-                            readOnly={field === 'rows'}
+                            readOnly={field === 'rows' || field === 'logId'}
                             value={value as string | number}
                             onChange={(e) =>
                               update(

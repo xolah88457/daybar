@@ -214,8 +214,8 @@ export function createDemoClient(
               );
           }
           if (parsed.habits.logId !== s.habits.logId)
-            next.dailyLog = structuredClone(
-              logs.get(parsed.habits.logId) ?? {}
+            throw new Error(
+              'Log ID is stable and cannot be changed. Use the same log ID to preserve history.'
             );
           next.settings = parsed;
           next.focus = normalizeFocus(next.focus, parsed.focus.blockMinutes);

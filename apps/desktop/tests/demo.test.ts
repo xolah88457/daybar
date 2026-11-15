@@ -194,19 +194,33 @@ describe('in-memory DaybarClient', () => {
     await client.mutate({ kind: 'save_settings', settings });
     expect((await client.snapshot()).settings.habits.tasks).toContain('Read');
   });
-  it('keeps separate habit log IDs entirely in memory', async () => {
+  it('rejects logId changes and preserves history', async () => {
     const initial = fixture();
     initial.dailyLog['2026-11-14'] = ['Coursework'];
     const client = createDemoClient(initial, () => start);
     const settings = structuredClone(initial.settings);
     settings.habits.logId = 'Other_Log';
-    await client.mutate({ kind: 'save_settings', settings });
-    expect((await client.snapshot()).dailyLog).toEqual({});
-    settings.habits.logId = initial.settings.habits.logId;
-    await client.mutate({ kind: 'save_settings', settings });
+    await expect(
+      client.mutate({ kind: 'save_settings', settings })
+    ).rejects.toThrow('Log ID is stable');
+    // History unchanged after rejected logId change
     expect((await client.snapshot()).dailyLog['2026-11-14']).toEqual([
       'Coursework'
     ]);
+    expect((await client.snapshot()).settings.habits.logId).toBe(
+      initial.settings.habits.logId
+    );
+  });
+  it('allows other settings changes while keeping logId stable', async () => {
+    const client = createDemoClient(fixture(), () => start);
+    const settings = structuredClone((await client.snapshot()).settings);
+    settings.focus.blockMinutes = 30;
+    settings.habits.dayCompleteMin = 2;
+    await client.mutate({ kind: 'save_settings', settings });
+    const snap = await client.snapshot();
+    expect(snap.settings.focus.blockMinutes).toBe(30);
+    expect(snap.settings.habits.dayCompleteMin).toBe(2);
+    expect(snap.settings.habits.logId).toBe('Daily_Tasks');
   });
   it('blocks writes on file issues, never offers OS/filesystem emulation, and cleans subscriptions', async () => {
     const initial = fixture();

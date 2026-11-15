@@ -107,6 +107,14 @@ describe('settings and safety controls', () => {
       )
     );
   });
+  it('shows logId as read-only with stable identifier hint', () => {
+    const p = props();
+    render(<SettingsPanel {...p} />);
+    fireEvent.click(screen.getByText('Habits', { selector: 'summary' }));
+    const logIdInput = screen.getByLabelText(/Log Id/);
+    expect(logIdInput).toHaveAttribute('readonly');
+    expect(screen.getByText('Stable identifier for the habit log file. Cannot be changed here.')).toBeInTheDocument();
+  });
   it('does not overwrite externally changed settings from an old draft', () => {
     const p = props();
     const { rerender } = render(<SettingsPanel {...p} />);
