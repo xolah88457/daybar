@@ -44,6 +44,7 @@ with sync_playwright() as p:
             assert len(bounds) == 4, bounds
             lowest = max(card["bottom"] for card in bounds)
             assert lowest <= height, f"{mode} cards extend below {width}x{height}: {bounds}"
+            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight + 1"), f"Needless page scroll at {mode} {width}x{height}"
             assert page.locator(".today-focus button").count() >= 7, "Focus controls were removed"
             assert page.locator(".today-focus [role=timer]").evaluate("el => parseFloat(getComputedStyle(el).fontSize)") >= 42
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Horizontal overflow at {width}x{height}"

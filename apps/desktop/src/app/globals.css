@@ -1485,7 +1485,11 @@ details[open] summary > span {
 }
 @media (orientation: landscape) and (min-width: 1200px) {
   .workspace {
-    padding: 18px 2.5vw 20px;
+    padding: 18px 2.5vw 8px;
+  }
+  .page-footer {
+    margin-top: 6px;
+    padding-top: 6px;
   }
   .page-head {
     margin-bottom: 10px;
