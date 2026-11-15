@@ -1,21 +1,22 @@
 # Portfolio media
 
-The Today hero is an actual Playwright screenshot of main commit `3528594`'s static export, captured on 2026-11-15 at 1280 px with the in-memory browser client and synthetic data. The integrated six-screen browser smoke passed; localStorage writes were blocked, no external requests occurred, and the PNG contains only IHDR/IDAT/IEND chunks. The image was visually inspected. It is not a native-window or sync test. No tray recording or iPhone image has been captured. Do not use illustrative mockups as runtime evidence.
+The Today hero is an actual Playwright screenshot of the static export, captured at 1280 px with the in-memory browser client and synthetic data. Browser smoke covered six screens and responsive widths; this image is not native-window or sync evidence.
+
+`menu-bar.gif` is an actual native Daybar popup-window capture sequence, 546×780, with four sampled states (idle, active focus, stopped, task unchecked), two seconds each. It contains synthetic data and no other app content. It is not a continuous recording, and does not prove a live countdown or countdown timing. The owner-supplied iPhone image is unavailable; retain the placeholder.
 
 | Asset | Status | Content |
 | --- | --- | --- |
-| `today.png` | CAPTURED — browser demo | Actual Today static-export UI; synthetic in-memory data, no personal files |
-| `menu-bar.gif` | NOT YET CAPTURED | Start/stop a synthetic focus timer from the menu bar |
-| iPhone widget image (filename TBD) | OWNER-SUPPLIED PLACEHOLDER | Original widgets; owner must review/redact before publishing |
+| `today.png` | CAPTURED — browser demo | Static-export Today UI; synthetic in-memory data, no personal files |
+| `menu-bar.gif` | CAPTURED — native popup states | Four actual Daybar popup-window states, 546×780, 2 seconds each; synthetic data, not continuous/countdown proof |
+| iPhone widget image (filename TBD) | OWNER-SUPPLIED PLACEHOLDER | Unavailable; owner must supply and review/redact before publishing |
 
 ## Safe capture procedure
 
-1. Run `pnpm seed` from the repository root; use only synthetic `.dev-data/` fixtures. Launch with `pnpm tauri dev`. Do not select, browse, read or modify a real iCloud folder. Do not enter real task names, sleep history or calendar items.
-2. Confirm Settings points at the sandbox. If the current build cannot demonstrate sandbox isolation, stop and leave the placeholders intact.
-3. Use a clean desktop or disposable macOS account. Close unrelated windows and hide desktop items. Turn on Do Not Disturb; ensure the menu bar contains no personal account names, location, notifications or sensitive utility readouts.
-4. Capture **only the Daybar window** for `today.png` (macOS Shift–Command–4, then Space). Show the full dashboard legibly, with synthetic checklist, focus blocks, countdown and sleep state. Do not capture a full desktop or other apps.
-5. Record only the Daybar tray item and its menu for `menu-bar.gif`; crop tightly. Demonstrate a focus preset and stop action without real notifications, audio, personal data or unrelated menu bar items. Convert locally; do not upload raw recordings to a conversion service.
-6. Inspect every image and every GIF frame for personal data and unrelated desktop content. Remove unsafe media rather than merely hiding it with a translucent overlay. Strip unnecessary metadata locally.
-7. Add the reviewed files here, replace the explicit placeholders in `README.md` with accessible image links/alt text, and record the capture date, commit, sandbox setup and manual checks in the verification record. Images alone do not establish feature parity.
+1. For any recapture, run `pnpm seed` from the repository root; use only synthetic `.dev-data/` fixtures. Do not select, browse, read or modify a real iCloud folder or enter real personal data.
+2. Confirm Settings points at the sandbox. If isolation cannot be demonstrated, stop.
+3. Use a clean desktop or disposable macOS account. Close unrelated windows and hide desktop items; keep personal menu-bar content out of captures.
+4. Capture only the Daybar window or Daybar-owned popup content. Do not capture a full desktop or other apps.
+5. Inspect every image and GIF frame for personal data and unrelated content. Remove unsafe media; strip unnecessary metadata locally.
+6. Record capture date, commit, sandbox setup and manual checks in the verification record. Images alone do not establish feature parity.
 
 For iPhone media, the owner should use synthetic Scriptable data on a test setup, crop to the relevant widgets and remove personal wallpaper/status details. Never migrate or overwrite real phone data just to stage a screenshot.

@@ -26,6 +26,8 @@ getCountdown(settings: Settings, now: Date): {total: number; elapsed: number; da
 interface GridCell { date: string; color: string; opacity: number; count?: number; }
 
 // focus helpers are PURE: return new data, never mutate arguments.
+// Ambiguous saved days with a present session ledger and absent baseline fail closed;
+// callers must surface the error and preserve the source bytes for manual recovery.
 normalizeFocus(data: FocusData, blockMinutes: number): FocusData;
 settleFocus(data: FocusData, now: Date, blockMinutes: number): FocusData;
 startFocus(data: FocusData, type: 'focus'|'break', minutes: number, now: Date, blockMinutes: number, task?: string): FocusData;

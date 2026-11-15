@@ -17,3 +17,9 @@ Next static export + Tauri 2, pnpm workspace, Zod schemas and serde mirrors. Use
 
 ## 006 — Work allocation
 Foundation is orchestrator-only. Independent core, Rust, UI and phone work uses separate git worktrees with nonoverlapping ownership; merge sequentially and run tests at every merge. Core APIs are fixed in CORE_API.md. UI module implementation may proceed in its shell worktree against that contract instead of creating four competing page writers; phases retain their verification gates.
+
+## 007 — Ambiguous focus ledgers fail closed (2026-11-15)
+A file containing a session ledger but no baseline cannot safely treat saved `days` as either legacy baseline or session-derived totals. If they disagree with zero-baseline derivation, refuse rather than normalize and erase history. Manual recovery is safer than guessing. Shared TypeScript/Rust/phone validators were aligned after independent review.
+
+## 008 — Native HTML dialog compatibility (2026-11-15)
+The HTML `<dialog>` confirmation helper requires macOS 12.3+ in the target WKWebView baseline, so set the app minimum accordingly. This is not evidence that confirmation behavior has passed native acceptance; keep those checks pending until exercised in the app.

@@ -1,6 +1,6 @@
 # v1 acceptance ledger
 
-**Status: browser-only app-shape checks have passed; remaining rows are PENDING unless explicitly updated.** Executed evidence is recorded per row and in `docs/PROGRESS.md`. A frontend pass does not establish native IPC, filesystem or OS behavior. Foundation checks recorded elsewhere do not establish feature parity. The integration owner should replace individual statuses only after execution, recording commit, command or manual steps, environment, result and evidence in `docs/PROGRESS.md`. A passing build, a screenshot or a test name alone is not acceptance evidence.
+**Status: browser and selected native sandbox acceptance have passed; remaining rows are PENDING unless explicitly updated.** See per-row scope/evidence and authoritative `docs/PROGRESS.md` on main. Native observations used synthetic `.dev-data`; no real iCloud folder was selected or accessed. Feature-specific tests and manual evidence do not imply unrelated requirements passed. A passing build, screenshot or test name alone is not acceptance evidence.
 
 Scope: every requirement in `AGENT_PROMPT.md` §5.2–5.4 and §6.1–6.3. Phone installation, CI and media checks are added at the end. No real iCloud data may be read or written during development, tests or capture.
 
@@ -25,7 +25,7 @@ Scope: every requirement in `AGENT_PROMPT.md` §5.2–5.4 and §6.1–6.3. Phone
 
 | ID | Acceptance point | Status | Intended method / evidence |
 | --- | --- | --- | --- |
-| 5.3-01 | Watch folder, push UI changes without restart | PENDING | Sync: externally set a task and sleep value via same-folder atomic replacement; UI updates without restart; watcher survives repeated writes. |
+| 5.3-01 | Watch folder, push UI changes without restart | PASS (sandbox) | Native WKWebView: external same-folder atomic task JSON edit updated Habits without restart (`/tmp/daybar-native-acceptance.log`). Repeated writes, sleep edits and iCloud delivery remain unverified. |
 | 5.3-02 | Every mutation re-reads, applies one operation, validates and writes atomically; no whole cached object writes | PENDING | Rust/Phone: load stale snapshot, add unrelated external edit, mutate another field and assert both survive. Inspect all mutation callers, including tray/shortcuts and settings/history changes. |
 | 5.3-03 | Detect `.name.json.icloud`, request download, wait before reading | PENDING | Rust: fake downloader success, timeout and failure; no network or real iCloud. UI shows bounded failure rather than overwriting placeholder. Phone fake asserts download-before-read. |
 | 5.3-04 | Detect conflict copies; explicit merge/discard UI; no silent deletion | PENDING | Rust/UI: create `focus-timer 2.json`, inspect notice, cancel, merge and explicitly discard on separate fixtures. Assert unique session union, preserved ambiguous values and no deletion without action. |
@@ -46,14 +46,14 @@ Atomic rename and re-reading cannot guarantee distributed serialization. Even af
 
 | ID | Acceptance point | Status | Intended method / evidence |
 | --- | --- | --- | --- |
-| 6.1-01 | Sidebar: Today, Countdown, Habits, Focus, Sleep, Settings | PASS | Main `3528594`: committed Playwright smoke visited all six screens in static-export browser demo; active navigation and return paths work. `/tmp/daybar-integrated-browser.log`. Native IPC remains separate. |
+| 6.1-01 | Sidebar: Today, Countdown, Habits, Focus, Sleep, Settings | PASS | Browser smoke and native WKWebView acceptance visited all six screens; native keyboard navigation also exercised. `/tmp/daybar-native-acceptance.log`. |
 | 6.1-02 | Script-style dark theme; responsive grids, no hard-coded widget width | PASS | Same browser smoke: no document overflow at 375/600/900/1280 px; component tests assert grid order/colors/padding. Actual hero visually inspected, `docs/screenshots/today.png`. |
-| 6.1-03 | Today combines day progress/time to bed, active focus start/stop, inline tasks, focus blocks and countdown grid | PASS | Integrated 27 UI tests include active/idle/expiry handling; browser smoke started/stopped focus and changed a task, and actual Today hero shows all composed modules. Memory-client only, not native persistence proof. |
-| 6.1-04 | Tray title is live focus countdown or time until bed | PENDING | UI/native: observe successive ticks, start/stop, expiry and idle return without reopening window. |
-| 6.1-05 | Tray: all focus presets, stop, today's task toggles, open window, quit | PENDING | UI/native: exercise each action against sandbox; compare UI and JSON after tray changes. Relaunch after quit. |
+| 6.1-03 | Today combines day progress/time to bed, active focus start/stop, inline tasks, focus blocks and countdown grid | PASS | Browser smoke and native six-screen acceptance; native focus stop and task changes persisted in sandbox. Full visual parity remains bounded by the captured synthetic screenshot. |
+| 6.1-04 | Tray title is live focus countdown or time until bed | PASS (sandbox) | Native tray showed changing Break countdown (`Break4:47`) and returned to sleep status at expiry; actual tray status visually inspected (`/tmp/daybar-native-acceptance.log`). |
+| 6.1-05 | Tray: all focus presets, stop, today's task toggles, open window, quit | PASS (sandbox; quit partial) | Native menu displayed all focus/break/long-break presets, Stop, tasks, Show/Quit. Focus25 start, Stop, task toggle persisted; Open restored after Cmd+W hide. Quit/relaunch not tested. |
 | 6.1-06 | Dock icon hide preference | PENDING | UI/native: toggle, verify Dock visibility, reopen from tray and persistence after relaunch. |
 | 6.1-07 | Launch-at-login setting | PENDING | UI/native: inspect registration change with disposable test account; restore initial OS setting. Record restart/login check separately. |
-| 6.1-08 | Configurable global shortcut starts/stops focus | PENDING | UI/native: configure, use while app unfocused, change/unregister, test invalid/conflicting binding and persistence. Restore registration. |
+| 6.1-08 | Configurable global shortcut starts/stops focus | PASS (configured binding only) | Native Cmd+Shift+F started Focus25 and a second invocation stopped it; persisted state checked. Reconfiguration/conflict and relaunch persistence remain untested. |
 | 6.1-09 | Focus-done and break-over notifications | PENDING | Rust: injected near-future clock deadlines; UI/native: allow permission and observe each notification once, without real data. |
 | 6.1-10 | Night routine, no-phone and bedtime notifications | PENDING | Rust: seeded schedules at boundaries; UI/native: observe all three once using synthetic times, test alert toggles and permission denial. |
 | 6.1-11 | Rust timers rebuild on start/relevant changes; notifications only while running | PENDING | Rust/native: alter timer/sleep data, verify obsolete deadlines cancel and new ones fire; close/quit/relaunch behaviour is explicit. No claim of OS background scheduling. |
@@ -127,9 +127,9 @@ Atomic rename and re-reading cannot guarantee distributed serialization. Even af
 | ID | Acceptance point | Status | Intended method / evidence |
 | --- | --- | --- | --- |
 | I-01 | Updated standalone phone scripts and safe local→iCloud migration | PENDING | Phone harness: FileManager.iCloud, download-before-read, migrate only if destination absent; original `legacy/` hashes unchanged. Owner separately follows `scriptable/README.md` on a disposable phone setup. |
-| I-02 | Static export and native app launch | PENDING | Execute documented install/check/build commands after all workstreams merge; inspect `apps/desktop/out/`, launch native sandbox app and check every screen. |
+| I-02 | Static export and native app launch | PASS (sandbox) | Static export and native WKWebView launch; all six screens rendered and interacted with against sandbox. This does not mean app/DMG bundle is built. |
 | I-03 | GitHub macOS CI green, tag unsigned app/DMG downloadable | PENDING | Actual push/PR run then trusted version tag: inspect logs and download/unzip artifacts, mount DMG, open trusted app via right-click → Open. Local YAML validation is not a hosted CI run. |
-| I-04 | Hero, menu bar GIF and owner iPhone screenshot | PENDING | Follow `docs/screenshots/README.md` with synthetic data only; review all frames/metadata, record commit/date and replace placeholders honestly. |
+| I-04 | Hero, menu bar GIF and owner iPhone screenshot | PENDING (partial) | Browser Today hero and actual native popup GIF exist, both synthetic; GIF is sampled states, not continuous/countdown proof. Owner iPhone screenshot unavailable. See `docs/screenshots/README.md`. |
 
 ## Evidence record template
 

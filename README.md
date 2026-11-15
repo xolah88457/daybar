@@ -6,9 +6,11 @@
 
 ![Daybar Today dashboard showing synthetic countdown, tasks, focus and sleep data](docs/screenshots/today.png)
 
-*Captured from the actual static-export UI in browser-demo mode using synthetic in-memory data. Native OS integration is verified separately; this image is not evidence of iCloud sync.*
+*Captured from the actual static-export UI in browser-demo mode using synthetic in-memory data. It is not evidence of iCloud sync.*
 
-**Menu bar timer GIF:** not yet captured. Planned asset: `docs/screenshots/menu-bar.gif`.
+![Native Daybar popup menu showing sampled idle, focus, stopped and task states](docs/screenshots/menu-bar.gif)
+
+*Four actual native popup-window captures, two seconds each, with synthetic data. This is a sampled sequence—not a continuous recording or proof of a live countdown.*
 
 ## From Scriptable widgets to a desktop app
 
@@ -37,11 +39,13 @@ Next.js is statically exported into Tauri's WKWebView: no SSR, server actions or
 
 The phone and Mac share `daily-log-<LOG_ID>.json`, `focus-timer.json`, `sleep-data.json` and `daybar-settings.json`. Each mutation re-reads disk, applies one operation and validates. The Mac replaces files via a same-directory temporary file and atomic rename. Scriptable cannot atomically replace an existing file: it checks for intervening edits, moves the old file to a retained recovery backup, then installs the temporary file. A crash between those phone moves requires manual recovery; see the [phone guide](scriptable/README.md). Focus credit uses a session-start-keyed ledger so repeat settlement is a no-op; legacy daily totals remain a baseline.
 
+**Phone recovery limitation:** Scriptable's FileManager cannot atomically replace an existing file or provide compare-and-swap. Phone writes retain a recovery backup and fail closed when interrupted-write artifacts remain; after a crash, inspect/recover those artifacts manually before continuing. The two-file focus-to-habit repair is also not atomic.
+
 **Concurrency limitation:** atomic rename is not a cross-device transaction. Scriptable's `FileManager.iCloud()` synchronizes files; it does not supply a distributed transaction or a lock shared with the Mac. Re-reading narrows the race window but cannot guarantee that simultaneous phone/Mac edits never overwrite one another, even with idempotent focus credit. Conflict copies must be surfaced for explicit merge/discard, never silently deleted. Avoid editing the same data simultaneously; retain backups. These safety behaviours still require the checks in the ledger.
 
 ## Run locally — sandbox first
 
-Requires macOS (app target: macOS 12+), Xcode Command Line Tools (`xcode-select --install` if absent), **Node 22**, **pnpm 10.12.3**, and stable Rust with Cargo. Install Rust using [rustup](https://rustup.rs/) and consult [Tauri's macOS prerequisites](https://v2.tauri.app/start/prerequisites/). Commands below run from the repository root.
+Requires macOS 12.3 or later (the WKWebView HTML-dialog helper requires 12.3; native confirmation acceptance remains pending), Xcode Command Line Tools (`xcode-select --install` if absent), **Node 22**, **pnpm 10.12.3**, and stable Rust with Cargo. Install Rust using [rustup](https://rustup.rs/) and consult [Tauri's macOS prerequisites](https://v2.tauri.app/start/prerequisites/). Commands below run from the repository root.
 
 ```sh
 corepack enable
@@ -77,7 +81,7 @@ The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle
 4. Before the first real write, Daybar must copy **every managed file it will touch** to a timestamped backup folder. Confirm the backup exists and is readable before editing. Malformed/unknown files must produce a visible error, never an empty replacement.
 5. In Finder, choose **Keep Downloaded** for the shared folder where available. Evicted `.icloud` placeholders can delay reads; failed downloads should remain visible errors. Allow iCloud to finish syncing before switching devices.
 
-The real-folder flow, backups, placeholder handling and conflict resolution are acceptance requirements, not verified promises in this documentation. Do not use valuable data until they pass.
+Native sandbox acceptance has verified real tray actions, external sandbox-file refresh, focus stop/expiry, a global shortcut, and close-hide/reopen. It did not use the real iCloud folder. First-write backup, malformed-file behavior, placeholder handling, conflict resolution and genuine cross-device convergence remain unverified; do not use valuable data until their ledger checks pass.
 
 ## Stack & repository map
 
