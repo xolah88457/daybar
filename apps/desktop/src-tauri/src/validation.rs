@@ -280,7 +280,7 @@ mod tests {
         s.sleep.no_phone_minutes = 121;
         assert!(s.validate().is_err());
         s.sleep.no_phone_minutes = 60;
-        s.habits.tasks.push(" Coursework ".into());
+        s.habits.tasks.push(" Read a chapter ".into());
         assert!(s.validate().is_err());
     }
 }

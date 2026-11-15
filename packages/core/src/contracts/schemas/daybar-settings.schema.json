@@ -9,24 +9,24 @@
     },
     "countdown": {
       "default": {
-        "startDate": "2026-09-09",
-        "endDate": "2027-05-24",
-        "title": "End of University"
+        "startDate": "2026-10-01",
+        "endDate": "2027-07-01",
+        "title": "Community Garden Opening"
       },
       "type": "object",
       "properties": {
         "startDate": {
-          "default": "2026-09-09",
+          "default": "2026-10-01",
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "endDate": {
-          "default": "2027-05-24",
+          "default": "2027-07-01",
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "title": {
-          "default": "End of University",
+          "default": "Community Garden Opening",
           "type": "string",
           "minLength": 1,
           "maxLength": 120
@@ -41,15 +41,15 @@
     },
     "habits": {
       "default": {
-        "startDate": "2026-10-30",
+        "startDate": "2026-11-01",
         "endDate": "",
         "title": "Daily Tasks",
         "logId": "Daily_Tasks",
         "tasks": [
-          "Coursework",
-          "Live Trading",
-          "Trade Review",
-          "Apostles work"
+          "Read a chapter",
+          "Sketch a scene",
+          "Take a walk",
+          "Water the plants"
         ],
         "archivedTasks": [],
         "dayCompleteMin": 1,
@@ -58,7 +58,7 @@
       "type": "object",
       "properties": {
         "startDate": {
-          "default": "2026-10-30",
+          "default": "2026-11-01",
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
@@ -88,10 +88,10 @@
         },
         "tasks": {
           "default": [
-            "Coursework",
-            "Live Trading",
-            "Trade Review",
-            "Apostles work"
+            "Read a chapter",
+            "Sketch a scene",
+            "Take a walk",
+            "Water the plants"
           ],
           "minItems": 1,
           "type": "array",

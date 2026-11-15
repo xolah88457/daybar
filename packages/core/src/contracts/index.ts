@@ -56,12 +56,12 @@ export const sleepDataSchema = z.object({
 }).strict();
 
 export const countdownSettingsSchema = z.object({
-  startDate: dateKeySchema.default('2026-09-09'), endDate: dateKeySchema.default('2027-05-24'), title: name.default('End of University')
+  startDate: dateKeySchema.default('2026-10-01'), endDate: dateKeySchema.default('2027-07-01'), title: name.default('Community Garden Opening')
 }).strict();
 export const habitSettingsSchema = z.object({
-  startDate: dateKeySchema.default('2026-10-30'), endDate: z.union([dateKeySchema, z.literal('')]).default(''),
+  startDate: dateKeySchema.default('2026-11-01'), endDate: z.union([dateKeySchema, z.literal('')]).default(''),
   title: name.default('Daily Tasks'), logId: z.string().regex(/^[a-zA-Z0-9_]+$/).default('Daily_Tasks'),
-  tasks: z.array(name).min(1).refine(xs => new Set(xs).size === xs.length, 'Duplicate tasks').default(['Coursework', 'Live Trading', 'Trade Review', 'Apostles work']),
+  tasks: z.array(name).min(1).refine(xs => new Set(xs).size === xs.length, 'Duplicate tasks').default(['Read a chapter', 'Sketch a scene', 'Take a walk', 'Water the plants']),
   archivedTasks: z.array(name).default([]), dayCompleteMin: z.number().int().min(1).default(1),
   focusThresholds: z.record(name, z.number().int().min(1).max(1440)).default({})
 }).strict();
@@ -105,7 +105,8 @@ export type SleepPlan = z.infer<typeof sleepPlanSchema>;
 export type SleepData = z.infer<typeof sleepDataSchema>;
 
 export const preferencesSchema = z.object({
-  dataFolder: z.string(), realData: z.boolean(), launchAtLogin: z.boolean(), hideDock: z.boolean(), globalShortcut: z.string()
+  dataFolder: z.string(), realData: z.boolean(), launchAtLogin: z.boolean(), hideDock: z.boolean(), globalShortcut: z.string(),
+  themeMode: z.enum(['day', 'night', 'auto']).default('night')
 }).strict();
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type Operation =

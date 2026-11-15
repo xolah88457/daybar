@@ -53,7 +53,7 @@ fn malformed_unknown_and_invalid_dates_are_never_overwritten() {
         write(&root, file, raw);
         let before = bytes(&root.join(file)).unwrap();
         assert!(!store.snapshot().unwrap().issues.is_empty(), "{file}");
-        assert!(store.mutate(task("2026-11-15", "Coursework")).is_err());
+        assert!(store.mutate(task("2026-11-15", "Read a chapter")).is_err());
         assert_eq!(bytes(&root.join(file)).unwrap(), before);
     }
 }
@@ -74,30 +74,30 @@ fn first_opted_in_write_backs_up_every_managed_file() {
     prefs.real_data = true;
     prefs.data_folder = root.to_string_lossy().into();
     store.set_preferences(prefs).unwrap();
-    store.mutate(task("2026-11-15", "Coursework")).unwrap();
+    store.mutate(task("2026-11-15", "Read a chapter")).unwrap();
     let backups = all_backups(&root);
     assert_eq!(backups.len(), 1);
     for (n, b) in originals {
         assert_eq!(fs::read(backups[0].join(n)).unwrap(), b);
     }
-    store.mutate(task("2026-11-15", "Live Trading")).unwrap();
+    store.mutate(task("2026-11-15", "Sketch a scene")).unwrap();
     assert_eq!(all_backups(&root).len(), 1);
 }
 #[test]
 fn interleaved_external_edit_is_preserved_and_stale_commit_rejected() {
     let (_d, store, root) = sandbox();
-    store.mutate(task("2026-11-15", "Coursework")).unwrap();
+    store.mutate(task("2026-11-15", "Read a chapter")).unwrap();
     write(
         &root,
         "daily-log-Daily_Tasks.json",
-        r#"{"2026-11-15":["Coursework","Live Trading"],"2026-11-14":["Trade Review"]}"#,
+        r#"{"2026-11-15":["Read a chapter","Sketch a scene"],"2026-11-14":["Take a walk"]}"#,
     );
     let s = store
-        .mutate(task("2026-11-15", "Apostles work"))
+        .mutate(task("2026-11-15", "Water the plants"))
         .unwrap()
         .snapshot;
     assert_eq!(s.daily_log["2026-11-15"].len(), 3);
-    assert_eq!(s.daily_log["2026-11-14"], vec!["Trade Review"]);
+    assert_eq!(s.daily_log["2026-11-14"], vec!["Take a walk"]);
     let mut state = store.lock().unwrap();
     let (_, previous) = store.load(&state).unwrap();
     write(
@@ -127,7 +127,7 @@ fn startup_settles_legacy_once_and_recovers_habit_threshold() {
     settings
         .habits
         .focus_thresholds
-        .insert("Coursework".into(), 25);
+        .insert("Read a chapter".into(), 25);
     atomic(&root.join(SETTINGS), &encode(&settings).unwrap()).unwrap();
     let data = FocusData {
         state: Some(TimerState {
@@ -135,7 +135,7 @@ fn startup_settles_legacy_once_and_recovers_habit_threshold() {
             minutes: 25,
             start,
             end,
-            task: Some("Coursework".into()),
+            task: Some("Read a chapter".into()),
         }),
         days: BTreeMap::from([(
             day.clone(),
@@ -150,11 +150,11 @@ fn startup_settles_legacy_once_and_recovers_habit_threshold() {
     let s = store.snapshot().unwrap();
     assert!(s.focus.state.is_none());
     assert_eq!(s.focus.days[&day].minutes, 50);
-    assert!(s.daily_log[&day].contains(&"Coursework".into()));
+    assert!(s.daily_log[&day].contains(&"Read a chapter".into()));
     assert_eq!(store.snapshot().unwrap().focus.days[&day].minutes, 50);
     // Simulate interruption after the focus ledger commit, before the daily-log write.
     write(&root, "daily-log-Daily_Tasks.json", "{}");
-    assert!(store.snapshot().unwrap().daily_log[&day].contains(&"Coursework".into()));
+    assert!(store.snapshot().unwrap().daily_log[&day].contains(&"Read a chapter".into()));
     let mut d = s.focus;
     d.state = data.state;
     atomic(&root.join(FOCUS), &encode(&d).unwrap()).unwrap();
@@ -169,7 +169,7 @@ fn rename_transfers_every_log_and_sessions_archive_keeps_history() {
             Operation::StartTimer {
                 timer_type: "focus".into(),
                 minutes: 25,
-                task: Some("Coursework".into()),
+                task: Some("Read a chapter".into()),
             },
             now,
         )
@@ -180,11 +180,11 @@ fn rename_transfers_every_log_and_sessions_archive_keeps_history() {
     write(
         &root,
         "daily-log-Other.json",
-        r#"{"2026-11-01":["Coursework","old archived name"]}"#,
+        r#"{"2026-11-01":["Read a chapter","old archived name"]}"#,
     );
     let s = store
         .mutate(Operation::RenameTask {
-            from: "Coursework".into(),
+            from: "Read a chapter".into(),
             to: "Study".into(),
         })
         .unwrap()
@@ -219,12 +219,12 @@ fn conflicts_union_logs_backup_discard_and_refuse_ambiguous_sleep() {
     write(
         &root,
         "daily-log-Daily_Tasks.json",
-        r#"{"2026-11-15":["Coursework"]}"#,
+        r#"{"2026-11-15":["Read a chapter"]}"#,
     );
     write(
         &root,
         "daily-log-Daily_Tasks 2.json",
-        r#"{"2026-11-15":["Live Trading"]}"#,
+        r#"{"2026-11-15":["Sketch a scene"]}"#,
     );
     assert_eq!(store.snapshot().unwrap().conflicts.len(), 1);
     let s = store
@@ -309,7 +309,7 @@ fn path_traversal_symlinks_and_unconsented_folder_are_rejected() {
         fs::remove_file(root.join(SLEEP)).unwrap();
         std::os::unix::fs::symlink(other.path().join("victim"), root.join(SLEEP)).unwrap();
         assert!(!store.snapshot().unwrap().issues.is_empty());
-        assert!(store.mutate(task("2026-11-15", "Coursework")).is_err());
+        assert!(store.mutate(task("2026-11-15", "Read a chapter")).is_err());
         assert!(!other.path().join("victim").exists());
     }
 }
@@ -326,6 +326,7 @@ fn debug_restart_revokes_persisted_real_folder_without_probing_it() {
         launch_at_login: false,
         hide_dock: false,
         global_shortcut: String::new(),
+        theme_mode: ThemeMode::Night,
     };
     atomic(&prefs, &encode(&p).unwrap()).unwrap();
     let store = Store::open(root.clone(), Some(prefs)).unwrap();
@@ -411,10 +412,10 @@ fn mutex_serializes_simultaneous_mac_mutations() {
     let (_d, store, _) = sandbox();
     let store = std::sync::Arc::new(store);
     let handles: Vec<_> = [
-        "Coursework",
-        "Live Trading",
-        "Trade Review",
-        "Apostles work",
+        "Read a chapter",
+        "Sketch a scene",
+        "Take a walk",
+        "Water the plants",
     ]
     .into_iter()
     .map(|task| {

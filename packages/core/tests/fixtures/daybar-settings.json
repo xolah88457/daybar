@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
   "countdown": {
-    "startDate": "2026-09-09",
-    "endDate": "2027-05-24",
-    "title": "End of University"
+    "startDate": "2026-10-01",
+    "endDate": "2027-07-01",
+    "title": "Community Garden Opening"
   },
   "habits": {
-    "startDate": "2026-10-30",
+    "startDate": "2026-11-01",
     "endDate": "",
     "title": "Daily Tasks",
     "logId": "Daily_Tasks",
     "tasks": [
-      "Coursework",
-      "Live Trading",
-      "Trade Review",
-      "Apostles work"
+      "Read a chapter",
+      "Sketch a scene",
+      "Take a walk",
+      "Water the plants"
     ],
     "archivedTasks": [],
     "dayCompleteMin": 1,
@@ -22,18 +22,9 @@
   },
   "focus": {
     "title": "Focus",
-    "focusOptions": [
-      25,
-      50
-    ],
-    "breakOptions": [
-      5,
-      10
-    ],
-    "longBreakOptions": [
-      15,
-      30
-    ],
+    "focusOptions": [25, 50],
+    "breakOptions": [5, 10],
+    "longBreakOptions": [15, 30],
     "blockMinutes": 25,
     "alerts": true
   },
