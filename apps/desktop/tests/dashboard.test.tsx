@@ -206,9 +206,8 @@ describe('dashboard operations and failures', () => {
       }
     });
     const initial = fixture();
-    const currentTime = new Date();
-    initial.sleep.wakes[key(currentTime)] =
-      currentTime.getHours() * 60 + currentTime.getMinutes() - 60;
+    const wake = new Date(Date.now() - 60 * 60000);
+    initial.sleep.wakes[key(wake)] = wake.getHours() * 60 + wake.getMinutes();
     initial.settings.sleep.noPhoneMinutes = 1440;
     const mock = mockClient(initial);
     render(<Dashboard client={mock.client} />);
@@ -226,6 +225,19 @@ describe('dashboard operations and failures', () => {
       'Could not confirm this action: Native dialogs are unavailable.'
     );
     expect(mock.client.mutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    const browserConfirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Data folder path' }), {
+      target: { value: '/disposable-confirm-test' }
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: /This is my real shared data/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand this connects real data/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Mac preferences ↗' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not confirm this action: Native dialogs are unavailable.'
+    );
+    expect(browserConfirm).not.toHaveBeenCalled();
+    expect(mock.client.setPreferences).not.toHaveBeenCalled();
     if (showModal)
       Object.defineProperty(
         HTMLDialogElement.prototype,

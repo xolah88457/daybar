@@ -316,6 +316,7 @@ export function SettingsPanel({
         key={JSON.stringify(snapshot.preferences)}
         snapshot={snapshot}
         busy={busy}
+        confirm={confirm}
         save={savePreferences}
       />
       <Section title="Keyboard, not mouse">
@@ -341,10 +342,12 @@ export function SettingsPanel({
 function PreferencesPanel({
   snapshot,
   busy,
+  confirm,
   save
 }: {
   snapshot: Snapshot;
   busy: boolean;
+  confirm: Actions['confirm'];
   save: (p: Preferences) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(() => ({ ...snapshot.preferences }));

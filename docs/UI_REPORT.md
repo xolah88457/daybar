@@ -22,6 +22,12 @@
 - Browser smoke source: `apps/desktop/tests/browser_smoke.py`. It requires a separately installed Python Playwright/Chromium environment, not a new app dependency. Serve `apps/desktop/out` on `127.0.0.1:3107` before running it; the script’s header includes the server-helper invocation.
 - Screenshots from the smoke run: `/tmp/daybar-ui-today.png` and `/tmp/daybar-ui-mobile.png` (outside the commit; available for the orchestrator’s README assets).
 
+## Final confirmation error-path correction
+
+- All ten production gates use the dashboard's shared fail-closed catcher and existing error notice. Integration additionally wires the nested real-folder preferences panel explicitly, avoiding an accidental fallback to the browser's global `confirm`.
+- The integrated regression forces native `showModal` failure for Focus, Archive and real-folder connection: the error is visible, no mutation/preferences write occurs, and browser confirmation is not called. The folder regression failed before the explicit prop wiring and passed afterward.
+- Orchestrator Node 22.23.5 lint, typecheck and both timezone suites passed: 137 core + 38 desktop + 59 phone = 234 tests per Toronto/London (`/tmp/daybar-final-correction-gates.log`). Original worker-scope checks below/above are historical; current native/release acceptance is tracked in `docs/PROGRESS.md` and `docs/VERIFICATION.md`.
+
 ## Integration and limitations
 
 - Tested against completed core commit `2cecb141d54b748c772e97db2f94a13c1c711b6b`, cherry-picked here as `a8dc04f`. No fixed API mismatches were found. The UI additionally uses core’s exported `getFocusBlocks` helper for responsive block cells.
