@@ -158,7 +158,7 @@ function createWidget() {
   const end = parseKey(END_DATE);
   const now = new Date();
   const today = startOfDay(now);
-  const dayFraction = (now - today) / (addDays(today, 1) - today); // 0 at midnight, 1 at next midnight
+  const dayFraction = (now - today) / 86400000; // 0 at midnight, 1 at next midnight
 
   const total = daysBetween(end, start) + 1;
   const elapsed = Math.min(total, Math.max(0, daysBetween(today, start) + 1)); // includes today

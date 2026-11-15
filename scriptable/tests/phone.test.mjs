@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-import {scripts,source,storage,run,plain,allText} from './harness.mjs';
+import {scripts,source,storage,run,plain,allText,snapshot} from './harness.mjs';
 
 const day = '2026-11-15';
 const defaults = ['Coursework','Live Trading','Trade Review','Apostles work'];
@@ -256,4 +256,40 @@ test('Countdown and focus widgets apply colors/grid; focus countdown never becom
   assert.deepEqual(plain(f.api.FOCUS_OPTIONS),[40]); assert.deepEqual(plain(f.api.BREAK_OPTIONS),[7]); assert.deepEqual(plain(f.api.LONG_BREAK_OPTIONS),[20]);
   const data = await f.api.startTimer('focus',1); f.advance(61000);
   assert.ok(allText(f.api.createWidget(data)).includes('0:00'));
+});
+
+test('Days Left: golden VM parity with the legacy file on 23h/25h DST days and midnight', async () => {
+  // Run the actual legacy source (not a reimplementation) through the same harness VM.
+  const legacyCode = await readFile(new URL('../../legacy/Days Left.js', import.meta.url), 'utf8');
+  // Local calendar days inside the default range [2026-09-09, 2027-05-24]. The DST dates are
+  // America/Toronto's (2026-11-01 fall back, 2027-03-14 spring forward) and Europe/London's
+  // (2026-10-25 fall back, 2027-03-28 spring forward), so under either test TZ the set below
+  // covers a 25h, a 24h and a 23h local day.
+  const local = (y,m,d,h=12,mi=0) => new Date(y,m-1,d,h,mi).getTime();
+  const instants = [
+    ['harness default', Date.parse('2026-11-15T17:00:00Z')],
+    ['midnight normal day', local(2026,11,15,0,0)],
+    ['first grid day midnight', local(2026,9,9,0,0)],
+    ['last grid day late', local(2027,5,24,23,59)],
+    ['Toronto fall-back midnight (25h day)', local(2026,11,1,0,0)],
+    ['Toronto fall-back late (25h day)', local(2026,11,1,23,30)],
+    ['London fall-back late (25h day)', local(2026,10,25,23,30)],
+    ['Toronto spring-forward midnight (23h day)', local(2027,3,14,0,0)],
+    ['Toronto spring-forward late (23h day)', local(2027,3,14,23,30)],
+    ['London spring-forward late (23h day)', local(2027,3,28,23,30)]
+  ];
+  const dayLength = ms => { const d = new Date(ms), a = new Date(d.getFullYear(),d.getMonth(),d.getDate()), b = new Date(d.getFullYear(),d.getMonth(),d.getDate()+1); return b - a; };
+  const lengths = [...new Set(instants.map(([,ms]) => dayLength(ms)))];
+  // Where the test TZ observes DST on the chosen dates, both a 23h and a 25h local day must be exercised.
+  if (lengths.some(l => l !== 86400000)) {
+    assert.ok(lengths.includes(82800000) && lengths.includes(90000000),
+      `expected 23h and 25h local days to be exercised in this DST-observing TZ, got ${lengths}`);
+  }
+  for (const [label, now] of instants) {
+    const updated = await run('Days Left', {now});
+    const legacy = await run('Days Left', {now, code: legacyCode});
+    assert.deepEqual(snapshot(updated.api.createWidget()), snapshot(legacy.api.createWidget()),
+      `golden widget mismatch at ${label} (${new Date(now).toString()}, local day ${dayLength(now)/3600000}h)`);
+    assert.deepEqual(allText(updated.api.createWidget()), allText(legacy.api.createWidget()), `footer mismatch at ${label}`);
+  }
 });
