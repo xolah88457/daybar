@@ -12,7 +12,7 @@ import { confirmAction } from '../lib/confirm';
 import { createDemoClient } from '../lib/demo';
 import { tauriClient } from '../lib/ipc';
 import { Countdown, DayProgress, Focus, Habits, Sleep } from './modules';
-import { theme } from './primitives';
+import { theme, layoutTheme, dayProjectedSettings } from './primitives';
 import { SettingsPanel } from './settings';
 
 const views = [
@@ -54,6 +54,7 @@ export function Dashboard({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [demo, setDemo] = useState(false);
+  const [systemDark, setSystemDark] = useState(true);
   const working = useRef(false);
   const pendingChange = useRef(false);
   const mounted = useRef(false);
@@ -66,8 +67,15 @@ export function Dashboard({
     setDemo(!suppliedClient && browser);
     setClient(suppliedClient ?? (browser ? createDemoClient() : tauriClient));
     setNow(new Date());
+    const appearance = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (appearance) setSystemDark(appearance.matches);
+    const updateAppearance = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    appearance?.addEventListener('change', updateAppearance);
     const tick = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(tick);
+    return () => {
+      window.clearInterval(tick);
+      appearance?.removeEventListener('change', updateAppearance);
+    };
   }, [suppliedClient]);
   const accept = useCallback((data: Snapshot) => {
     current.current = data;
@@ -205,21 +213,39 @@ export function Dashboard({
       if (
         event.defaultPrevented ||
         event.repeat ||
-        !(event.metaKey || event.ctrlKey) ||
-        event.altKey ||
+        event.isComposing ||
         (target instanceof Element &&
           target.closest(
             'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]'
-          ))
+          )) ||
+        document.querySelector('dialog[open]')
       )
         return;
       const index = Number(event.key) - 1;
-      if (!event.shiftKey && index >= 0 && index < views.length) {
+      const bareNavigation =
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        index >= 0 &&
+        index < views.length;
+      const modifiedNavigation =
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        index >= 0 &&
+        index < views.length;
+      if (bareNavigation || modifiedNavigation) {
         event.preventDefault();
         setView(views[index]);
         main.current?.focus();
       }
-      if (event.shiftKey && event.key === 'Enter') {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        event.shiftKey &&
+        event.key === 'Enter'
+      ) {
         const data = current.current;
         if (!data || working.current || data.issues.length) return;
         event.preventDefault();
@@ -260,10 +286,31 @@ export function Dashboard({
           confirm
         }
       : null;
+  const themeMode = snapshot?.preferences.themeMode ?? 'night';
+  const effectiveNight =
+    themeMode === 'night' || (themeMode === 'auto' && systemDark);
+  const nextTheme = effectiveNight ? 'day' : 'night';
+  const moduleActions =
+    actions && !effectiveNight
+      ? {
+          ...actions,
+          snapshot: {
+            ...actions.snapshot,
+            settings: dayProjectedSettings(actions.snapshot.settings)
+          }
+        }
+      : actions;
+  const appearanceStyle = snapshot
+    ? effectiveNight
+      ? theme(snapshot.settings)
+      : layoutTheme(snapshot.settings)
+    : undefined;
   return (
     <div
       className="app-shell"
-      style={snapshot ? theme(snapshot.settings) : undefined}
+      data-theme={themeMode}
+      data-system-theme={systemDark ? 'night' : 'day'}
+      style={appearanceStyle}
     >
       <a className="skip-link" href="#main">
         Skip to content
@@ -328,6 +375,22 @@ export function Dashboard({
             <h1>{view === 'Today' ? 'Here & now.' : view}</h1>
             <p className="page-description">{descriptions[view]}</p>
           </div>
+          <div className="head-actions">
+            <button
+              type="button"
+              className="theme-toggle"
+              aria-label={`Switch to ${nextTheme} appearance`}
+              title="Toggle day/night appearance"
+              onClick={() => {
+                if (!snapshot || !client) return;
+                void savePreferences({
+                  ...snapshot.preferences,
+                  themeMode: nextTheme
+                });
+              }}
+            >
+              {effectiveNight ? '☼' : '☾'}
+            </button>
           <div className="date-stamp">
             {now ? (
               <>
@@ -346,6 +409,7 @@ export function Dashboard({
             ) : (
               '—'
             )}
+          </div>
           </div>
         </header>
         {demo && (
@@ -440,7 +504,7 @@ export function Dashboard({
             </div>
           </div>
         ))}
-        {!actions ? (
+        {!actions || !moduleActions ? (
           <div className="loading" role="status">
             {error
               ? 'Data unavailable. Choose refresh to retry.'
@@ -451,29 +515,29 @@ export function Dashboard({
             {view === 'Today' && (
               <div className="dashboard-grid">
                 <div className="today-progress">
-                  <DayProgress {...actions} />
+                  <DayProgress {...moduleActions} />
                 </div>
                 <div className="today-focus">
-                  <Focus {...actions} />
+                  <Focus {...moduleActions} />
                 </div>
                 <div className="today-habits">
-                  <Habits {...actions} compact />
+                  <Habits {...moduleActions} compact />
                 </div>
                 <div className="today-countdown">
-                  <Countdown {...actions} />
+                  <Countdown {...moduleActions} />
                 </div>
               </div>
             )}
-            {view === 'Countdown' && <Countdown {...actions} />}
-            {view === 'Habits' && <Habits {...actions} />}
+            {view === 'Countdown' && <Countdown {...moduleActions} />}
+            {view === 'Habits' && <Habits {...moduleActions} />}
             {view === 'Focus' && (
               <div className="reading-width">
-                <Focus {...actions} />
+                <Focus {...moduleActions} />
               </div>
             )}
             {view === 'Sleep' && (
               <div className="stack">
-                <Sleep {...actions} />
+                <Sleep {...moduleActions} />
               </div>
             )}
             {view === 'Settings' && (

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   act,
   fireEvent,
@@ -25,10 +27,10 @@ function mockClient(initial = fixture()) {
           : [];
       return { snapshot: structuredClone(snapshot) };
     }),
-    setPreferences: vi.fn(async (preferences) => ({
-      ...structuredClone(snapshot),
-      preferences
-    })),
+    setPreferences: vi.fn(async (preferences) => {
+      snapshot = { ...structuredClone(snapshot), preferences };
+      return structuredClone(snapshot);
+    }),
     resolveConflict: vi.fn(async () => structuredClone(snapshot)),
     subscribe: vi.fn(async (callback) => {
       changed = callback;
@@ -52,11 +54,57 @@ const navigate = (name: string) =>
     )
   );
 
+function dayKey(offset: number) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - offset);
+  return key(date);
+}
+
+function mockMatchMedia(matches: boolean) {
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const addEventListener = vi.fn(
+    (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      listeners.add(listener);
+    }
+  );
+  const removeEventListener = vi.fn(
+    (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      listeners.delete(listener);
+    }
+  );
+  const mql = {
+    matches,
+    media: '(prefers-color-scheme: dark)',
+    addEventListener,
+    removeEventListener
+  };
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn(() => mql)
+  });
+  return {
+    mql,
+    change(next: boolean) {
+      mql.matches = next;
+      for (const listener of [...listeners])
+        listener({ matches: next } as MediaQueryListEvent);
+    },
+    listenerCount: () => listeners.size,
+    restore() {
+      if (descriptor) Object.defineProperty(window, 'matchMedia', descriptor);
+      else Reflect.deleteProperty(window, 'matchMedia');
+    }
+  };
+}
+
 describe('dashboard operations and failures', () => {
   it('combines modules, sends single checkbox operations and applies live updates', async () => {
     const mock = mockClient();
     const { unmount } = render(<Dashboard client={mock.client} />);
-    const task = await screen.findByRole('checkbox', { name: /Coursework/ });
+    const task = await screen.findByRole('checkbox', { name: /Read a chapter/ });
     expect(
       screen.getByRole('heading', { name: /Time/ })
     ).toBeInTheDocument();
@@ -68,24 +116,204 @@ describe('dashboard operations and failures', () => {
       expect(mock.client.mutate).toHaveBeenCalledWith({
         kind: 'set_task',
         date: key(new Date()),
-        task: 'Coursework',
+        task: 'Read a chapter',
         done: true
       })
     );
     expect(await screen.findByRole('status')).toHaveTextContent('Saved.');
     const next = fixture();
-    next.dailyLog[key(new Date())] = ['Live Trading'];
+    next.dailyLog[key(new Date())] = ['Sketch a scene'];
     await mock.update(next);
     await waitFor(() =>
       expect(
-        screen.getByRole('checkbox', { name: /Live Trading/ })
+        screen.getByRole('checkbox', { name: /Sketch a scene/ })
       ).toBeChecked()
     );
     expect(
-      screen.getByRole('checkbox', { name: /Coursework/ })
+      screen.getByRole('checkbox', { name: /Read a chapter/ })
     ).not.toBeChecked();
     unmount();
     expect(mock.unsubscribe).toHaveBeenCalledOnce();
+  });
+  it('persists a day/night toggle through setPreferences and applies the returned snapshot', async () => {
+    const mock = mockClient();
+    render(<Dashboard client={mock.client} />);
+    await screen.findByRole('checkbox', { name: /Read a chapter/ });
+    const shell = document.querySelector('.app-shell') as HTMLElement;
+    expect(shell).toHaveAttribute('data-theme', 'night');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Switch to day appearance' })
+    );
+    await waitFor(() =>
+      expect(mock.client.setPreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ themeMode: 'day' })
+      )
+    );
+    await waitFor(() => expect(shell).toHaveAttribute('data-theme', 'day'));
+    expect(shell.getAttribute('style') ?? '').not.toContain('--background');
+    expect(shell.getAttribute('style') ?? '').toContain('--cellSize');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Switch to night appearance' })
+    );
+    await waitFor(() =>
+      expect(mock.client.setPreferences).toHaveBeenLastCalledWith(
+        expect.objectContaining({ themeMode: 'night' })
+      )
+    );
+    await waitFor(() => expect(shell).toHaveAttribute('data-theme', 'night'));
+  });
+  it('saves Auto appearance from Settings and follows the current system theme', async () => {
+    const media = mockMatchMedia(false);
+    try {
+      const mock = mockClient();
+      render(<Dashboard client={mock.client} />);
+      await screen.findByRole('checkbox', { name: /Read a chapter/ });
+      navigate('Settings');
+      fireEvent.change(
+        await screen.findByRole('combobox', { name: 'Appearance' }),
+        { target: { value: 'auto' } }
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Save Mac preferences ↗' })
+      );
+      await waitFor(() =>
+        expect(mock.client.setPreferences).toHaveBeenCalledWith(
+          expect.objectContaining({ themeMode: 'auto' })
+        )
+      );
+      const shell = document.querySelector('.app-shell') as HTMLElement;
+      await waitFor(() => expect(shell).toHaveAttribute('data-theme', 'auto'));
+      expect(shell).toHaveAttribute('data-system-theme', 'day');
+      expect(shell.getAttribute('style') ?? '').not.toContain('--background');
+      expect(
+        screen.getByRole('button', { name: 'Switch to night appearance' })
+      ).toBeInTheDocument();
+    } finally {
+      media.restore();
+    }
+  });
+  it('updates Auto mode on a system appearance change and cleans up its media listener', async () => {
+    const media = mockMatchMedia(true);
+    try {
+      const initial = fixture();
+      initial.preferences.themeMode = 'auto';
+      const mock = mockClient(initial);
+      const { unmount } = render(<Dashboard client={mock.client} />);
+      await screen.findByRole('checkbox', { name: /Read a chapter/ });
+      const shell = document.querySelector('.app-shell') as HTMLElement;
+      expect(shell).toHaveAttribute('data-system-theme', 'night');
+      expect(
+        screen.getByRole('button', { name: 'Switch to day appearance' })
+      ).toBeInTheDocument();
+      expect(media.mql.addEventListener).toHaveBeenCalledWith(
+        'change',
+        expect.any(Function)
+      );
+      const listener = media.mql.addEventListener.mock.calls[0][1];
+      act(() => media.change(false));
+      await waitFor(() =>
+        expect(shell).toHaveAttribute('data-system-theme', 'day')
+      );
+      expect(
+        screen.getByRole('button', { name: 'Switch to night appearance' })
+      ).toBeInTheDocument();
+      expect(shell.getAttribute('style') ?? '').not.toContain('--background');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Switch to night appearance' })
+      );
+      await waitFor(() =>
+        expect(mock.client.setPreferences).toHaveBeenCalledWith(
+          expect.objectContaining({ themeMode: 'night' })
+        )
+      );
+      unmount();
+      expect(media.mql.removeEventListener).toHaveBeenCalledWith(
+        'change',
+        listener
+      );
+      expect(media.listenerCount()).toBe(0);
+    } finally {
+      media.restore();
+    }
+  });
+  it('keeps core heatmap colors and opacity distinctions in day mode', async () => {
+    const initial = fixture();
+    initial.preferences.themeMode = 'day';
+    initial.dailyLog[dayKey(0)] = [
+      'Read a chapter',
+      'Sketch a scene',
+      'Take a walk',
+      'Water the plants'
+    ];
+    initial.dailyLog[dayKey(1)] = ['Read a chapter'];
+    initial.dailyLog[dayKey(2)] = ['Read a chapter', 'Sketch a scene'];
+    const mock = mockClient(initial);
+    render(<Dashboard client={mock.client} />);
+    await screen.findByRole('checkbox', { name: /Read a chapter/ });
+    navigate('Habits');
+    const full = await screen.findByRole('button', {
+      name: `${dayKey(0)}: 4 tasks done`
+    });
+    const partial = screen.getByRole('button', {
+      name: `${dayKey(1)}: 1 tasks done`
+    });
+    const empty = screen.getByRole('button', {
+      name: `${dayKey(3)}: 0 tasks done`
+    });
+    expect(full).toHaveStyle({ background: '#18764b' });
+    expect(partial).toHaveStyle({ background: '#b43737' });
+    expect(empty).toHaveStyle({ background: '#202820' });
+    expect(Number(full.style.opacity)).toBe(1);
+    expect(Number(partial.style.opacity)).toBeCloseTo(0.475);
+    expect(Number(empty.style.opacity)).toBeCloseTo(0.05);
+    expect(Number(partial.style.opacity)).toBeGreaterThan(
+      Number(empty.style.opacity)
+    );
+    expect(Number(full.style.opacity)).toBeGreaterThan(
+      Number(partial.style.opacity)
+    );
+  });
+  it('saves shared settings from Day with the raw appearance, not the day projection', async () => {
+    const initial = fixture();
+    initial.preferences.themeMode = 'day';
+    const mock = mockClient(initial);
+    render(<Dashboard client={mock.client} />);
+    await screen.findByRole('checkbox', { name: /Read a chapter/ });
+    navigate('Settings');
+    fireEvent.click(screen.getByText('Focus', { selector: 'summary' }));
+    fireEvent.change(screen.getByLabelText(/Block Minutes/), {
+      target: { value: '30' }
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save shared settings ↗' })
+    );
+    await waitFor(() => expect(mock.client.mutate).toHaveBeenCalled());
+    const operation = vi.mocked(mock.client.mutate).mock.calls[0][0];
+    expect(operation).toMatchObject({ kind: 'save_settings' });
+    if (operation.kind === 'save_settings') {
+      expect(operation.settings.appearance).toMatchObject({
+        background: '#0d1117',
+        text: '#ffffff',
+        green: '#39d353',
+        blue: '#58a6ff',
+        red: '#ff5c5c',
+        orange: '#ff9f43',
+        yellow: '#f2cc60'
+      });
+    }
+    expect(mock.client.setPreferences).not.toHaveBeenCalled();
+  });
+  it('does not override core heatmap opacity in the day CSS palette', () => {
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/app/globals.css'),
+      'utf8'
+    );
+    expect(css).not.toMatch(
+      /\.app-shell\[data-theme='day'\][^{}]*\.square[^{}]*\{[^}]*opacity\s*:\s*1\s*!important/s
+    );
+    expect(css).not.toMatch(
+      /\.app-shell\[data-theme='auto'\][^{}]*\.square[^{}]*\{[^}]*opacity\s*:\s*1\s*!important/s
+    );
   });
   it('disables mutation controls while saving and surfaces backend errors without optimistic data loss', async () => {
     const mock = mockClient();
@@ -98,10 +326,10 @@ describe('dashboard operations and failures', () => {
     );
     render(<Dashboard client={mock.client} />);
     fireEvent.click(
-      await screen.findByRole('checkbox', { name: /Coursework/ })
+      await screen.findByRole('checkbox', { name: /Read a chapter/ })
     );
     expect(
-      screen.getByRole('checkbox', { name: /Live Trading/ })
+      screen.getByRole('checkbox', { name: /Sketch a scene/ })
     ).toBeDisabled();
     await act(async () =>
       reject(new Error('Atomic write failed. Original file kept.'))
@@ -110,10 +338,10 @@ describe('dashboard operations and failures', () => {
       'Original file kept.'
     );
     expect(
-      screen.getByRole('checkbox', { name: /Coursework/ })
+      screen.getByRole('checkbox', { name: /Read a chapter/ })
     ).not.toBeChecked();
     expect(
-      screen.getByRole('checkbox', { name: /Live Trading/ })
+      screen.getByRole('checkbox', { name: /Sketch a scene/ })
     ).toBeEnabled();
   });
   it('reloads a queued phone edit after a mutation instead of replacing it with an older response', async () => {
@@ -127,21 +355,21 @@ describe('dashboard operations and failures', () => {
     );
     render(<Dashboard client={mock.client} />);
     fireEvent.click(
-      await screen.findByRole('checkbox', { name: /Coursework/ })
+      await screen.findByRole('checkbox', { name: /Read a chapter/ })
     );
     const phone = fixture();
-    phone.dailyLog[key(new Date())] = ['Live Trading'];
+    phone.dailyLog[key(new Date())] = ['Sketch a scene'];
     await mock.update(phone);
     const olderResponse = fixture();
-    olderResponse.dailyLog[key(new Date())] = ['Coursework'];
+    olderResponse.dailyLog[key(new Date())] = ['Read a chapter'];
     await act(async () => finish({ snapshot: olderResponse }));
     await waitFor(() =>
       expect(
-        screen.getByRole('checkbox', { name: /Live Trading/ })
+        screen.getByRole('checkbox', { name: /Sketch a scene/ })
       ).toBeChecked()
     );
     expect(
-      screen.getByRole('checkbox', { name: /Coursework/ })
+      screen.getByRole('checkbox', { name: /Read a chapter/ })
     ).not.toBeChecked();
   });
   it('requires confirmation for merge/discard and sleep clear', async () => {
@@ -211,7 +439,7 @@ describe('dashboard operations and failures', () => {
     initial.settings.sleep.noPhoneMinutes = 1440;
     const mock = mockClient(initial);
     render(<Dashboard client={mock.client} />);
-    await screen.findByRole('checkbox', { name: /Coursework/ });
+    await screen.findByRole('checkbox', { name: /Read a chapter/ });
     navigate('Focus');
     fireEvent.click(screen.getByRole('button', { name: '25 min ↗' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -249,17 +477,71 @@ describe('dashboard operations and failures', () => {
     delete (window as Window & { __TAURI_INTERNALS__?: unknown })
       .__TAURI_INTERNALS__;
   });
-  it('never hijacks typing, but navigates and starts focus with window shortcuts', async () => {
+  it('supports bare and modified 1–6 navigation without hijacking typing or dialogs', async () => {
     const mock = mockClient();
     render(<Dashboard client={mock.client} />);
-    await screen.findByRole('checkbox', { name: /Coursework/ });
+    await screen.findByRole('checkbox', { name: /Read a chapter/ });
+    const modules = ['Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'Settings'];
+    for (const [index, name] of modules.entries()) {
+      fireEvent.keyDown(window, { key: String(index + 1) });
+      expect(
+        screen.getByRole('heading', { level: 1, name: name === 'Today' ? 'Here & now.' : name })
+      ).toBeInTheDocument();
+    }
     fireEvent.keyDown(window, { key: '4', ctrlKey: true });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Focus' })
+    ).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '3', metaKey: true });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Habits' })
+    ).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '4' });
     expect(
       screen.getByRole('heading', { level: 1, name: 'Focus' })
     ).toBeInTheDocument();
     const input = screen.getByRole('spinbutton', {
       name: 'Custom focus minutes'
     });
+    fireEvent.keyDown(input, { key: '1' });
+    fireEvent.keyDown(window, { key: '2', repeat: true });
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    const editorChild = document.createElement('span');
+    editor.append(editorChild);
+    document.body.append(editor);
+    fireEvent.keyDown(editorChild, { key: '1' });
+    editor.remove();
+    const textarea = document.createElement('textarea');
+    document.body.append(textarea);
+    fireEvent.keyDown(textarea, { key: '2' });
+    textarea.remove();
+    const select = document.createElement('select');
+    document.body.append(select);
+    fireEvent.keyDown(select, { key: '3' });
+    select.remove();
+    const textbox = document.createElement('div');
+    textbox.setAttribute('role', 'textbox');
+    document.body.append(textbox);
+    fireEvent.keyDown(textbox, { key: '5' });
+    textbox.remove();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Focus' })
+    ).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '2', altKey: true });
+    fireEvent.keyDown(window, { key: '3', shiftKey: true });
+    fireEvent.keyDown(window, { key: '5', isComposing: true });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Focus' })
+    ).toBeInTheDocument();
+    const dialog = document.createElement('dialog');
+    dialog.open = true;
+    document.body.append(dialog);
+    fireEvent.keyDown(window, { key: '2' });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Focus' })
+    ).toBeInTheDocument();
+    dialog.remove();
     fireEvent.keyDown(input, { key: '1', ctrlKey: true });
     expect(
       screen.getByRole('heading', { level: 1, name: 'Focus' })
@@ -290,7 +572,7 @@ describe('dashboard operations and failures', () => {
       'Unknown schema version'
     );
     expect(
-      await screen.findByRole('checkbox', { name: /Coursework/ })
+      await screen.findByRole('checkbox', { name: /Read a chapter/ })
     ).toBeDisabled();
     expect(screen.getByRole('button', { name: '25 min ↗' })).toBeDisabled();
     navigate('Settings');
@@ -356,7 +638,7 @@ describe('dashboard operations and failures', () => {
       'Folder unavailable'
     );
     fireEvent.click(screen.getByRole('button', { name: 'Refresh data' }));
-    await screen.findByRole('checkbox', { name: /Coursework/ });
+    await screen.findByRole('checkbox', { name: /Read a chapter/ });
     unmount();
     await act(async () => finishSubscribe(mock.unsubscribe));
     expect(mock.unsubscribe).toHaveBeenCalledOnce();

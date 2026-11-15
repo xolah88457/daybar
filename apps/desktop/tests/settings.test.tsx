@@ -59,8 +59,8 @@ describe('settings and safety controls', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<SettingsPanel {...p} />);
     fireEvent.change(
-      screen.getByRole('textbox', { name: 'New name for Coursework' }),
-      { target: { value: 'Study' } }
+      screen.getByRole('textbox', { name: 'New name for Read a chapter' }),
+      { target: { value: 'Read every day' } }
     );
     fireEvent.click(screen.getAllByRole('button', { name: 'Rename…' })[0]);
     await waitFor(() => expect(confirm).toHaveBeenCalled());
@@ -70,15 +70,15 @@ describe('settings and safety controls', () => {
     await waitFor(() =>
       expect(p.run).toHaveBeenCalledWith({
         kind: 'rename_task',
-        from: 'Coursework',
-        to: 'Study'
+        from: 'Read a chapter',
+        to: 'Read every day'
       })
     );
     fireEvent.click(screen.getAllByRole('button', { name: 'Archive…' })[0]);
     await waitFor(() =>
       expect(p.run).toHaveBeenCalledWith({
         kind: 'archive_task',
-        task: 'Coursework'
+        task: 'Read a chapter'
       })
     );
   });
@@ -121,6 +121,22 @@ describe('settings and safety controls', () => {
     expect(logIdInput).toHaveAttribute('readonly');
     expect(screen.getByText('Stable identifier for the habit log file. Cannot be changed here.')).toBeInTheDocument();
   });
+  it('saves app-local appearance through the preferences API without changing shared settings', async () => {
+    const p = props();
+    render(<SettingsPanel {...p} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Appearance' }), {
+      target: { value: 'auto' }
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save Mac preferences ↗' })
+    );
+    await waitFor(() =>
+      expect(p.savePreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ themeMode: 'auto' })
+      )
+    );
+    expect(p.run).not.toHaveBeenCalled();
+  });
   it('does not overwrite externally changed settings from an old draft', () => {
     const p = props();
     const { rerender } = render(<SettingsPanel {...p} />);
@@ -156,7 +172,7 @@ describe('sleep and focus presentation', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<Focus {...p} now={new Date(2026, 10, 15, 23, 30)} />);
     fireEvent.change(screen.getByRole('combobox', { name: 'Link a task' }), {
-      target: { value: 'Coursework' }
+      target: { value: 'Take a walk' }
     });
     fireEvent.click(screen.getByRole('button', { name: '25 min ↗' }));
     await waitFor(() => expect(confirm).toHaveBeenCalled());
@@ -168,7 +184,7 @@ describe('sleep and focus presentation', () => {
         kind: 'start_timer',
         timerType: 'focus',
         minutes: 25,
-        task: 'Coursework'
+        task: 'Take a walk'
       })
     );
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('no-phone'));

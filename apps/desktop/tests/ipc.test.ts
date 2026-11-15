@@ -16,7 +16,7 @@ describe('typed Tauri command adapter', () => {
     const operation = {
       kind: 'set_task' as const,
       date: '2026-11-15',
-      task: 'Coursework',
+      task: 'Read a chapter',
       done: true
     };
     await tauriClient.mutate(operation);

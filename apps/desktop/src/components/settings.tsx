@@ -322,8 +322,12 @@ export function SettingsPanel({
       <Section title="Keyboard, not mouse">
         <div className="shortcut-list">
           <p>
-            <kbd>⌘ / Ctrl</kbd> + <kbd>1–6</kbd>
+            <kbd>1–6</kbd>
             <span>Today / Countdown / Habits / Focus / Sleep / Settings</span>
+          </p>
+          <p>
+            <kbd>⌘ / Ctrl</kbd> + <kbd>1–6</kbd>
+            <span>Same module shortcuts when using a modifier</span>
           </p>
           <p>
             <kbd>⌘ / Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd>
@@ -386,6 +390,21 @@ function PreferencesPanel({
         }}
       >
         <fieldset disabled={busy} className="preferences">
+          <label className="field">
+            Appearance
+            <select
+              aria-label="Appearance"
+              value={draft.themeMode}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, themeMode: e.target.value as Preferences['themeMode'] }))
+              }
+            >
+              <option value="day">Day</option>
+              <option value="night">Night</option>
+              <option value="auto">Auto · follow system appearance</option>
+            </select>
+            <small>Auto follows macOS appearance. Set macOS to Auto for its scheduled day/night changes; Daybar uses no location or network access.</small>
+          </label>
           <label className="field">
             Data folder path
             <input
@@ -471,7 +490,7 @@ function PreferencesPanel({
             Save Mac preferences ↗
           </button>
           <p className="caption">
-            Browser demo cannot connect folders or change OS preferences.
+            Browser demo cannot connect folders or change OS preferences; appearance changes stay in memory.
             Notification scheduling, menu bar, and global keys run only in the
             desktop shell.
           </p>

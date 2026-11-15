@@ -202,11 +202,37 @@ export function Progress({
 export function clock(date: Date) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+export function layoutTheme(s: Settings): CSSProperties {
+  return {
+    '--gap': `${s.appearance.gap}px`,
+    '--radius': `${s.appearance.radius}px`,
+    '--cellSize': `${s.appearance.cellSize}px`
+  } as CSSProperties;
+}
 export function theme(s: Settings): CSSProperties {
-  return Object.fromEntries(
-    Object.entries(s.appearance).map(([k, v]) => [
-      `--${k}`,
-      ['gap', 'radius', 'cellSize'].includes(k) ? `${v}px` : v
-    ])
-  ) as CSSProperties;
+  return {
+    ...Object.fromEntries(
+      Object.entries(s.appearance)
+        .filter(([k]) => !['gap', 'radius', 'cellSize'].includes(k))
+        .map(([k, v]) => [`--${k}`, v])
+    ),
+    ...layoutTheme(s)
+  } as CSSProperties;
+}
+// Keep these values in sync with the day palette in globals.css. They are
+// used only for module rendering; Settings always receives the raw snapshot.
+const dayPalette = {
+  background: '#f4f3ed',
+  text: '#202820',
+  green: '#18764b',
+  blue: '#286a9f',
+  red: '#b43737',
+  orange: '#a34b15',
+  yellow: '#80620b'
+} as const;
+export function dayProjectedSettings(settings: Settings): Settings {
+  return {
+    ...settings,
+    appearance: { ...settings.appearance, ...dayPalette }
+  };
 }

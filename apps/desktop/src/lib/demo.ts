@@ -48,7 +48,8 @@ export function demoSnapshot(now = new Date()): Snapshot {
       realData: false,
       launchAtLogin: false,
       hideDock: false,
-      globalShortcut: 'CommandOrControl+Shift+F'
+      globalShortcut: 'CommandOrControl+Shift+F',
+      themeMode: 'night'
     },
     issues: [],
     conflicts: []
@@ -238,10 +239,18 @@ export function createDemoClient(
       return result;
     },
     async setPreferences(preferences) {
-      preferencesSchema.parse(preferences);
-      throw new Error(
-        'OS preferences and real folders require the desktop app. Browser demo has no filesystem access.'
-      );
+      const parsed = preferencesSchema.parse(preferences);
+      if (
+        parsed.dataFolder !== memory.preferences.dataFolder ||
+        parsed.realData !== memory.preferences.realData ||
+        parsed.launchAtLogin !== memory.preferences.launchAtLogin ||
+        parsed.hideDock !== memory.preferences.hideDock ||
+        parsed.globalShortcut !== memory.preferences.globalShortcut
+      )
+        throw new Error(
+          'OS preferences and real folders require the desktop app. Browser demo has no filesystem access.'
+        );
+      return publish({ ...copy(), preferences: parsed });
     },
     async resolveConflict() {
       throw new Error(

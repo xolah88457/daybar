@@ -12,7 +12,8 @@ export function fixture(): Snapshot {
       realData: false,
       launchAtLogin: false,
       hideDock: false,
-      globalShortcut: ''
+      globalShortcut: '',
+      themeMode: 'night'
     },
     issues: [],
     conflicts: []

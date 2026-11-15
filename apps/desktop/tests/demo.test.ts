@@ -4,21 +4,54 @@ import { fixture } from './fixtures';
 
 const start = new Date(2026, 10, 15, 12);
 describe('in-memory DaybarClient', () => {
+  it('keeps only theme changes in memory and rejects every folder or OS preference change', async () => {
+    const client = createDemoClient(fixture(), () => start);
+    const before = await client.snapshot();
+    const next = await client.setPreferences({
+      ...before.preferences,
+      themeMode: 'day'
+    });
+    expect(next.preferences.themeMode).toBe('day');
+    expect((await client.snapshot()).preferences.themeMode).toBe('day');
+    const auto = await client.setPreferences({
+      ...next.preferences,
+      themeMode: 'auto'
+    });
+    expect(auto.preferences.themeMode).toBe('auto');
+    const rejected = [
+      { ...auto.preferences, dataFolder: '/other' },
+      { ...auto.preferences, realData: true },
+      { ...auto.preferences, launchAtLogin: true },
+      { ...auto.preferences, hideDock: true },
+      {
+        ...auto.preferences,
+        globalShortcut: 'CommandOrControl+Shift+T'
+      }
+    ];
+    for (const preferences of rejected)
+      await expect(client.setPreferences(preferences)).rejects.toThrow(
+        'desktop app'
+      );
+    expect((await client.snapshot()).preferences).toEqual(auto.preferences);
+  });
   it('applies single task operations idempotently and isolates returned snapshots', async () => {
     const client = createDemoClient(fixture(), () => start);
     const op = {
       kind: 'set_task' as const,
       date: '2026-11-14',
-      task: 'Coursework',
+      task: 'Read a chapter',
       done: true
     };
     await Promise.all([
       client.mutate(op),
       client.mutate(op),
-      client.mutate({ ...op, task: 'Live Trading' })
+      client.mutate({ ...op, task: 'Sketch a scene' })
     ]);
     const snapshot = await client.snapshot();
-    expect(snapshot.dailyLog[op.date]).toEqual(['Coursework', 'Live Trading']);
+    expect(snapshot.dailyLog[op.date]).toEqual([
+      'Read a chapter',
+      'Sketch a scene'
+    ]);
     snapshot.dailyLog[op.date].push('Not saved');
     expect((await client.snapshot()).dailyLog[op.date]).not.toContain(
       'Not saved'
@@ -34,19 +67,19 @@ describe('in-memory DaybarClient', () => {
     );
     await client.mutate({ ...op, done: false });
     expect((await client.snapshot()).dailyLog[op.date]).toEqual([
-      'Live Trading'
+      'Sketch a scene'
     ]);
   });
   it('renames historical entries, thresholds and timer tags; archives without erasing history', async () => {
     const initial = fixture();
-    initial.dailyLog['2026-11-01'] = ['Coursework'];
-    initial.settings.habits.focusThresholds.Coursework = 40;
+    initial.dailyLog['2026-11-01'] = ['Read a chapter'];
+    initial.settings.habits.focusThresholds['Read a chapter'] = 40;
     initial.focus.state = {
       type: 'focus',
       minutes: 25,
       start: start.getTime(),
       end: start.getTime() + 25 * 60000,
-      task: 'Coursework'
+      task: 'Read a chapter'
     };
     const previousStart = String(start.getTime() - 11 * 60000);
     initial.focus.sessions = {
@@ -56,46 +89,48 @@ describe('in-memory DaybarClient', () => {
         creditedMinutes: 10,
         end: start.getTime() - 60000,
         date: '2026-11-14',
-        task: 'Coursework'
+        task: 'Read a chapter'
       }
     };
     initial.focus.baseline = {};
     const client = createDemoClient(initial, () => start);
     await client.mutate({
       kind: 'rename_task',
-      from: 'Coursework',
-      to: 'Deep work'
+      from: 'Read a chapter',
+      to: 'Read every day'
     });
     let snapshot = await client.snapshot();
-    expect(snapshot.dailyLog['2026-11-01']).toEqual(['Deep work']);
+    expect(snapshot.dailyLog['2026-11-01']).toEqual(['Read every day']);
     expect(snapshot.settings.habits.focusThresholds).toEqual({
-      'Deep work': 40
+      'Read every day': 40
     });
-    expect(snapshot.focus.state?.task).toBe('Deep work');
-    expect(snapshot.focus.sessions?.[previousStart].task).toBe('Deep work');
+    expect(snapshot.focus.state?.task).toBe('Read every day');
+    expect(snapshot.focus.sessions?.[previousStart].task).toBe(
+      'Read every day'
+    );
     await expect(
       client.mutate({
         kind: 'rename_task',
-        from: 'Deep work',
-        to: 'Live Trading'
+        from: 'Read every day',
+        to: 'Sketch a scene'
       })
     ).rejects.toThrow('unique');
-    await client.mutate({ kind: 'archive_task', task: 'Deep work' });
+    await client.mutate({ kind: 'archive_task', task: 'Read every day' });
     snapshot = await client.snapshot();
-    expect(snapshot.settings.habits.tasks).not.toContain('Deep work');
-    expect(snapshot.settings.habits.archivedTasks).toContain('Deep work');
-    expect(snapshot.dailyLog['2026-11-01']).toEqual(['Deep work']);
+    expect(snapshot.settings.habits.tasks).not.toContain('Read every day');
+    expect(snapshot.settings.habits.archivedTasks).toContain('Read every day');
+    expect(snapshot.dailyLog['2026-11-01']).toEqual(['Read every day']);
   });
   it('credits only whole early-stop minutes, links task thresholds and never credits a session twice', async () => {
     let now = start;
     const initial = fixture();
-    initial.settings.habits.focusThresholds.Coursework = 2;
+    initial.settings.habits.focusThresholds['Read a chapter'] = 2;
     const client = createDemoClient(initial, () => now);
     await client.mutate({
       kind: 'start_timer',
       timerType: 'focus',
       minutes: 25,
-      task: 'Coursework'
+      task: 'Read a chapter'
     });
     await expect(
       client.mutate({ kind: 'start_timer', timerType: 'focus', minutes: 25 })
@@ -107,7 +142,9 @@ describe('in-memory DaybarClient', () => {
       count: 0,
       minutes: 2
     });
-    expect(stopped.snapshot.dailyLog['2026-11-15']).toContain('Coursework');
+    expect(stopped.snapshot.dailyLog['2026-11-15']).toContain(
+      'Read a chapter'
+    );
     await client.mutate({ kind: 'settle_timer' });
     expect((await client.snapshot()).focus.days['2026-11-15'].minutes).toBe(2);
     now = new Date(now.getTime() + 1000);
@@ -186,18 +223,20 @@ describe('in-memory DaybarClient', () => {
       client.mutate({ kind: 'save_settings', settings })
     ).rejects.toThrow('Rename or Archive');
     settings.habits.tasks = [
-      'Coursework',
-      'Live Trading',
-      'Trade Review',
-      'Apostles work',
-      'Read'
+      'Read a chapter',
+      'Sketch a scene',
+      'Take a walk',
+      'Water the plants',
+      'Stretch'
     ];
     await client.mutate({ kind: 'save_settings', settings });
-    expect((await client.snapshot()).settings.habits.tasks).toContain('Read');
+    expect((await client.snapshot()).settings.habits.tasks).toContain(
+      'Stretch'
+    );
   });
   it('rejects logId changes and preserves history', async () => {
     const initial = fixture();
-    initial.dailyLog['2026-11-14'] = ['Coursework'];
+    initial.dailyLog['2026-11-14'] = ['Read a chapter'];
     const client = createDemoClient(initial, () => start);
     const settings = structuredClone(initial.settings);
     settings.habits.logId = 'Other_Log';
@@ -206,7 +245,7 @@ describe('in-memory DaybarClient', () => {
     ).rejects.toThrow('Log ID is stable');
     // History unchanged after rejected logId change
     expect((await client.snapshot()).dailyLog['2026-11-14']).toEqual([
-      'Coursework'
+      'Read a chapter'
     ]);
     expect((await client.snapshot()).settings.habits.logId).toBe(
       initial.settings.habits.logId
@@ -236,16 +275,19 @@ describe('in-memory DaybarClient', () => {
     await client.mutate({
       kind: 'set_task',
       date: '2026-11-15',
-      task: 'Coursework',
+      task: 'Read a chapter',
       done: true
     });
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
     await client.mutate({ kind: 'clear_sleep' });
     expect(listener).toHaveBeenCalledTimes(1);
-    await expect(client.setPreferences(fixture().preferences)).rejects.toThrow(
-      'desktop app'
-    );
+    await expect(
+      client.setPreferences({
+        ...fixture().preferences,
+        launchAtLogin: true
+      })
+    ).rejects.toThrow('desktop app');
     await expect(
       client.resolveConflict('conflict.json', 'discard')
     ).rejects.toThrow('No files were changed');

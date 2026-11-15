@@ -5,7 +5,10 @@ import {
   Blocks,
   Heatmap,
   Progress,
-  TimerDisplay
+  TimerDisplay,
+  dayProjectedSettings,
+  layoutTheme,
+  theme
 } from '../src/components/primitives';
 import { fixture } from './fixtures';
 
@@ -70,13 +73,15 @@ describe('timer and progress', () => {
       minutes: 25,
       start: now.getTime() - 26 * 60000,
       end: now.getTime() - 60000,
-      task: 'Coursework'
+      task: 'Read a chapter'
     };
     const { rerender } = render(
       <TimerDisplay state={state} now={now} idleMinutes={25} />
     );
     expect(screen.getByRole('timer')).toHaveTextContent(/^0{1,2}:00$/);
-    expect(screen.getByText(/FOCUS · ends/)).toHaveTextContent('Coursework');
+    expect(screen.getByText(/FOCUS · ends/)).toHaveTextContent(
+      'Read a chapter'
+    );
     rerender(
       <TimerDisplay
         state={{ ...state, type: 'break', end: now.getTime() + 65000 }}
@@ -108,5 +113,49 @@ describe('timer and progress', () => {
     expect(
       screen.getByRole('img', { name: '3 completed focus blocks' })
     ).toBeInTheDocument();
+  });
+});
+
+describe('appearance tokens', () => {
+  it('keeps grid layout tokens separate from the night color palette', () => {
+    const s = fixture().settings;
+    s.appearance.cellSize = 14;
+    s.appearance.gap = 3;
+    s.appearance.radius = 4;
+    expect(theme(s)).toMatchObject({
+      '--cellSize': '14px',
+      '--gap': '3px',
+      '--radius': '4px',
+      '--green': '#39d353'
+    });
+    expect(layoutTheme(s)).toEqual({
+      '--cellSize': '14px',
+      '--gap': '3px',
+      '--radius': '4px'
+    });
+    expect(layoutTheme(s)).not.toHaveProperty('--background');
+  });
+
+  it('projects day colors without mutating raw settings or changing opacity math', () => {
+    const raw = fixture().settings;
+    const projected = dayProjectedSettings(raw);
+    expect(projected).not.toBe(raw);
+    expect(projected.appearance).toMatchObject({
+      background: '#f4f3ed',
+      text: '#202820',
+      green: '#18764b',
+      blue: '#286a9f',
+      red: '#b43737',
+      orange: '#a34b15',
+      yellow: '#80620b',
+      emptyOpacity: raw.appearance.emptyOpacity,
+      minDoneOpacity: raw.appearance.minDoneOpacity,
+      futureOpacity: raw.appearance.futureOpacity,
+      cellSize: raw.appearance.cellSize,
+      gap: raw.appearance.gap,
+      radius: raw.appearance.radius
+    });
+    expect(raw.appearance.green).toBe('#39d353');
+    expect(raw.appearance.background).toBe('#0d1117');
   });
 });
