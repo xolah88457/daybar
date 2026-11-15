@@ -35,7 +35,7 @@ Next.js is statically exported into Tauri's WKWebView: no SSR, server actions or
 
 ### Shared files, not magic sync
 
-The phone and Mac share `daily-log-<LOG_ID>.json`, `focus-timer.json`, `sleep-data.json` and `daybar-settings.json`. Each mutation must re-read disk, apply one operation, validate, then replace the file via a same-directory temporary file and rename. Focus credit uses a session-start-keyed ledger so repeat settlement is a no-op; legacy daily totals remain a baseline.
+The phone and Mac share `daily-log-<LOG_ID>.json`, `focus-timer.json`, `sleep-data.json` and `daybar-settings.json`. Each mutation re-reads disk, applies one operation and validates. The Mac replaces files via a same-directory temporary file and atomic rename. Scriptable cannot atomically replace an existing file: it checks for intervening edits, moves the old file to a retained recovery backup, then installs the temporary file. A crash between those phone moves requires manual recovery; see the [phone guide](scriptable/README.md). Focus credit uses a session-start-keyed ledger so repeat settlement is a no-op; legacy daily totals remain a baseline.
 
 **Concurrency limitation:** atomic rename is not a cross-device transaction. Scriptable's `FileManager.iCloud()` synchronizes files; it does not supply a distributed transaction or a lock shared with the Mac. Re-reading narrows the race window but cannot guarantee that simultaneous phone/Mac edits never overwrite one another, even with idempotent focus credit. Conflict copies must be surfaced for explicit merge/discard, never silently deleted. Avoid editing the same data simultaneously; retain backups. These safety behaviours still require the checks in the ledger.
 
@@ -58,7 +58,7 @@ pnpm tauri dev
 ```sh
 pnpm lint
 pnpm typecheck
-pnpm test:tz                 # Vitest in America/Toronto and Europe/London
+pnpm test:tz                 # core, UI and phone tests in Toronto and London
 node --test scriptable/tests/*.test.mjs  # phone integration must be present
 pnpm test:rust               # cargo test for apps/desktop/src-tauri/Cargo.toml
 pnpm build                   # static export: apps/desktop/out/
@@ -72,7 +72,7 @@ The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle
 ## Opt in to real data — only after verification
 
 1. Complete the safety checks in [VERIFICATION.md](docs/VERIFICATION.md) in a disposable sandbox. Keep a separate backup of the phone's existing local data before migration.
-2. Follow the [updated phone script installation guide](scriptable/README.md). Installation notes arrive with the phone scripts; until the linked guide is available, keep working phone scripts unchanged. Review the migration steps before replacing them.
+2. Follow the [updated phone script installation guide](scriptable/README.md). Back up the existing local files and review migration/recovery steps before replacing working scripts.
 3. In Daybar Settings, explicitly choose the Scriptable iCloud Drive **Documents** folder and consent to using real data. Do not repoint dev/test commands at it. Merely installing or building Daybar must not probe it.
 4. Before the first real write, Daybar must copy **every managed file it will touch** to a timestamped backup folder. Confirm the backup exists and is readable before editing. Malformed/unknown files must produce a visible error, never an empty replacement.
 5. In Finder, choose **Keep Downloaded** for the shared folder where available. Evicted `.icloud` placeholders can delay reads; failed downloads should remain visible errors. Allow iCloud to finish syncing before switching devices.
@@ -90,7 +90,7 @@ The real-folder flow, backups, placeholder handling and conflict resolution are 
 | --- | --- |
 | `apps/desktop/` | Next UI, typed IPC, `src-tauri/` backend |
 | `packages/core/` | Pure logic, schemas, fixtures and tests |
-| `scriptable/` | Updated phone scripts and install notes (integration pending) |
+| `scriptable/` | Updated phone scripts, isolated tests and install/recovery notes |
 | `legacy/` | Original five scripts, preserved unchanged |
 | `scripts/seed-sandbox.mjs` | Non-destructive synthetic sandbox seed |
 | `docs/` | Architecture, formats, decisions, verification, screenshots |

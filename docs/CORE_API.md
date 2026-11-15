@@ -19,6 +19,8 @@ getHabitStats(log: DailyLog, settings: Settings, now: Date): {
 };
 // cells are ROW-MAJOR for direct CSS grid display; their dates are COLUMN-MAJOR.
 // null cells are blank padding after range end. colors are #rrggbb; opacity separate.
+// width is content width, excluding caller-owned padding (legacy medium: 354 - 24 = 330).
+// taskRates are percentages (0–100); currentStreak ignores an unfinished today until tomorrow.
 getHabitGrid(log: DailyLog, settings: Settings, now: Date, width: number): {cells: (GridCell | null)[]; columns: number; cellSize: number};
 getCountdown(settings: Settings, now: Date): {total: number; elapsed: number; daysLeft: number; percent: number; weeksLeft: number; columns: number; cells: (GridCell | null)[]};
 interface GridCell { date: string; color: string; opacity: number; count?: number; }
@@ -53,5 +55,7 @@ getSleepView(data: SleepData, now: Date, settings: Settings): {
 getPlanNights(data: SleepData, now: Date, settings: Settings): {night:number;wake:number;bed:number;current:boolean}[];
 logSleep(data: SleepData, entry:'wake'|'bed', date:Date): SleepData;
 ```
+
+Sleeping progress uses the configured white color at opacity 0.4; callers apply this opacity when `asleep` is true. Always pass `now` to `parseWhen` in application/tests despite its compatibility default.
 
 Golden fixtures must execute extracted legacy pure functions in Node with deterministic Date and DateFormatter stubs. Preserve the legacy rounding/calendar semantics including DST; document any intentional safety improvement rather than silently changing expected outputs.
