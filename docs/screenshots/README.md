@@ -1,22 +1,23 @@
 # Portfolio media
 
-The Today hero is an actual Playwright screenshot of the static export, captured at 1280 px with the in-memory browser client and synthetic data. Browser smoke covered six screens and responsive widths; this image is not native-window or sync evidence.
+Captured on 2026-11-15 from the unsigned native **`f6fd530`** build, using only fictional app-local sandbox fixtures. No real iCloud folder was selected, read or written. Images are observations, not proof of phone sync.
 
-`menu-bar.gif` is an actual native Daybar popup-window capture sequence, 546×780, with four sampled states (idle, active focus, stopped, task unchecked), two seconds each. It contains synthetic data and no other app content. It is not a continuous recording, and does not prove a live countdown or countdown timing. The owner-supplied iPhone image is unavailable; retain the placeholder.
+| Asset | Actual content |
+| --- | --- |
+| `today.png` | Native Night dashboard; 1200×840-point owned window, resized to 1800×1306 pixels including its shadow |
+| `today-day.png` | The same native dashboard in Day mode; same dimensions and fictional data |
+| `menu-bar.gif` | Eight actual Daybar-owned status-item crops: Auto, focus minutes, hours, blocks, timer idle, bedtime, next task, countdown; centered on a 500×80 canvas, two seconds each |
+| iPhone image | **OWNER-SUPPLIED PLACEHOLDER:** unavailable; not fabricated |
 
-| Asset | Status | Content |
-| --- | --- | --- |
-| `today.png` | CAPTURED — browser demo | Static-export Today UI; synthetic in-memory data, no personal files |
-| `menu-bar.gif` | CAPTURED — native popup states | Four actual Daybar popup-window states, 546×780, 2 seconds each; synthetic data, not continuous/countdown proof |
-| iPhone widget image (filename TBD) | OWNER-SUPPLIED PLACEHOLDER | Unavailable; owner must supply and review/redact before publishing |
+The GIF is a sampled sequence of saved modes, **not continuous video or a live timer demonstration**. The zero focus totals and idle timer reflect the sandbox at capture time. Crops include only Daybar's own status-item bounds, not neighboring menu-bar items. Each native selection and the actual status text were checked; countdown mode displayed `228d` and survived normal Quit/relaunch.
 
-## Safe capture procedure
+Both window images and every GIF source frame were visually inspected. They contain fictional tasks and the “Community Garden Opening” example, no other app content or personal paths. Text/EXIF/time metadata was removed from the PNGs. The original private sample labels are no longer in these published images.
 
-1. For any recapture, run `pnpm seed` from the repository root; use only synthetic `.dev-data/` fixtures. Do not select, browse, read or modify a real iCloud folder or enter real personal data.
-2. Confirm Settings points at the sandbox. If isolation cannot be demonstrated, stop.
-3. Use a clean desktop or disposable macOS account. Close unrelated windows and hide desktop items; keep personal menu-bar content out of captures.
-4. Capture only the Daybar window or Daybar-owned popup content. Do not capture a full desktop or other apps.
-5. Inspect every image and GIF frame for personal data and unrelated content. Remove unsafe media; strip unnecessary metadata locally.
-6. Record capture date, commit, sandbox setup and manual checks in the verification record. Images alone do not establish feature parity.
+## Safe recapture
 
-For iPhone media, the owner should use synthetic Scriptable data on a test setup, crop to the relevant widgets and remove personal wallpaper/status details. Never migrate or overwrite real phone data just to stage a screenshot.
+1. Use only known synthetic sandbox files. `pnpm seed` does **not** overwrite existing data; back up and deliberately reset a sandbox if old examples remain.
+2. Confirm **SANDBOX DATA**, the app-local folder and `realData=false`. Stop if isolation cannot be established; never point a test at a real iCloud folder.
+3. Capture only the Daybar window or its own status-item rectangle. Never capture the desktop, other apps, adjacent status items, or a Settings page containing a personal folder path.
+4. Inspect every frame, remove unnecessary metadata, and record source commit, setup and capture date. Do not turn an image into an unsupported sync, notification or timing claim.
+
+The owner should supply iPhone media from a disposable fictional-data setup, cropped/redacted before publishing. Never overwrite real phone history to stage an image.
