@@ -4,7 +4,9 @@ with_server.py --server 'python3 -m http.server 3107 --bind 127.0.0.1 --director
   --port 3107 -- python apps/desktop/tests/browser_smoke.py
 Requires Playwright and its Chromium browser outside the pnpm workspace.
 """
+import os
 import re
+from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
 
 with sync_playwright() as p:
@@ -16,7 +18,8 @@ with sync_playwright() as p:
     page.on("request", lambda request: requests.append(request.url))
     page.on("dialog", lambda dialog: dialog.accept())
     page.add_init_script("Storage.prototype.setItem = () => { throw Error('User data must stay in memory'); };")
-    page.goto("http://127.0.0.1:3107")
+    base_url = os.environ.get("DAYBAR_BASE_URL", "http://127.0.0.1:3107").rstrip("/")
+    page.goto(base_url)
     page.wait_for_load_state("networkidle")
     expect(page.get_by_role("heading", name="Here & now.")).to_be_visible()
     expect(page.get_by_role("checkbox", name=re.compile("Read a chapter"))).to_be_visible()
@@ -29,6 +32,24 @@ with sync_playwright() as p:
     assert day_background != night_background, (night_background, day_background)
     page.get_by_role("button", name="Switch to night appearance").click()
     expect(shell).to_have_attribute("data-theme", "night")
+    for width, height in [(1280, 800), (1440, 900)]:
+        page.set_viewport_size({"width": width, "height": height})
+        for mode in ("night", "day"):
+            if shell.get_attribute("data-theme") != mode:
+                page.get_by_role("button", name=f"Switch to {mode} appearance").click()
+                expect(shell).to_have_attribute("data-theme", mode)
+            bounds = page.locator(".dashboard-grid > div").evaluate_all(
+                "els => els.map(el => ({name: el.className, top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom}))"
+            )
+            assert len(bounds) == 4, bounds
+            lowest = max(card["bottom"] for card in bounds)
+            assert lowest <= height, f"{mode} cards extend below {width}x{height}: {bounds}"
+            assert page.locator(".today-focus button").count() >= 7, "Focus controls were removed"
+            assert page.locator(".today-focus [role=timer]").evaluate("el => parseFloat(getComputedStyle(el).fontSize)") >= 42
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Horizontal overflow at {width}x{height}"
+        page.get_by_role("button", name="Switch to night appearance").click()
+        expect(shell).to_have_attribute("data-theme", "night")
+    page.set_viewport_size({"width": 1280, "height": 1000})
     page.screenshot(path="/tmp/daybar-ui-today.png", full_page=True)
 
     def navigate(name):
@@ -67,13 +88,16 @@ with sync_playwright() as p:
     navigate("Countdown")
     expect(page.get_by_role("group", name="Countdown days")).to_be_visible()
     navigate("Today")
-    for width, height in [(1440, 900), (1280, 800), (1280, 1000), (900, 1600), (600, 1000), (375, 812)]:
+    for width, height in [(1440, 900), (1280, 800), (1280, 1000), (1024, 768), (900, 1600), (600, 1000), (375, 812)]:
         page.set_viewport_size({"width": width, "height": height})
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Overflow at {width}x{height}"
         if width == 900:
             expect(page.locator(".dashboard-grid")).to_have_css("display", "flex")
+            positions = page.locator(".dashboard-grid > div").evaluate_all("els => els.map(el => el.getBoundingClientRect().top)")
+            assert positions == sorted(positions), f"Portrait cards are not stacked: {positions}"
         if width == 1440:
-            expect(page.locator(".dashboard-grid")).to_have_css("grid-template-columns", re.compile("\\S+ \\S+"))
+            columns = page.locator(".dashboard-grid").evaluate("el => getComputedStyle(el).gridTemplateColumns.split(' ').length")
+            assert columns == 3, f"Expected 3 landscape columns, got {columns}"
     page.set_viewport_size({"width": 900, "height": 1600})
     page.screenshot(path="/tmp/daybar-ui-mobile.png", full_page=True)
     for key, title in [("1", "Here & now."), ("2", "Countdown"), ("3", "Habits"), ("4", "Focus"), ("5", "Sleep"), ("6", "Settings")]:
@@ -81,6 +105,7 @@ with sync_playwright() as p:
         expect(page.get_by_role("heading", level=1, name=title)).to_be_visible()
     assert page.evaluate("localStorage.length") == 0
     assert not errors, errors
-    assert all(url.startswith("http://127.0.0.1:3107/") for url in requests), requests
-    print("Browser smoke passed: all six screens, past task edit, focus start/stop, validated settings, history rename, sleep plan/clear, 375–1280px, no runtime errors or external requests.")
+    expected_origin = f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}/"
+    assert all(url.startswith(expected_origin) for url in requests), requests
+    print("Browser smoke passed: all six screens, dashboard geometry in day/night at 1280x800 and 1440x900, portrait stacking, 375–1440px overflow checks, app interactions, no runtime errors or external requests.")
     browser.close()
