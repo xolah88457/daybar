@@ -1,6 +1,6 @@
 # Portfolio media
 
-Captured on 2026-11-15 from the unsigned native **`f6fd530`** build, using only fictional app-local sandbox fixtures. No real iCloud folder was selected, read or written. Images are observations, not proof of phone sync.
+Captured on 2026-11-15 from the unsigned native build of product source **`f6fd53084bc5e3912f312a3a9291cd700cc71fe0`**, using only fictional app-local sandbox fixtures. No real iCloud folder was selected, read or written. Images are observations, not proof of phone sync.
 
 | Asset | Actual content |
 | --- | --- |

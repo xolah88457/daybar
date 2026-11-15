@@ -1,21 +1,19 @@
-# Independent implementation review
+# Independent implementation reviews
 
-**Result: BLOCKED by one P2 error-reporting gap; not a release-readiness approval.** Review basis: settled HEAD `a841ef839223ed77bc49cc7384fe86645a4aae86`, plus the current native, test and packaging logs cited below. No source files were changed during review. No real iCloud data was accessed.
+Reviews below are scoped technical reviews of product source; they are not user acceptance, real-data safety certification, or hosted CI results.
 
-## Finding
+## Final safety/integrity — PASS
 
-**P2 — Confirmation API failures are fail-closed but not shown to the user.** `apps/desktop/src/lib/confirm.ts` rejects if native dialog support is unavailable or `showModal()` fails; protected actions do not proceed. Its ten UI callsites await the helper without catching/reporting rejection, so Daybar's existing inline error notice does not explain the failure and the promise may be unhandled. The helper-level unsupported-dialog test verifies rejection, not UI error reporting. Smallest correction: catch at a shared UI boundary, show an actionable notice and retain the no-action-on-error behavior. Locations and supporting detail are in `/tmp/daybar-final-safety-review.md`.
+`/tmp/daybar-final-safety-review.md` reports PASS for the focused review at settled source `9d2d329997f9f72c3dcf6456e7176f2b495cebc4`. It confirmed the prior confirmation-error-reporting issue was closed: all protected actions use a shared fail-closed wrapper, errors are surfaced, and regression tests cover Focus, Habits and nested real-folder preference paths. Native dialog acceptance showed Cancel/Escape/default Enter cancel and explicit Confirm proceeds. No real iCloud data was accessed. The report's own earlier provisional-bundle note is superseded by the final local build recorded in `docs/RELEASE.md`.
 
-## Verified scope
+## Theme, keyboard and layout refinement — PASS
 
-- Settled Node 26.13.0 checks passed: lint, typecheck, Toronto and London each 137 core + 37 desktop + 59 phone tests, Rust 29 tests, and static export. Logs: `/tmp/daybar-final-safety-settled-{lint,typecheck,tests,rust,build}.log`. The earlier Node 22.23.5 integrated gates and committed browser smoke also passed: `/tmp/daybar-final-node22-gates.log`, `/tmp/daybar-final-browser.log`.
-- Browser smoke covered six screens, selected task/focus/settings/sleep workflows and widths 375–1280px, with no runtime errors, external requests or storage writes.
-- Native synthetic-sandbox acceptance covered all six screens, external task-file refresh without restart, focus early stop, a five-minute break expiry, tray presets/actions, Cmd+W hide/tray reopen, configured Cmd+Shift+F start/stop, and the native HTML confirmation: Cancel/Escape/default Enter canceled; explicit Confirm started focus. The bundled app also settled a seeded expired one-minute focus exactly once at launch; a second normal Quit/relaunch preserved ledger/totals byte-equivalent JSON, and original app-local focus bytes were restored byte-exactly. No OS notification delivery was observed. Evidence: `/tmp/daybar-native-acceptance.log`, `/tmp/daybar-native-confirm-dialog.txt`.
-- Safety review rechecked conservative focus-ledger validation/recovery, stable log ID, phone interrupted-write guards and native quiet-time rules. These tests do not create distributed CAS or atomic cross-file writes.
-- An unsigned local arm64 app/DMG build succeeded; app 13.31 MiB, DMG 3.72 MiB; `hdiutil verify` passed. The bundled app launched with app-local sandbox data and retained an active five-minute break across normal Quit/relaunch. This artifact predates the final confirmation-error-path correction and is provisional, not a final release artifact. `/tmp/daybar-unsigned-bundle-retry.log`, `/tmp/daybar-native-acceptance.log`.
+`/tmp/daybar-refinement-final-review.md` reports PASS for the landscape-fit and browser-regression changes at `a5d7becffcb5db014696d19065da19ee8cf9c229`. It checked the three-column layout and verified no clipping/fixed-height behavior; landscape whole-page fit at 1280×800 and 1440×900; portrait stacking; and 375–1440px overflow. This is source/browser review, not macOS appearance scheduling or real-data acceptance.
 
-## Still unverified
+## Menu-bar display — PASS
 
-No real iCloud folder/device or owner iPhone/Shortcut was used. Hosted CI, final corrected bundle, signing/notarization, Dock hide, login item, OS notification delivery, actual iCloud materialization/convergence, and full native conflict merge/discard workflows are not accepted. Scriptable FileManager lacks atomic replace/CAS; its recovery guard detects interrupted artifacts but does not restore them. Focus-to-habit updates span two files and are repairable, not atomic. Synthetic screenshot/GIF assets do not substitute for owner phone evidence.
+`/tmp/daybar-tray-final-review.md` reports PASS for source `f6fd53084bc5e3912f312a3a9291cd700cc71fe0`. It reviewed all eight modes, strict TS/schema/Rust preferences, saved settings and calculations, demo rejection of native tray preference changes, task ordering/label bounds, countdown boundaries and unchanged Auto behavior. Parent native evidence observed each actual status-item label and normal Quit/relaunch persistence. Reviewer did not personally drive the native GUI or run its build. All observations used sandbox data and retained `realData=false`; four shared JSON hashes stayed unchanged.
 
-Use `docs/VERIFICATION.md` for row-level scoped status; `docs/PROGRESS.md` records the integrated run chronology. No final v1/real-data readiness claim is supported by this review.
+## Limits
+
+These reviews do not establish actual iPhone/Scriptable installation, real iCloud materialization or convergence, notification delivery, Dock/login behavior, full native conflict resolution, hosted CI, signing/notarization, Intel/universal packaging, or compatibility on older macOS. See `docs/VERIFICATION.md` for scoped ledger status and `docs/RELEASE.md` for local artifact identity.

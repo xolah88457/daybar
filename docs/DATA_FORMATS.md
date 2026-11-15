@@ -18,6 +18,10 @@ Log id starts as `Daily_Tasks` (legacy title sanitized); retain it across title 
 ## Focus upgrade
 A legacy file without `sessions` is upgraded by capturing `baseline = days` and adding `sessions = {}` before mutation. Once a ledger exists, derive days from the preserved baseline plus focus sessions, with `count = floor(minutes / blockMinutes)`. A session key is the canonical decimal start epoch. Settlement at end credits planned minutes to the end date; early stop credits floor(elapsed minutes) to stop date, capped to planned. Break records credit zero. Already-recorded keys never add credit. Do not manufacture a new baseline from derived days. If `sessions` is present but `baseline` is absent and saved `days` contain unexplained totals, treat the file as ambiguous and refuse mutation; recover it manually rather than guessing or erasing history. `sessions: {}` with no baseline is only safe when the saved days agree with zero baseline.
 
+## App-local preferences (not shared phone data)
+
+The native app's separate preferences file stores `themeMode: 'day' | 'night' | 'auto'` (missing defaults to `night`) and `trayDisplay: 'auto' | 'focusMinutes' | 'focusHours' | 'focusBlocks' | 'activeTimer' | 'bedtime' | 'nextTask' | 'countdown'` (missing defaults to `auto`), alongside native folder/OS preferences. Both enums are strict: unknown values are rejected. They do **not** belong to `daybar-settings.json`, `SharedSettings`, or the phone scripts. Auto theme follows macOS appearance; Daybar requests no location or astronomy service. Tray Auto retains timer-first then bedtime behavior; explicit tray modes are saved macOS-local preferences. See `docs/DECISIONS.md` and `docs/RELEASE.md`.
+
 ## IPC
 `get_snapshot() -> Snapshot`; `mutate({operation}) -> MutationResult`; `set_preferences({preferences}) -> Snapshot`; `resolve_conflict({file,action:'merge'|'discard'}) -> Snapshot`. Tauri arguments use camelCase. Events: `daybar://changed` (reload snapshot), with no payload requirement. See `DaybarClient`, `Operation`, `Snapshot` for exact types. The browser mock implements the same interface, purely in memory.
 

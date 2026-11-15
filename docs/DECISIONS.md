@@ -22,4 +22,7 @@ Foundation is orchestrator-only. Independent core, Rust, UI and phone work uses 
 A file containing a session ledger but no baseline cannot safely treat saved `days` as either legacy baseline or session-derived totals. If they disagree with zero-baseline derivation, refuse rather than normalize and erase history. Manual recovery is safer than guessing. Shared TypeScript/Rust/phone validators were aligned after independent review.
 
 ## 008 — Native HTML dialog compatibility (2026-11-15)
-The HTML `<dialog>` confirmation helper requires macOS 12.3+ in the target WKWebView baseline, so set the app minimum accordingly. This is not evidence that confirmation behavior has passed native acceptance; keep those checks pending until exercised in the app.
+The HTML `<dialog>` confirmation helper requires macOS 12.3+ in the target WKWebView baseline, so set the app minimum accordingly. Native WKWebView acceptance exercised Cancel, Escape, default Enter and explicit Confirm; errors fail closed and surface through the shared UI notice. This does not claim broader OS/device compatibility.
+
+## 009 — Mac-local appearance and tray preferences (2026-11-15)
+Keep `themeMode` (`day|night|auto`, missing defaults to night) and `trayDisplay` (strict eight-value enum, missing defaults to auto) in the separate native preferences contract, not shared `daybar-settings.json` or phone settings. Auto appearance follows macOS's configured light/dark schedule without Daybar location access. Tray Auto preserves timer-first then bedtime; explicit choices stay selected. Validation, types and Rust serde reject unknown values.

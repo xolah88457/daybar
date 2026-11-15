@@ -2,15 +2,22 @@
 
 **Your day, at a glance.** Daybar brings a countdown, daily habits, a focus timer and a sleep-shift plan into one quiet macOS window and menu bar. Built from everyday iPhone Scriptable widgets, it keeps the original dark, monospace, tiny-square visual language while using shared JSON in iCloud Drive rather than a server, account or database. No telemetry.
 
-> **Work in progress:** feature integration and acceptance verification are pending. This README describes the v1 experience and safety contract, not a claim that every feature has shipped. See the [verification ledger](docs/VERIFICATION.md) and [documentation check report](docs/DOCS_REPORT.md).
+> **Local release candidate:** the arm64 app and DMG were built and verified locally from product source `f6fd53084bc5e3912f312a3a9291cd700cc71fe0`. The artifact is unsigned and not notarized. This is not a hosted release or a claim of real iPhone/iCloud acceptance. See the [release and safe-switch guide](docs/RELEASE.md) and [scoped verification ledger](docs/VERIFICATION.md).
 
 ![Daybar Today dashboard showing synthetic countdown, tasks, focus and sleep data](docs/screenshots/today.png)
 
-*Captured from the actual static-export UI in browser-demo mode using synthetic in-memory data. It is not evidence of iCloud sync.*
+*Captured from an actual native app window on 2026-11-15, using fictional app-local sandbox data. It is not evidence of iCloud sync.*
 
-![Native Daybar popup menu showing sampled idle, focus, stopped and task states](docs/screenshots/menu-bar.gif)
+![Sampled Daybar-owned menu-bar labels across eight saved modes](docs/screenshots/menu-bar.gif)
 
-*Four actual native popup-window captures, two seconds each, with synthetic data. This is a sampled sequence—not a continuous recording or proof of a live countdown.*
+*Eight actual Daybar-owned status-item mode crops, two seconds each, with synthetic data. This is a sampled sequence—not a continuous recording or proof of a live countdown.*
+
+## Everyday controls
+
+- Press **1–6** to switch modules; typing, composition and open dialogs are protected.
+- Use the header **Day/Night** button, or **Settings → On this Mac → Appearance → Auto** to follow macOS. Set macOS itself to Auto for scheduled day/night changes; Daybar requests no location.
+- Choose **Settings → On this Mac → Menu-bar label**, then **Save Mac preferences**: Auto, focus minutes/hours/blocks, active timer, bedtime, next task or countdown days only. Focus totals are today's credited work; explicit modes stay selected even during a timer.
+- Landscape Today is compact; portrait stacks the cards. Small windows and long forms scroll rather than hide controls.
 
 ## From Scriptable widgets to a desktop app
 
@@ -24,7 +31,7 @@ The five standalone scripts are in [`scriptable/`](scriptable/README.md): [Days 
 
 Install **Scriptable** from the iOS App Store by searching its name. For a shared phone/Mac setup, enable iCloud Drive on both devices with the same Apple ID and enable Scriptable's iCloud Drive access. Back up existing phone-local and iCloud Scriptable data before setup. On Mac, explicitly connect Daybar to the real Scriptable **Documents** folder only after reviewing the data and making backups; save valid shared settings with the intended task names before first use on phone, and confirm the Mac's read-only `habits.logId` matches the existing log filename. The Mac app is standalone without the phone; the phone companion requires Scriptable and these scripts. Keep shared files in iCloud Drive's `Scriptable` folder and avoid simultaneous edits. Full setup, widget parameters, data mapping and recovery guidance: [Scriptable setup guide](scriptable/README.md).
 
-The intended desktop experience adds editable settings, habit streaks, history-preserving task renames, focus-to-habit credit and “room for ~N blocks before bed.” Notifications are scheduled by Rust **only while Daybar is running**; this is not a background service. See [capture instructions](docs/screenshots/README.md) before adding portfolio media.
+The desktop app includes editable settings, habit streaks, history-preserving task renames, focus-to-habit credit and “room for ~N blocks before bed.” Notifications are scheduled by Rust **only while Daybar is running**; this is not a background service, and OS notification delivery remains unverified. See [capture instructions](docs/screenshots/README.md) before adding portfolio media.
 
 ## Architecture in a minute
 
@@ -43,6 +50,8 @@ Next.js is statically exported into Tauri's WKWebView: no SSR, server actions or
 
 ### Shared files, not magic sync
 
+Daybar itself works without an iPhone; Scriptable is an optional companion for users who want shared files.
+
 The phone and Mac share `daily-log-<LOG_ID>.json`, `focus-timer.json`, `sleep-data.json` and `daybar-settings.json`. Each mutation re-reads disk, applies one operation and validates. The Mac replaces files via a same-directory temporary file and atomic rename. Scriptable cannot atomically replace an existing file: it checks for intervening edits, moves the old file to a retained recovery backup, then installs the temporary file. A crash between those phone moves requires manual recovery; see the [phone guide](scriptable/README.md). Focus credit uses a session-start-keyed ledger so repeat settlement is a no-op; legacy daily totals remain a baseline.
 
 **Phone recovery limitation:** Scriptable's FileManager cannot atomically replace an existing file or provide compare-and-swap. Phone writes retain a recovery backup and fail closed when interrupted-write artifacts remain; after a crash, inspect/recover those artifacts manually before continuing. The two-file focus-to-habit repair is also not atomic.
@@ -51,7 +60,7 @@ The phone and Mac share `daily-log-<LOG_ID>.json`, `focus-timer.json`, `sleep-da
 
 ## Run locally — sandbox first
 
-Requires macOS 12.3 or later (the WKWebView HTML-dialog helper requires 12.3; native confirmation acceptance remains pending), Xcode Command Line Tools (`xcode-select --install` if absent), **Node 22**, **pnpm 10.12.3**, and stable Rust with Cargo. Install Rust using [rustup](https://rustup.rs/) and consult [Tauri's macOS prerequisites](https://v2.tauri.app/start/prerequisites/). Commands below run from the repository root.
+Requires macOS 12.3 or later (the WKWebView HTML-dialog helper requires 12.3; native confirmation behavior was exercised on the test Mac), Xcode Command Line Tools (`xcode-select --install` if absent), **Node 22**, **pnpm 10.12.3**, and stable Rust with Cargo. Install Rust using [rustup](https://rustup.rs/) and consult [Tauri's macOS prerequisites](https://v2.tauri.app/start/prerequisites/). Commands below run from the repository root.
 
 ```sh
 corepack enable
@@ -81,13 +90,15 @@ The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle
 
 ## Opt in to real data — only after verification
 
+Follow the complete [release and safe-switch guide](docs/RELEASE.md); do not switch valuable data based on this README alone.
+
 1. Complete the safety checks in [VERIFICATION.md](docs/VERIFICATION.md) in a disposable sandbox. Keep a separate backup of the phone's existing local data before migration.
 2. Follow the [updated phone script installation guide](scriptable/README.md). Back up the existing local files and review migration/recovery steps before replacing working scripts.
 3. In Daybar Settings, explicitly choose the Scriptable iCloud Drive **Documents** folder and consent to using real data. Do not repoint dev/test commands at it. Merely installing or building Daybar must not probe it.
-4. Before the first real write, Daybar must copy **every managed file it will touch** to a timestamped backup folder. Confirm the backup exists and is readable before editing. Malformed/unknown files must produce a visible error, never an empty replacement.
+4. Keep your own dated backup **before opting in**. Daybar creates its automatic timestamped backup as part of the first real write, before changing managed files; it may not exist beforehand. Connecting can reconcile an expired timer. Inspect the automatic backup after the first operation and stop on any backup/validation error. Malformed/unknown files must never become an empty replacement.
 5. In Finder, choose **Keep Downloaded** for the shared folder where available. Evicted `.icloud` placeholders can delay reads; failed downloads should remain visible errors. Allow iCloud to finish syncing before switching devices.
 
-Native sandbox acceptance has verified real tray actions, external sandbox-file refresh, focus stop/expiry, a global shortcut, and close-hide/reopen. It did not use the real iCloud folder. First-write backup, malformed-file behavior, placeholder handling, conflict resolution and genuine cross-device convergence remain unverified; do not use valuable data until their ledger checks pass.
+Native sandbox acceptance has verified tray actions, external sandbox-file refresh, focus stop/expiry, a global shortcut, close-hide/reopen, and fail-closed confirmation dialogs. The final local candidate additionally verified six bare navigation keys, Day/Night persistence and Auto matching current macOS appearance, all eight saved menu-bar label modes, and normal Quit/relaunch persistence for the selected countdown label and theme. These checks used fictional data; every preference case retained `realData=false` and four shared JSON hashes remained unchanged. The real iCloud folder was not used. Automated temporary-folder tests cover backup and validation behavior, but actual iCloud materialization, full native conflict resolution and cross-device convergence remain unverified; see the scoped ledger.
 
 ## Stack & repository map
 
@@ -108,7 +119,7 @@ Native sandbox acceptance has verified real tray actions, external sandbox-file 
 
 ## Roadmap
 
-- Finish and verify v1 parity, live sandbox sync, native integration and safe phone migration.
+- Owner acceptance: real phone/iCloud setup, pending native/OS checks and hosted CI; see [verification ledger](docs/VERIFICATION.md).
 - **Deadline Radar:** intentionally out of v1; navigation/module seam for a small **Swift EventKit helper** to read calendar events and reminders with explicit permissions.
 - Insights relating sleep consistency, focus and habits (stretch).
 - Bundle the tested core for Scriptable `importModule()` reuse (stretch).
