@@ -127,28 +127,29 @@ fn open(app: &AppHandle) {
         let _ = window.set_focus();
     }
 }
+fn quiet_focus_start(s: &Snapshot, op: &Operation, now: DateTime<Local>) -> bool {
+    if !matches!(op, Operation::StartTimer { timer_type, .. } if timer_type == "focus") {
+        return false;
+    }
+    sleep::view(&s.sleep, &s.settings.sleep, now).is_ok_and(|v| {
+        let left = (v.bed - now).num_seconds();
+        !v.asleep && left > 0 && left <= i64::from(s.settings.sleep.no_phone_minutes) * 60
+    })
+}
 fn native_mutate(app: &AppHandle, op: Operation) {
     let app = app.clone();
     std::thread::spawn(move || {
         let backend = app.state::<Backend>();
-        if matches!(op, Operation::StartTimer { .. }) {
-            if let Ok(snap) = backend.store.snapshot() {
-                if let Ok(v) = sleep::view(&snap.sleep, &snap.settings.sleep, Local::now()) {
-                    let left = (v.bed - Local::now()).num_seconds();
-                    if !v.asleep
-                        && left > 0
-                        && left <= i64::from(snap.settings.sleep.no_phone_minutes) * 60
-                    {
-                        let _ = app
-                            .notification()
-                            .builder()
-                            .title("No phone time")
-                            .body("Open Daybar Focus to confirm starting a session near bedtime.")
-                            .show();
-                        open(&app);
-                        return;
-                    }
-                }
+        if let Ok(snap) = backend.store.snapshot() {
+            if quiet_focus_start(&snap, &op, Local::now()) {
+                let _ = app
+                    .notification()
+                    .builder()
+                    .title("No phone time")
+                    .body("Open Daybar Focus to confirm starting a session near bedtime.")
+                    .show();
+                open(&app);
+                return;
             }
         }
         if let Err(e) = backend.store.mutate(op) {
@@ -583,7 +584,11 @@ mod tests {
     use super::*;
     #[test]
     fn scheduler_cancels_and_titles_clamp() {
-        let now = Local::now();
+        use chrono::TimeZone;
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 23, 30, 0)
+            .single()
+            .unwrap();
         let s = Snapshot {
             settings: Settings::default(),
             daily_log: Default::default(),
@@ -612,6 +617,24 @@ mod tests {
         assert!(deadlines(&s, now)
             .iter()
             .all(|a| !a.id.starts_with("timer:")));
+        let start = |timer_type: &str| Operation::StartTimer {
+            timer_type: timer_type.into(),
+            minutes: 25,
+            task: None,
+        };
+        assert!(quiet_focus_start(&s, &start("focus"), now));
+        assert!(!quiet_focus_start(&s, &start("break"), now));
+        assert!(!quiet_focus_start(&s, &Operation::StopTimer, now));
+        assert!(!quiet_focus_start(
+            &s,
+            &start("focus"),
+            now - chrono::Duration::hours(2)
+        ));
+        assert!(!quiet_focus_start(
+            &s,
+            &start("focus"),
+            now + chrono::Duration::hours(1)
+        ));
     }
     #[test]
     fn default_shortcut_is_valid_and_bad_shortcut_rejected() {
