@@ -1,10 +1,10 @@
-# Portfolio media — capture pending
+# Portfolio media
 
-No screenshots or recordings have been captured. Do not use illustrative mockups as evidence that the app works.
+The Today hero is an actual Playwright screenshot of main commit `3528594`'s static export, captured on 2026-11-15 at 1280 px with the in-memory browser client and synthetic data. The integrated six-screen browser smoke passed; localStorage writes were blocked, no external requests occurred, and the PNG contains only IHDR/IDAT/IEND chunks. The image was visually inspected. It is not a native-window or sync test. No tray recording or iPhone image has been captured. Do not use illustrative mockups as runtime evidence.
 
 | Asset | Status | Content |
 | --- | --- | --- |
-| `today.png` | NOT YET CAPTURED | Today dashboard hero linked from the root README |
+| `today.png` | CAPTURED — browser demo | Actual Today static-export UI; synthetic in-memory data, no personal files |
 | `menu-bar.gif` | NOT YET CAPTURED | Start/stop a synthetic focus timer from the menu bar |
 | iPhone widget image (filename TBD) | OWNER-SUPPLIED PLACEHOLDER | Original widgets; owner must review/redact before publishing |
 

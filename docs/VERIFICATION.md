@@ -1,6 +1,6 @@
 # v1 acceptance ledger
 
-**Status: all acceptance checks below are PENDING.** This is a test plan, not evidence of successful execution. Foundation checks recorded elsewhere do not establish feature parity. The integration owner should replace individual statuses only after execution, recording commit, command or manual steps, environment, result and evidence in `docs/PROGRESS.md`. A passing build, a screenshot or a test name alone is not acceptance evidence.
+**Status: browser-only app-shape checks have passed; remaining rows are PENDING unless explicitly updated.** Executed evidence is recorded per row and in `docs/PROGRESS.md`. A frontend pass does not establish native IPC, filesystem or OS behavior. Foundation checks recorded elsewhere do not establish feature parity. The integration owner should replace individual statuses only after execution, recording commit, command or manual steps, environment, result and evidence in `docs/PROGRESS.md`. A passing build, a screenshot or a test name alone is not acceptance evidence.
 
 Scope: every requirement in `AGENT_PROMPT.md` §5.2–5.4 and §6.1–6.3. Phone installation, CI and media checks are added at the end. No real iCloud data may be read or written during development, tests or capture.
 
@@ -46,9 +46,9 @@ Atomic rename and re-reading cannot guarantee distributed serialization. Even af
 
 | ID | Acceptance point | Status | Intended method / evidence |
 | --- | --- | --- | --- |
-| 6.1-01 | Sidebar: Today, Countdown, Habits, Focus, Sleep, Settings | PENDING | UI: visit each screen, active navigation and return paths; no dead in-scope route. |
-| 6.1-02 | Script-style dark theme; responsive grids, no hard-coded widget width | PENDING | UI: resize minimum to wide; inspect tokens, grid fit, legible labels and absence of horizontal clipping. |
-| 6.1-03 | Today combines day progress/time to bed, active focus start/stop, inline tasks, focus blocks and countdown grid | PENDING | UI: seeded dashboard plus active/idle/expired timer and task mutations; record screenshot only after checks. |
+| 6.1-01 | Sidebar: Today, Countdown, Habits, Focus, Sleep, Settings | PASS | Main `3528594`: committed Playwright smoke visited all six screens in static-export browser demo; active navigation and return paths work. `/tmp/daybar-integrated-browser.log`. Native IPC remains separate. |
+| 6.1-02 | Script-style dark theme; responsive grids, no hard-coded widget width | PASS | Same browser smoke: no document overflow at 375/600/900/1280 px; component tests assert grid order/colors/padding. Actual hero visually inspected, `docs/screenshots/today.png`. |
+| 6.1-03 | Today combines day progress/time to bed, active focus start/stop, inline tasks, focus blocks and countdown grid | PASS | Integrated 27 UI tests include active/idle/expiry handling; browser smoke started/stopped focus and changed a task, and actual Today hero shows all composed modules. Memory-client only, not native persistence proof. |
 | 6.1-04 | Tray title is live focus countdown or time until bed | PENDING | UI/native: observe successive ticks, start/stop, expiry and idle return without reopening window. |
 | 6.1-05 | Tray: all focus presets, stop, today's task toggles, open window, quit | PENDING | UI/native: exercise each action against sandbox; compare UI and JSON after tray changes. Relaunch after quit. |
 | 6.1-06 | Dock icon hide preference | PENDING | UI/native: toggle, verify Dock visibility, reopen from tray and persistence after relaunch. |

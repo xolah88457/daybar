@@ -4,9 +4,9 @@
 
 > **Work in progress:** feature integration and acceptance verification are pending. This README describes the v1 experience and safety contract, not a claim that every feature has shipped. See the [verification ledger](docs/VERIFICATION.md) and [documentation check report](docs/DOCS_REPORT.md).
 
-[Today dashboard hero — `docs/screenshots/today.png`](docs/screenshots/today.png)
+![Daybar Today dashboard showing synthetic countdown, tasks, focus and sleep data](docs/screenshots/today.png)
 
-*Screenshot placeholder: not yet captured. The linked image will be added after a sandbox-only UI check; the link is intentionally unresolved today.*
+*Captured from the actual static-export UI in browser-demo mode using synthetic in-memory data. Native OS integration is verified separately; this image is not evidence of iCloud sync.*
 
 **Menu bar timer GIF:** not yet captured. Planned asset: `docs/screenshots/menu-bar.gif`.
 
