@@ -49,7 +49,8 @@ export function demoSnapshot(now = new Date()): Snapshot {
       launchAtLogin: false,
       hideDock: false,
       globalShortcut: 'CommandOrControl+Shift+F',
-      themeMode: 'night'
+      themeMode: 'night',
+      trayDisplay: 'auto'
     },
     issues: [],
     conflicts: []
@@ -245,7 +246,8 @@ export function createDemoClient(
         parsed.realData !== memory.preferences.realData ||
         parsed.launchAtLogin !== memory.preferences.launchAtLogin ||
         parsed.hideDock !== memory.preferences.hideDock ||
-        parsed.globalShortcut !== memory.preferences.globalShortcut
+        parsed.globalShortcut !== memory.preferences.globalShortcut ||
+        parsed.trayDisplay !== memory.preferences.trayDisplay
       )
         throw new Error(
           'OS preferences and real folders require the desktop app. Browser demo has no filesystem access.'

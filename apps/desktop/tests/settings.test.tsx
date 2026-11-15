@@ -121,6 +121,18 @@ describe('settings and safety controls', () => {
     expect(logIdInput).toHaveAttribute('readonly');
     expect(screen.getByText('Stable identifier for the habit log file. Cannot be changed here.')).toBeInTheDocument();
   });
+  it('saves the selected menu-bar label as an app-local preference', async () => {
+    const p = props();
+    render(<SettingsPanel {...p} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Menu-bar label' }), {
+      target: { value: 'focusMinutes' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Mac preferences ↗' }));
+    await waitFor(() => expect(p.savePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ trayDisplay: 'focusMinutes', themeMode: 'night' })
+    ));
+    expect(p.run).not.toHaveBeenCalled();
+  });
   it('saves app-local appearance through the preferences API without changing shared settings', async () => {
     const p = props();
     render(<SettingsPanel {...p} />);

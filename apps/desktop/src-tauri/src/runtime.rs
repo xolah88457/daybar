@@ -388,7 +388,7 @@ fn alert_current(
             .ends_with(&format!(":{}", v.bed.timestamp_millis()))
     })
 }
-fn tray_title(s: &Snapshot, now: DateTime<Local>) -> String {
+fn timer_title(s: &Snapshot, now: DateTime<Local>) -> String {
     if let Some(timer) = &s.focus.state {
         let secs = ((timer.end - now.timestamp_millis() + 999) / 1000).max(0);
         format!(
@@ -405,6 +405,77 @@ fn tray_title(s: &Snapshot, now: DateTime<Local>) -> String {
         sleep::view(&s.sleep, &s.settings.sleep, now)
             .map(|v| sleep::title(&v, now))
             .unwrap_or_else(|_| "Daybar".into())
+    }
+}
+fn tray_title(s: &Snapshot, now: DateTime<Local>) -> String {
+    use crate::contracts::TrayDisplay::*;
+    use chrono::NaiveDate;
+    let today = now.format("%Y-%m-%d").to_string();
+    match s.preferences.tray_display {
+        Auto => timer_title(s, now),
+        FocusMinutes => format!("{} min", s.focus.days.get(&today).map_or(0, |d| d.minutes)),
+        FocusHours => {
+            let minutes = s.focus.days.get(&today).map_or(0, |d| d.minutes);
+            format!("{}h {}m", minutes / 60, minutes % 60)
+        }
+        FocusBlocks => format!("{} blocks", s.focus.days.get(&today).map_or(0, |d| d.count)),
+        ActiveTimer => s.focus.state.as_ref().map_or_else(
+            || "Timer idle".into(),
+            |timer| {
+                let secs = ((timer.end - now.timestamp_millis() + 999) / 1000).max(0);
+                format!(
+                    "{} {}:{:02}",
+                    if timer.r#type == "focus" {
+                        "Focus"
+                    } else {
+                        "Break"
+                    },
+                    secs / 60,
+                    secs % 60
+                )
+            },
+        ),
+        Bedtime => sleep::view(&s.sleep, &s.settings.sleep, now)
+            .map(|v| sleep::title(&v, now))
+            .unwrap_or_else(|_| "Daybar".into()),
+        NextTask => {
+            let h = &s.settings.habits;
+            if today < h.start_date || (!h.end_date.is_empty() && today > h.end_date) {
+                "No tasks today".into()
+            } else if h.tasks.is_empty() {
+                "No tasks today".into()
+            } else if let Some(task) = h.tasks.iter().find(|task| {
+                !s.daily_log
+                    .get(&today)
+                    .is_some_and(|done| done.contains(task))
+            }) {
+                let label: String = task.chars().take(24).collect();
+                if task.chars().count() > 24 {
+                    format!("Task: {}…", label.trim_end())
+                } else {
+                    format!("Task: {label}")
+                }
+            } else {
+                "All tasks done".into()
+            }
+        }
+        Countdown => {
+            let parse = |value: &str| NaiveDate::parse_from_str(value, "%Y-%m-%d");
+            let (Ok(start), Ok(end)) = (
+                parse(&s.settings.countdown.start_date),
+                parse(&s.settings.countdown.end_date),
+            ) else {
+                return "Daybar".into();
+            };
+            let day = now.date_naive();
+            let total = (end - start).num_days() + 1;
+            let remaining = if day >= end {
+                0
+            } else {
+                (end - day).num_days().min(total).max(0)
+            };
+            format!("{remaining}d")
+        }
     }
 }
 fn watch(root: &std::path::Path, tx: Sender<Signal>) -> Result<RecommendedWatcher> {
@@ -610,6 +681,7 @@ mod tests {
                 hide_dock: false,
                 global_shortcut: String::new(),
                 theme_mode: crate::contracts::ThemeMode::Night,
+                tray_display: crate::contracts::TrayDisplay::Auto,
             },
             issues: vec![],
             conflicts: vec![],
@@ -638,6 +710,163 @@ mod tests {
         ));
     }
     #[test]
+    fn tray_display_modes_use_credited_totals_dates_and_ordered_tasks() {
+        use chrono::TimeZone;
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 12, 0, 0)
+            .single()
+            .unwrap();
+        let today = now.format("%Y-%m-%d").to_string();
+        let mut s = Snapshot {
+            settings: Settings::default(),
+            daily_log: Default::default(),
+            focus: FocusData {
+                days: std::collections::BTreeMap::from([
+                    (
+                        today.clone(),
+                        FocusDay {
+                            count: 3,
+                            minutes: 85,
+                        },
+                    ),
+                    (
+                        "2026-11-14".into(),
+                        FocusDay {
+                            count: 99,
+                            minutes: 999,
+                        },
+                    ),
+                ]),
+                ..Default::default()
+            },
+            sleep: SleepData::default(),
+            preferences: Preferences {
+                data_folder: "/sandbox".into(),
+                real_data: false,
+                launch_at_login: false,
+                hide_dock: false,
+                global_shortcut: String::new(),
+                theme_mode: ThemeMode::Night,
+                tray_display: TrayDisplay::FocusMinutes,
+            },
+            issues: vec![],
+            conflicts: vec![],
+        };
+        for (mode, expected) in [
+            (TrayDisplay::FocusMinutes, "85 min"),
+            (TrayDisplay::FocusHours, "1h 25m"),
+            (TrayDisplay::FocusBlocks, "3 blocks"),
+        ] {
+            s.preferences.tray_display = mode;
+            assert_eq!(tray_title(&s, now), expected);
+        }
+        s.focus.state = Some(TimerState {
+            r#type: "break".into(),
+            minutes: 5,
+            start: now.timestamp_millis(),
+            end: now.timestamp_millis() + 90_000,
+            task: None,
+        });
+        s.preferences.tray_display = TrayDisplay::FocusMinutes;
+        assert_eq!(tray_title(&s, now), "85 min");
+        s.preferences.tray_display = TrayDisplay::ActiveTimer;
+        assert_eq!(tray_title(&s, now), "Break 1:30");
+        s.focus.state.as_mut().unwrap().end = now.timestamp_millis() - 1;
+        assert_eq!(tray_title(&s, now), "Break 0:00");
+        s.focus.state = None;
+        assert_eq!(tray_title(&s, now), "Timer idle");
+        s.focus.days.clear();
+        s.preferences.tray_display = TrayDisplay::FocusMinutes;
+        assert_eq!(tray_title(&s, now), "0 min");
+        s.preferences.tray_display = TrayDisplay::FocusHours;
+        assert_eq!(tray_title(&s, now), "0h 0m");
+        s.preferences.tray_display = TrayDisplay::FocusBlocks;
+        assert_eq!(tray_title(&s, now), "0 blocks");
+        s.focus.days.insert(
+            "2026-11-16".into(),
+            FocusDay {
+                count: 2,
+                minutes: 50,
+            },
+        );
+        let before_midnight = Local
+            .with_ymd_and_hms(2026, 11, 15, 23, 59, 59)
+            .single()
+            .unwrap();
+        let after_midnight = Local
+            .with_ymd_and_hms(2026, 11, 16, 0, 0, 0)
+            .single()
+            .unwrap();
+        s.preferences.tray_display = TrayDisplay::FocusMinutes;
+        assert_eq!(tray_title(&s, before_midnight), "0 min");
+        assert_eq!(tray_title(&s, after_midnight), "50 min");
+        s.focus.state = Some(TimerState {
+            r#type: "focus".into(),
+            minutes: 1,
+            start: now.timestamp_millis(),
+            end: now.timestamp_millis() + 30_000,
+            task: None,
+        });
+        s.preferences.tray_display = TrayDisplay::ActiveTimer;
+        assert_eq!(tray_title(&s, now), "Focus 0:30");
+        s.focus.state = None;
+        s.preferences.tray_display = TrayDisplay::Bedtime;
+        assert!(tray_title(&s, now).ends_with("→ bed"));
+        s.preferences.tray_display = TrayDisplay::NextTask;
+        s.settings.habits.tasks = vec!["First task".into(), "Second task".into()];
+        s.daily_log.insert(today.clone(), vec!["First task".into()]);
+        assert_eq!(tray_title(&s, now), "Task: Second task");
+        s.daily_log
+            .insert(today.clone(), s.settings.habits.tasks.clone());
+        assert_eq!(tray_title(&s, now), "All tasks done");
+        s.settings.habits.tasks = vec!["🌿 One very long unicode task label".into()];
+        s.daily_log.remove(&today);
+        assert_eq!(tray_title(&s, now), "Task: 🌿 One very long unicode…");
+        s.settings.habits.start_date = "2026-11-16".into();
+        assert_eq!(tray_title(&s, now), "No tasks today");
+    }
+    #[test]
+    fn tray_countdown_matches_remaining_days_and_auto_preserves_legacy_title() {
+        use chrono::TimeZone;
+        let mut s = Snapshot {
+            settings: Settings::default(),
+            daily_log: Default::default(),
+            focus: FocusData::default(),
+            sleep: SleepData::default(),
+            preferences: Preferences {
+                data_folder: "/sandbox".into(),
+                real_data: false,
+                launch_at_login: false,
+                hide_dock: false,
+                global_shortcut: String::new(),
+                theme_mode: ThemeMode::Night,
+                tray_display: TrayDisplay::Countdown,
+            },
+            issues: vec![],
+            conflicts: vec![],
+        };
+        let at = |y, m, d| Local.with_ymd_and_hms(y, m, d, 12, 0, 0).single().unwrap();
+        s.settings.countdown.start_date = "2026-11-15".into();
+        s.settings.countdown.end_date = "2027-07-01".into();
+        assert_eq!(tray_title(&s, at(2026, 11, 14)), "229d");
+        assert_eq!(tray_title(&s, at(2026, 11, 15)), "228d");
+        s.settings.countdown.start_date = "2026-11-15".into();
+        s.settings.countdown.end_date = "2026-11-15".into();
+        assert_eq!(tray_title(&s, at(2026, 11, 15)), "0d");
+        assert_eq!(tray_title(&s, at(2026, 11, 16)), "0d");
+        s.preferences.tray_display = TrayDisplay::Auto;
+        s.focus.state = Some(TimerState {
+            r#type: "focus".into(),
+            minutes: 5,
+            start: at(2026, 11, 15).timestamp_millis(),
+            end: at(2026, 11, 15).timestamp_millis() + 60_000,
+            task: None,
+        });
+        assert_eq!(tray_title(&s, at(2026, 11, 15)), "Focus 1:00");
+        s.focus.state = None;
+        assert!(tray_title(&s, at(2026, 11, 15)).ends_with("→ bed"));
+    }
+    #[test]
     fn default_shortcut_is_valid_and_bad_shortcut_rejected() {
         validate_shortcut("CommandOrControl+Shift+F").unwrap();
         validate_shortcut("").unwrap();
@@ -658,6 +887,7 @@ mod tests {
                 hide_dock: false,
                 global_shortcut: String::new(),
                 theme_mode: crate::contracts::ThemeMode::Night,
+                tray_display: crate::contracts::TrayDisplay::Auto,
             },
             issues: vec![],
             conflicts: vec![],

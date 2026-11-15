@@ -216,6 +216,7 @@ impl Store {
             hide_dock: false,
             global_shortcut: "CommandOrControl+Shift+F".into(),
             theme_mode: crate::contracts::ThemeMode::Night,
+            tray_display: crate::contracts::TrayDisplay::Auto,
         };
         if let Some(path) = &preference_file {
             if let Some(raw) = bytes(path)? {

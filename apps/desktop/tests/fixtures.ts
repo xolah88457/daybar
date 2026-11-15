@@ -13,7 +13,8 @@ export function fixture(): Snapshot {
       launchAtLogin: false,
       hideDock: false,
       globalShortcut: '',
-      themeMode: 'night'
+      themeMode: 'night',
+      trayDisplay: 'auto'
     },
     issues: [],
     conflicts: []

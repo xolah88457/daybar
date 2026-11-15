@@ -13,11 +13,13 @@ describe('shared contracts', () => {
     expect(settingsSchema.safeParse({ countdown: { startDate: '2027-01-01', endDate: '2026-01-01' } }).success).toBe(false);
     expect(focusDataSchema.safeParse({ state: null, days: {}, sessions: { '1': { type: 'focus', minutes: 25, creditedMinutes: 26, end: 2, date: '2026-11-15' } } }).success).toBe(false);
   });
-  it('defaults theme mode to night and rejects unsupported values', () => {
+  it('defaults theme and tray preferences and rejects unsupported enum values', () => {
     const preferences = {dataFolder:'', realData:false, launchAtLogin:false, hideDock:false, globalShortcut:''};
-    expect(preferencesSchema.parse(preferences).themeMode).toBe('night');
+    expect(preferencesSchema.parse(preferences)).toMatchObject({themeMode:'night', trayDisplay:'auto'});
     for (const themeMode of ['day', 'night', 'auto']) expect(preferencesSchema.parse({...preferences, themeMode}).themeMode).toBe(themeMode);
+    for (const trayDisplay of ['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown']) expect(preferencesSchema.parse({...preferences, trayDisplay}).trayDisplay).toBe(trayDisplay);
     expect(preferencesSchema.safeParse({...preferences, themeMode:'system'}).success).toBe(false);
+    expect(preferencesSchema.safeParse({...preferences, trayDisplay:'future'}).success).toBe(false);
   });
   it('accepts legacy phone data', () => {
     expect(dailyLogSchema.parse(['2026-11-15'])).toEqual(['2026-11-15']);

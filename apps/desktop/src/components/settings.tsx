@@ -406,6 +406,26 @@ function PreferencesPanel({
             <small>Auto follows macOS appearance. Set macOS to Auto for its scheduled day/night changes; Daybar uses no location or network access.</small>
           </label>
           <label className="field">
+            Menu-bar label
+            <select
+              aria-label="Menu-bar label"
+              value={draft.trayDisplay}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, trayDisplay: e.target.value as Preferences['trayDisplay'] }))
+              }
+            >
+              <option value="auto">Auto · timer, then bedtime</option>
+              <option value="focusMinutes">Today's focus minutes</option>
+              <option value="focusHours">Today's focus hours</option>
+              <option value="focusBlocks">Today's focus blocks</option>
+              <option value="activeTimer">Active timer</option>
+              <option value="bedtime">Time until bed</option>
+              <option value="nextTask">Next task</option>
+              <option value="countdown">Countdown days left</option>
+            </select>
+            <small>Mac-only display. Focus totals count credited minutes only; the browser demo cannot change the menu bar.</small>
+          </label>
+          <label className="field">
             Data folder path
             <input
               value={draft.dataFolder}

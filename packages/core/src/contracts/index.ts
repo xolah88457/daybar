@@ -106,7 +106,8 @@ export type SleepData = z.infer<typeof sleepDataSchema>;
 
 export const preferencesSchema = z.object({
   dataFolder: z.string(), realData: z.boolean(), launchAtLogin: z.boolean(), hideDock: z.boolean(), globalShortcut: z.string(),
-  themeMode: z.enum(['day', 'night', 'auto']).default('night')
+  themeMode: z.enum(['day', 'night', 'auto']).default('night'),
+  trayDisplay: z.enum(['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown']).default('auto')
 }).strict();
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type Operation =

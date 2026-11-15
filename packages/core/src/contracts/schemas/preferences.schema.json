@@ -25,6 +25,20 @@
         "night",
         "auto"
       ]
+    },
+    "trayDisplay": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "focusMinutes",
+        "focusHours",
+        "focusBlocks",
+        "activeTimer",
+        "bedtime",
+        "nextTask",
+        "countdown"
+      ]
     }
   },
   "required": [
@@ -33,7 +47,8 @@
     "launchAtLogin",
     "hideDock",
     "globalShortcut",
-    "themeMode"
+    "themeMode",
+    "trayDisplay"
   ],
   "additionalProperties": false
 }

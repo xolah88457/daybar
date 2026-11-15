@@ -327,6 +327,7 @@ fn debug_restart_revokes_persisted_real_folder_without_probing_it() {
         hide_dock: false,
         global_shortcut: String::new(),
         theme_mode: ThemeMode::Night,
+        tray_display: TrayDisplay::Auto,
     };
     atomic(&prefs, &encode(&p).unwrap()).unwrap();
     let store = Store::open(root.clone(), Some(prefs)).unwrap();

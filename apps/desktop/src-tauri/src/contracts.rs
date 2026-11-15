@@ -64,11 +64,15 @@ impl Default for Settings { fn default() -> Self { Self {schema_version:1,countd
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all="lowercase")]
 pub enum ThemeMode { Day, #[default] Night, Auto }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all="camelCase")]
+pub enum TrayDisplay { #[default] Auto, FocusMinutes, FocusHours, FocusBlocks, ActiveTimer, Bedtime, NextTask, Countdown }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 pub struct Preferences {
  pub data_folder: String, pub real_data: bool, pub launch_at_login: bool, pub hide_dock: bool, pub global_shortcut: String,
- #[serde(default)] pub theme_mode: ThemeMode
+ #[serde(default)] pub theme_mode: ThemeMode,
+ #[serde(default)] pub tray_display: TrayDisplay
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DataIssue { pub file: String, pub message: String }
@@ -105,7 +109,14 @@ mod tests {
   assert_eq!(prefs.theme_mode, ThemeMode::Night);
   let json = serde_json::to_value(&prefs).unwrap();
   assert_eq!(json["themeMode"], "night");
+  assert_eq!(json["trayDisplay"], "auto");
+  let mut selected = prefs.clone();
+  selected.tray_display = TrayDisplay::FocusHours;
+  let selected_json = serde_json::to_value(&selected).unwrap();
+  assert_eq!(selected_json["trayDisplay"], "focusHours");
+  assert_eq!(serde_json::from_value::<Preferences>(selected_json).unwrap().tray_display, TrayDisplay::FocusHours);
   assert!(serde_json::from_str::<Preferences>(r#"{"dataFolder":"/sandbox","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":"","themeMode":"system"}"#).is_err());
+  assert!(serde_json::from_str::<Preferences>(r#"{"dataFolder":"/sandbox","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":"","trayDisplay":"future"}"#).is_err());
  }
  #[test] fn rejects_unknown_fields() { assert!(serde_json::from_str::<Settings>("{\"schemaVersion\":1,\"future\":true}").is_err()); }
 }

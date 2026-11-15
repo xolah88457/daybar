@@ -23,6 +23,7 @@ describe('in-memory DaybarClient', () => {
       { ...auto.preferences, realData: true },
       { ...auto.preferences, launchAtLogin: true },
       { ...auto.preferences, hideDock: true },
+      { ...auto.preferences, trayDisplay: 'countdown' },
       {
         ...auto.preferences,
         globalShortcut: 'CommandOrControl+Shift+T'
