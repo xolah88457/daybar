@@ -8,6 +8,7 @@ import type {
   Preferences,
   Snapshot
 } from '@daybar/core/contracts';
+import { confirmAction } from '../lib/confirm';
 import { createDemoClient } from '../lib/demo';
 import { tauriClient } from '../lib/ipc';
 import { Countdown, DayProgress, Focus, Habits, Sleep } from './modules';
@@ -190,7 +191,7 @@ export function Dashboard({
     void run({ kind: 'settle_timer' });
   }, [snapshot, now, busy, run]);
   useEffect(() => {
-    const keydown = (event: KeyboardEvent) => {
+    const keydown = async (event: KeyboardEvent) => {
       const target = event.target;
       if (
         event.defaultPrevented ||
@@ -220,9 +221,9 @@ export function Dashboard({
             !sleep.asleep &&
             sleep.leftMinutes > 0 &&
             sleep.leftMinutes <= data.settings.sleep.noPhoneMinutes &&
-            !window.confirm(
+            !(await confirmAction(
               'It is no-phone time. Start a focus session anyway?'
-            )
+            ))
           )
             return;
           void run({
@@ -388,12 +389,12 @@ export function Dashboard({
             <div className="button-row">
               <button
                 disabled={busy}
-                onClick={() => {
+                onClick={async () => {
                   if (
                     client &&
-                    window.confirm(
+                    (await confirmAction(
                       `Merge “${conflict.file}” into “${conflict.canonical}”? Conflicting values may require manual repair; only a successful merge resolves the copy.`
-                    )
+                    ))
                   )
                     void perform(
                       () => client.resolveConflict(conflict.file, 'merge'),
@@ -406,12 +407,12 @@ export function Dashboard({
               <button
                 className="subtle-danger"
                 disabled={busy}
-                onClick={() => {
+                onClick={async () => {
                   if (
                     client &&
-                    window.confirm(
+                    (await confirmAction(
                       `Permanently discard conflict copy “${conflict.file}”? Keep “${conflict.canonical}” unchanged. This cannot be undone.`
-                    )
+                    ))
                   )
                     void perform(
                       () => client.resolveConflict(conflict.file, 'discard'),

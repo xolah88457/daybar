@@ -21,6 +21,7 @@ import {
   wrap
 } from '@daybar/core';
 import type { Operation, Snapshot } from '@daybar/core/contracts';
+import { confirmAction } from '../lib/confirm';
 import {
   Blocks,
   clock,
@@ -287,13 +288,15 @@ export function Focus(props: Actions) {
     [snapshot.focus, s.focus.blockMinutes]
   );
   const day = focus.days[key(now)] ?? { count: 0, minutes: 0 };
-  const start = (timerType: 'focus' | 'break', minutes: number) => {
+  const start = async (timerType: 'focus' | 'break', minutes: number) => {
     if (
       timerType === 'focus' &&
       !view.asleep &&
       view.leftMinutes > 0 &&
       view.leftMinutes <= s.sleep.noPhoneMinutes &&
-      !window.confirm('It is no-phone time. Start a focus session anyway?')
+      !(await confirmAction(
+        'It is no-phone time. Start a focus session anyway?'
+      ))
     )
       return;
     void run({
@@ -345,7 +348,7 @@ export function Focus(props: Actions) {
                 className="primary"
                 key={i}
                 disabled={busy}
-                onClick={() => start('focus', m)}
+                onClick={() => void start('focus', m)}
               >
                 {m} min <span>↗</span>
               </button>
@@ -354,7 +357,11 @@ export function Focus(props: Actions) {
           <div className="presets">
             <span>Break</span>
             {s.focus.breakOptions.map((m, i) => (
-              <button key={i} disabled={busy} onClick={() => start('break', m)}>
+              <button
+                key={i}
+                disabled={busy}
+                onClick={() => void start('break', m)}
+              >
                 {m} min
               </button>
             ))}
@@ -362,7 +369,11 @@ export function Focus(props: Actions) {
           <div className="presets">
             <span>Long break</span>
             {s.focus.longBreakOptions.map((m, i) => (
-              <button key={i} disabled={busy} onClick={() => start('break', m)}>
+              <button
+                key={i}
+                disabled={busy}
+                onClick={() => void start('break', m)}
+              >
                 {m} min
               </button>
             ))}
@@ -373,7 +384,7 @@ export function Focus(props: Actions) {
               e.preventDefault();
               const minutes = Number(custom);
               if (Number.isInteger(minutes) && minutes >= 1 && minutes <= 240)
-                start('focus', minutes);
+                void start('focus', minutes);
             }}
           >
             <label>
@@ -539,12 +550,12 @@ export function Sleep(props: Actions) {
             <button
               className="primary"
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 if (
                   !sleep.plan ||
-                  window.confirm(
+                  (await confirmAction(
                     'Restart the sleep plan from your current averages?'
-                  )
+                  ))
                 )
                   void run({ kind: 'start_plan' });
               }}
@@ -558,9 +569,9 @@ export function Sleep(props: Actions) {
           {sleep.plan && (
             <button
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
+                  await confirmAction(
                     'Stop the plan? Logged wake and bed times are kept.'
                   )
                 )
@@ -611,9 +622,9 @@ export function Sleep(props: Actions) {
         <button
           className="danger"
           disabled={busy || (!logs.length && !sleep.plan)}
-          onClick={() => {
+          onClick={async () => {
             if (
-              window.confirm(
+              await confirmAction(
                 'Permanently clear ALL wake logs, bed logs and the sleep plan? This cannot be undone.'
               )
             )

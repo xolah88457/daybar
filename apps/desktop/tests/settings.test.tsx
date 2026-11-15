@@ -62,19 +62,24 @@ describe('settings and safety controls', () => {
       { target: { value: 'Study' } }
     );
     fireEvent.click(screen.getAllByRole('button', { name: 'Rename…' })[0]);
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
     expect(p.run).not.toHaveBeenCalled();
     confirm.mockReturnValue(true);
     fireEvent.click(screen.getAllByRole('button', { name: 'Rename…' })[0]);
-    expect(p.run).toHaveBeenCalledWith({
-      kind: 'rename_task',
-      from: 'Coursework',
-      to: 'Study'
-    });
+    await waitFor(() =>
+      expect(p.run).toHaveBeenCalledWith({
+        kind: 'rename_task',
+        from: 'Coursework',
+        to: 'Study'
+      })
+    );
     fireEvent.click(screen.getAllByRole('button', { name: 'Archive…' })[0]);
-    expect(p.run).toHaveBeenCalledWith({
-      kind: 'archive_task',
-      task: 'Coursework'
-    });
+    await waitFor(() =>
+      expect(p.run).toHaveBeenCalledWith({
+        kind: 'archive_task',
+        task: 'Coursework'
+      })
+    );
   });
   it('requires explicit real-folder opt-in and confirmation before changing preferences', async () => {
     const p = props();
@@ -144,7 +149,7 @@ describe('sleep and focus presentation', () => {
     expect(screen.getByText('SLEEPING')).toBeInTheDocument();
     expect(screen.getByText(/Wake.*\(est\)/)).toBeInTheDocument();
   });
-  it('requires gentle confirmation during no-phone time and sends the selected task tag', () => {
+  it('requires gentle confirmation during no-phone time and sends the selected task tag', async () => {
     const p = props();
     p.snapshot.sleep.wakes['2026-11-15'] = 480;
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -153,15 +158,18 @@ describe('sleep and focus presentation', () => {
       target: { value: 'Coursework' }
     });
     fireEvent.click(screen.getByRole('button', { name: '25 min ↗' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
     expect(p.run).not.toHaveBeenCalled();
     confirm.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: '25 min ↗' }));
-    expect(p.run).toHaveBeenCalledWith({
-      kind: 'start_timer',
-      timerType: 'focus',
-      minutes: 25,
-      task: 'Coursework'
-    });
+    await waitFor(() =>
+      expect(p.run).toHaveBeenCalledWith({
+        kind: 'start_timer',
+        timerType: 'focus',
+        minutes: 25,
+        task: 'Coursework'
+      })
+    );
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('no-phone'));
   });
 });
