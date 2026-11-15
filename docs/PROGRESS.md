@@ -2,7 +2,7 @@
 
 ## Current local release candidate
 
-**Product source: `f6fd53084bc5e3912f312a3a9291cd700cc71fe0` (v0.1.0).** Implementation, independent source reviews, local automated gates, native sandbox checks and unsigned arm64 packaging have passed. Final handoff documentation is being updated. Real-phone/iCloud, notification delivery, login/Dock preferences and hosted CI acceptance are not claimed.
+**Product source: `f6fd53084bc5e3912f312a3a9291cd700cc71fe0` (v0.1.0).** Implementation, independent source reviews, local automated gates, native sandbox checks and unsigned arm64 packaging have passed. Final handoff and conservative owner setup instructions are in [RELEASE.md](RELEASE.md). Real-phone/iCloud, notification delivery, login/Dock preferences and hosted CI acceptance are not claimed.
 
 - **Node 22.23.5:** lint, strict types and **138 core + 50 desktop + 59 Scriptable = 247 tests in EACH America/Toronto and Europe/London**, all passing (`/tmp/daybar-tray-integrated-node22.log`).
 - **Rust:** 32 tests passing; the worker also tested Toronto/London (`/tmp/daybar-tray-parent-rust.log`).
@@ -39,4 +39,4 @@ The user's tmux extension replaced ACP. Failed/quota-limited agents were not cou
 
 **No real iCloud folder has been selected, read or written.** Original development-test JSON was restored byte-for-byte before the separately requested fictional reset. Only eight known development/app-local sandbox files were then replaced with schema-validated fictional fixtures; originals remain backed up under `/tmp/daybar-fictional-samples-backup-20261115-115838`. Later menu/theme verification changed only app-local preferences, not shared JSON.
 
-The acceptance ledger retains scoped automated/native evidence and explicit pending owner checks: full native conflict UI, Dock/login behavior, notification delivery, hosted CI/distribution and an owner iPhone image. Real iOS/Shortcuts/iCloud convergence, signing/notarization, older macOS and Intel builds remain unverified. Do not enable real-folder mode casually; use the phone setup and final release/safe-switch instructions.
+The acceptance ledger retains scoped automated/native evidence and explicit pending owner checks: full native conflict UI, Dock/login behavior, notification delivery, hosted CI/distribution and an owner iPhone image. Real iOS/Shortcuts/iCloud convergence, signing/notarization, older macOS and Intel builds remain unverified. Do not enable real-folder mode casually; use the [phone setup](../scriptable/README.md) and [release/safe-switch instructions](RELEASE.md).

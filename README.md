@@ -23,7 +23,7 @@
 
 The starting point was five separate Scriptable home-screen tools: Days Left, Daily Log, Focus Timer, Time Blindness + Sleep, and Deadline Radar. Four modules are integrated on Mac; Deadline Radar remains a phone-only calendar/reminders widget until a future Mac release. Today combines time until bed, focus controls, today's checklist, focus blocks and the countdown grid. Original scripts remain untouched in [`legacy/`](legacy/).
 
-**iPhone screenshot placeholder:** personal widget screenshot to be supplied by the owner; no image captured or included yet.
+**iPhone screenshot placeholder:** owner-supplied fictional-data widget capture; no image captured or included yet.
 
 ## iPhone Scriptable widgets
 
