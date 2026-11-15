@@ -1,0 +1,35 @@
+# Phone-side delivery report
+
+Scope: `scriptable/**` and this report only. Read `AGENT_PROMPT.md` in full (including §§5/7 and parity), all five complete legacy scripts, `packages/core/src/contracts/index.ts`, and `docs/DATA_FORMATS.md`. Preserved/continued the pre-existing untracked standalone script copies; did not touch `legacy/` or other workers' files.
+
+## Delivered
+
+- Five standalone copies with Scriptable metadata headers first, no imports/dependencies. Deadline Radar remains byte-identical to its legacy original.
+- Four in-scope scripts read nested `daybar-settings.json`, using exact camelCase section/key names and per-key built-in defaults. Unknown versions/fields, malformed values and invalid cross-field combinations throw rather than being reset. Relevant colors, opacity/grid tokens, tasks, titles/dates, timer options/block length, sleep targets/plan/phase timings and alert toggles are applied.
+- Daily Log, Focus and Sleep use iCloud, await evicted canonical/placeholder downloads, and migrate local files only when cloud canonical and placeholder are both absent. Local originals remain. Canonical cloud data wins over local; migration validates before writing and uses the same guarded temporary-write path.
+- Every data mutation reads/validates latest data, applies an operation, validates output, writes a same-folder temporary file and compares current canonical text before replacement. Original is moved to a recovery backup before installing the new file; failed replacement attempts restoration and retains the backup. Malformed/unknown files never become empty overwrite targets. Daily Log uses explicit desired task state so replaying an edit does not invert it again.
+- Focus persists exact contract session records keyed by decimal start epoch: `type`, `minutes`, `creditedMinutes`, `end`, `date`, optional `task`. Legacy `days` are captured once as baseline on upgrade; existing session-derived totals never create another baseline. Days derive from baseline plus sessions; block counts use floor(total / blockMinutes). Settlement is replay-safe, finished credit uses end date, early stops use stop date/whole capped minutes, breaks credit zero. Stale start/stop menus cannot replace/stop a different active session.
+- Optional task picker and per-task tagged-minute thresholds write completion into the configured Daily Log using a separate re-read operation; later settlement repairs interrupted cross-file completion without duplicate focus credit.
+- All legacy Shortcut ingestion forms remain: dictionary, JSON, wake string, time-only, paired segment lists/newline strings, multi-night backfill and old-bed skip rule. Sleep log/start/restart/stop/clear actions re-read the latest file. Calendar-day previous-evening attribution is preserved through DST; phone manual date/time editing uses native pickers.
+- Install/backup/local-export, Keep Downloaded, settings example, widget parameters, Shortcut creation/repointing and recovery instructions in `scriptable/README.md`.
+
+## Verification
+
+Executed against in-memory fake Scriptable/FileManager only, with the actual scripts loaded through Node VM; not a duplicate pure-logic implementation:
+
+- `TZ=America/Toronto node --test scriptable/tests/*.test.mjs` — **38 passed**.
+- `TZ=UTC node --test scriptable/tests/*.test.mjs` — **38 passed**.
+- All five scripts compiled inside async wrappers (Scriptable supports top-level await), and all five full widget entry points executed in the fake runtime.
+- `cmp 'legacy/Deadline Radar.js' 'scriptable/Deadline Radar.js'` — identical.
+- `git diff -- legacy` — empty; legacy is not staged/modified.
+
+Tests exercise settings fallback and strict errors; awaited evicted settings/data; local migration/no-overwrite; malformed cloud/local preservation; Daily Log legacy arrays, colors, stable/parameterized IDs and replayed desired state; stale/interleaved task, focus and sleep writes; optimistic conflict detection; move-failure restoration; duplicate focus settlement/stop and baseline upgrades; zero-minute/break sessions; notification toggles; task-threshold repair after corrupt habits; midnight focus dates; sleep plan latest baseline; all Shortcut entry forms; DST calendar arithmetic, bedtime attribution, circular mean and estimated wake.
+
+## Limitations / integration notes
+
+1. **No real iCloud or iPhone was accessed.** Notification permissions, actual Scriptable file-manager failure semantics, iOS widget rendering/refresh and live-device sync require explicit user testing after backup. The desktop app was outside this worker's scope.
+2. **No atomic replace/CAS/distributed transaction exists in Scriptable FileManager.** Same-folder temp + backup/move improves failure recovery but is not an atomic overwrite: there is a missing-canonical crash window and a race after the final comparison. iCloud's eventual consistency can still produce divergent edits/conflict copies. Session idempotence prevents replay, not writes a device has not received. Phone scripts do not delete/merge conflict copies; use the desktop resolution UI. Review retained `.daybar-backup-*` files after an error/crash before resuming writes. Independent manual backup is mandatory.
+3. **Focus → Habits is two files.** Session is saved first; if habits fails, the session remains credited and a later Focus run repairs completion. The contract provides no completion-ack/manual-override field, so earned linked tasks are reasserted on later Focus runs after manual unchecking. The link targets `habits.logId`, not an arbitrary Daily Log widget parameter.
+4. **Countdown display is a refresh-bound snapshot.** Native iOS date timers count upward after expiry and have no supported clamp. Focus instead displays a nonnegative text snapshot, requests refresh every minute/at expiry, and retains end-clock time plus scheduled notification. iOS may leave a stale positive snapshot until refresh. No claim of second-by-second/clamped live native animation is made. Countdown today's fade uses the actual local day length on DST days rather than a fixed 24-hour divisor.
+5. **Contract seam:** `sessions` and `baseline` are independently optional in the shared schema. The phone follows DATA_FORMATS: an existing `sessions` map with no baseline means zero baseline; it never reconstructs legacy totals from already-derived `days`. Keep this behavior identical in core/backend. Neither settings nor session format needed a contract change for this delivery.
+6. Settings have no widget-width/side-padding token, so legacy family widths/padding remain built in. `rows` is contract-fixed to seven. `archivedTasks` is accepted metadata; only active `tasks` count. Renames/history transfer remain desktop operations, not silent phone settings migrations.
