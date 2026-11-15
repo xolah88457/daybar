@@ -184,6 +184,59 @@ describe('dashboard operations and failures', () => {
       expect(mock.client.mutate).toHaveBeenCalledWith({ kind: 'clear_sleep' })
     );
   });
+  it('surfaces native confirmation failures and keeps destructive settings unchanged', async () => {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', {
+      configurable: true,
+      value: {}
+    });
+    const showModal = Object.getOwnPropertyDescriptor(
+      HTMLDialogElement.prototype,
+      'showModal'
+    );
+    Object.defineProperties(HTMLDialogElement.prototype, {
+      showModal: {
+        configurable: true,
+        value: () => {
+          throw new Error('Native dialogs are unavailable.');
+        }
+      },
+      close: {
+        configurable: true,
+        value: () => {}
+      }
+    });
+    const initial = fixture();
+    const currentTime = new Date();
+    initial.sleep.wakes[key(currentTime)] =
+      currentTime.getHours() * 60 + currentTime.getMinutes() - 60;
+    initial.settings.sleep.noPhoneMinutes = 1440;
+    const mock = mockClient(initial);
+    render(<Dashboard client={mock.client} />);
+    await screen.findByRole('checkbox', { name: /Coursework/ });
+    navigate('Focus');
+    fireEvent.click(screen.getByRole('button', { name: '25 min ↗' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not confirm this action: Native dialogs are unavailable.'
+    );
+    expect(mock.client.mutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    navigate('Settings');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Archive…' })[0]);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not confirm this action: Native dialogs are unavailable.'
+    );
+    expect(mock.client.mutate).not.toHaveBeenCalled();
+    if (showModal)
+      Object.defineProperty(
+        HTMLDialogElement.prototype,
+        'showModal',
+        showModal
+      );
+    else delete (HTMLDialogElement.prototype as { showModal?: unknown }).showModal;
+    delete (HTMLDialogElement.prototype as { close?: unknown }).close;
+    delete (window as Window & { __TAURI_INTERNALS__?: unknown })
+      .__TAURI_INTERNALS__;
+  });
   it('never hijacks typing, but navigates and starts focus with window shortcuts', async () => {
     const mock = mockClient();
     render(<Dashboard client={mock.client} />);

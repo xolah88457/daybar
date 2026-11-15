@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { preferencesSchema, settingsSchema } from '@daybar/core/contracts';
 import type { Preferences, Settings, Snapshot } from '@daybar/core/contracts';
-import { confirmAction } from '../lib/confirm';
 import type { Actions } from './modules';
 import { Section } from './primitives';
 
@@ -27,6 +26,7 @@ export function SettingsPanel({
   snapshot,
   busy,
   run,
+  confirm,
   savePreferences
 }: Actions & { savePreferences: (p: Preferences) => Promise<boolean> }) {
   const [draft, setDraft] = useState<Settings>(() =>
@@ -243,7 +243,7 @@ export function SettingsPanel({
                 disabled={!rename[task]?.trim() || rename[task].trim() === task}
                 onClick={async () => {
                   if (
-                    await confirmAction(
+                    await confirm(
                       `Rename “${task}” to “${rename[task].trim()}” across ALL history and focus tags?`
                     )
                   )
@@ -261,7 +261,7 @@ export function SettingsPanel({
                 disabled={snapshot.settings.habits.tasks.length <= 1}
                 onClick={async () => {
                   if (
-                    await confirmAction(
+                    await confirm(
                       `Archive “${task}”? History is kept, but this task will no longer count toward daily completion.`
                     )
                   )
@@ -363,7 +363,7 @@ function PreferencesPanel({
       draft.realData &&
       changedFolder &&
       (!consent ||
-        !(await confirmAction(
+        !(await confirm(
           'Connect this real data folder? Daybar will read its JSON files and back up managed files before its first write. The phone and Mac will share changes.'
         )))
     )

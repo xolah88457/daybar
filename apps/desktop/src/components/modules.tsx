@@ -21,7 +21,6 @@ import {
   wrap
 } from '@daybar/core';
 import type { Operation, Snapshot } from '@daybar/core/contracts';
-import { confirmAction } from '../lib/confirm';
 import {
   Blocks,
   clock,
@@ -38,6 +37,7 @@ export type Actions = {
   now: Date;
   busy: boolean;
   run: (op: Operation) => Promise<boolean>;
+  confirm: (message: string) => Promise<boolean>;
 };
 export function Countdown({ snapshot, now }: Actions) {
   const result = getCountdown(snapshot.settings, now);
@@ -275,7 +275,7 @@ export function DayProgress({ snapshot, now }: Actions) {
   );
 }
 export function Focus(props: Actions) {
-  const { snapshot, now, busy, run } = props;
+  const { snapshot, now, busy, run, confirm } = props;
   const [custom, setCustom] = useState(
     String(snapshot.settings.focus.focusOptions[0])
   );
@@ -294,7 +294,7 @@ export function Focus(props: Actions) {
       !view.asleep &&
       view.leftMinutes > 0 &&
       view.leftMinutes <= s.sleep.noPhoneMinutes &&
-      !(await confirmAction(
+      !(await confirm(
         'It is no-phone time. Start a focus session anyway?'
       ))
     )
@@ -422,7 +422,7 @@ export function Focus(props: Actions) {
   );
 }
 export function Sleep(props: Actions) {
-  const { snapshot, now, busy, run } = props;
+  const { snapshot, now, busy, run, confirm } = props;
   const [date, setDate] = useState(key(now));
   const [time, setTime] = useState('08:00');
   const { sleep, settings: s } = snapshot;
@@ -553,7 +553,7 @@ export function Sleep(props: Actions) {
               onClick={async () => {
                 if (
                   !sleep.plan ||
-                  (await confirmAction(
+                  (await confirm(
                     'Restart the sleep plan from your current averages?'
                   ))
                 )
@@ -571,7 +571,7 @@ export function Sleep(props: Actions) {
               disabled={busy}
               onClick={async () => {
                 if (
-                  await confirmAction(
+                  await confirm(
                     'Stop the plan? Logged wake and bed times are kept.'
                   )
                 )
@@ -624,7 +624,7 @@ export function Sleep(props: Actions) {
           disabled={busy || (!logs.length && !sleep.plan)}
           onClick={async () => {
             if (
-              await confirmAction(
+              await confirm(
                 'Permanently clear ALL wake logs, bed logs and the sleep plan? This cannot be undone.'
               )
             )

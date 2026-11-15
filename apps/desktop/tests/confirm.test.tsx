@@ -137,7 +137,8 @@ describe('confirmAction', () => {
       snapshot: fixture(),
       now: new Date(2026, 10, 15, 23, 30),
       busy: false,
-      run: vi.fn(async () => true)
+      run: vi.fn(async () => true),
+      confirm: confirmAction
     };
     p.snapshot.sleep.wakes['2026-11-15'] = 480;
     render(<Focus {...p} />);

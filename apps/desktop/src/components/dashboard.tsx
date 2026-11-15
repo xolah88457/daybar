@@ -166,6 +166,15 @@ export function Dashboard({
       client ? perform(() => client.mutate(operation)) : false,
     [client, perform]
   );
+  const confirm = useCallback(async (prompt: string) => {
+    try {
+      return await confirmAction(prompt);
+    } catch (e) {
+      if (mounted.current)
+        setError(`Could not confirm this action: ${message(e)}`);
+      return false;
+    }
+  }, []);
   const savePreferences = useCallback(
     async (preferences: Preferences) =>
       client
@@ -221,7 +230,7 @@ export function Dashboard({
             !sleep.asleep &&
             sleep.leftMinutes > 0 &&
             sleep.leftMinutes <= data.settings.sleep.noPhoneMinutes &&
-            !(await confirmAction(
+            !(await confirm(
               'It is no-phone time. Start a focus session anyway?'
             ))
           )
@@ -236,14 +245,20 @@ export function Dashboard({
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [run]);
+  }, [run, confirm]);
   const navigate = (next: View) => {
     setView(next);
     main.current?.focus();
   };
   const actions =
     snapshot && now
-      ? { snapshot, now, busy: busy || snapshot.issues.length > 0, run }
+      ? {
+          snapshot,
+          now,
+          busy: busy || snapshot.issues.length > 0,
+          run,
+          confirm
+        }
       : null;
   return (
     <div
@@ -392,7 +407,7 @@ export function Dashboard({
                 onClick={async () => {
                   if (
                     client &&
-                    (await confirmAction(
+                    (await confirm(
                       `Merge “${conflict.file}” into “${conflict.canonical}”? Conflicting values may require manual repair; only a successful merge resolves the copy.`
                     ))
                   )
@@ -410,7 +425,7 @@ export function Dashboard({
                 onClick={async () => {
                   if (
                     client &&
-                    (await confirmAction(
+                    (await confirm(
                       `Permanently discard conflict copy “${conflict.file}”? Keep “${conflict.canonical}” unchanged. This cannot be undone.`
                     ))
                   )

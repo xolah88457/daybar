@@ -11,6 +11,7 @@ function props() {
     now,
     busy: false,
     run: vi.fn(async () => true),
+    confirm: vi.fn(async (message: string) => window.confirm(message)),
     savePreferences: vi.fn(async () => true)
   };
 }
