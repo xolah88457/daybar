@@ -60,12 +60,12 @@
           "count": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 9007199254740991
+            "maximum": 4294967295
           },
           "minutes": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 9007199254740991
+            "maximum": 4294967295
           }
         },
         "required": [
@@ -79,7 +79,7 @@
       "type": "object",
       "propertyNames": {
         "type": "string",
-        "pattern": "^\\d+$"
+        "pattern": "^(?:0|[1-9]\\d*)$"
       },
       "additionalProperties": {
         "type": "object",
@@ -138,12 +138,12 @@
           "count": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 9007199254740991
+            "maximum": 4294967295
           },
           "minutes": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 9007199254740991
+            "maximum": 4294967295
           }
         },
         "required": [

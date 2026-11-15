@@ -17,17 +17,39 @@ export type DailyLog = Record<string, string[]>;
 export type LegacyDailyLog = string[];
 export const timerStateSchema = z.object({
   type: z.enum(['focus', 'break']), minutes: positive, start: epoch, end: epoch, task: name.optional()
-}).strict().refine(s => s.end > s.start, 'Timer end must follow start');
-export const focusDaySchema = z.object({ count: z.number().int().nonnegative(), minutes: z.number().int().nonnegative() }).strict();
+}).strict().refine(s => s.end - s.start === s.minutes * 60000, 'Timer duration must match planned minutes');
+export const focusDaySchema = z.object({ count: z.number().int().min(0).max(0xffffffff), minutes: z.number().int().min(0).max(0xffffffff) }).strict();
 export const sessionSchema = z.object({
   type: z.enum(['focus', 'break']), minutes: positive, creditedMinutes: z.number().int().nonnegative().max(240),
   end: epoch, date: dateKeySchema, task: name.optional()
 }).strict().refine(s => s.creditedMinutes <= s.minutes && (s.type === 'focus' || s.creditedMinutes === 0), 'Invalid session credit');
 export const focusDataSchema = z.object({
   state: timerStateSchema.nullable(), days: z.record(dateKeySchema, focusDaySchema),
-  sessions: z.record(z.string().regex(/^\d+$/), sessionSchema).optional(),
+  sessions: z.record(z.string().regex(/^(?:0|[1-9]\d*)$/).refine(id => Number.isSafeInteger(Number(id)), 'Session key out of range'), sessionSchema).optional(),
   baseline: z.record(dateKeySchema, focusDaySchema).optional()
-}).strict();
+}).strict().superRefine((data, ctx) => {
+  if (data.sessions === undefined) {
+    if (data.baseline && [...new Set([...Object.keys(data.days), ...Object.keys(data.baseline)])].some(date =>
+      (data.days[date]?.minutes ?? 0) !== (data.baseline?.[date]?.minutes ?? 0))) {
+      ctx.addIssue({ code: 'custom', path: ['baseline'], message: 'Baseline disagrees with legacy days; manual recovery needed' });
+    }
+    return;
+  }
+  const totals = new Map(Object.entries(data.baseline ?? {}).map(([date, day]) => [date, day.minutes]));
+  for (const [id, session] of Object.entries(data.sessions)) {
+    const elapsed = session.end - Number(id);
+    const dateOffset = Math.abs(Date.parse(`${session.date}T00:00:00Z`) / 86400000 - Math.floor(session.end / 86400000));
+    if (elapsed < 0 || elapsed > session.minutes * 60000 || session.creditedMinutes * 60000 > elapsed || dateOffset > 1) {
+      ctx.addIssue({ code: 'custom', path: ['sessions', id], message: 'Invalid session timestamps, credit or date' });
+    }
+    if (session.type === 'focus') totals.set(session.date, (totals.get(session.date) ?? 0) + session.creditedMinutes);
+  }
+  for (const [date, day] of Object.entries(data.days)) {
+    // Never turn unexplained history into an empty or smaller ledger-derived total.
+    if (day.minutes > (totals.get(date) ?? 0)) ctx.addIssue({ code: 'custom', path: ['days', date], message: 'Untracked focus minutes; preserve/recover the legacy baseline before editing' });
+  }
+  if ([...totals.values()].some(minutes => minutes > 0xffffffff)) ctx.addIssue({ code: 'custom', path: ['sessions'], message: 'Focus total overflow' });
+});
 export const sleepPlanSchema = z.object({ start: dateKeySchema, wake: minutesOfDay, bed: minutesOfDay }).strict();
 export const sleepDataSchema = z.object({
   wakes: z.record(dateKeySchema, minutesOfDay), beds: z.record(dateKeySchema, minutesOfDay), plan: sleepPlanSchema.nullable()

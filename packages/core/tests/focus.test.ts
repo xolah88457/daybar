@@ -46,7 +46,7 @@ describe('focus golden parity and ledger', () => {
     const copy = structuredClone(data);
     expect(normalizeFocus(data, 50).days['2026-11-15'].count).toBe(1);
     expect(data).toEqual(copy);
-    expect(normalizeFocus({state: null, days: {'2026-11-15': {minutes: 999, count: 99}}, sessions: {}}, 25).days).toEqual({});
+    expect(() => normalizeFocus({state: null, days: {'2026-11-15': {minutes: 999, count: 99}}, sessions: {}}, 25)).toThrow('Untracked focus minutes');
   });
 
   it('records breaks/zero-minute stops and protects active/key collisions', () => {

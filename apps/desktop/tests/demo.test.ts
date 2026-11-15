@@ -48,8 +48,9 @@ describe('in-memory DaybarClient', () => {
       end: start.getTime() + 25 * 60000,
       task: 'Coursework'
     };
+    const previousStart = String(start.getTime() - 11 * 60000);
     initial.focus.sessions = {
-      '123': {
+      [previousStart]: {
         type: 'focus',
         minutes: 25,
         creditedMinutes: 10,
@@ -71,7 +72,7 @@ describe('in-memory DaybarClient', () => {
       'Deep work': 40
     });
     expect(snapshot.focus.state?.task).toBe('Deep work');
-    expect(snapshot.focus.sessions?.['123'].task).toBe('Deep work');
+    expect(snapshot.focus.sessions?.[previousStart].task).toBe('Deep work');
     await expect(
       client.mutate({
         kind: 'rename_task',
