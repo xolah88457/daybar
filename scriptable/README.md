@@ -1,54 +1,58 @@
-# Install the Daybar phone widgets
+# Daybar Scriptable widgets: install and shared-data setup
 
-These are **standalone Scriptable scripts**: no imports, npm packages, Mac app, or network service is required. `legacy/` remains the reference; `Deadline Radar.js` is copied byte-for-byte and does not read Daybar settings.
+Five separate JavaScript files are provided here: [Days Left](./Days%20Left.js), [Daily Log](./Daily%20Log.js), [Focus Timer](./Focus%20Timer.js), [Time Blindness + Sleep](./Time%20Blindness%20%2B%20Sleep.js), and [Deadline Radar](./Deadline%20Radar.js). Open each on GitHub, then use **Raw** to download or copy its source. They are standalone scripts with no npm packages, imports, Mac app, or network service required. The first four scripts share settings and data with Daybar for Mac. **Deadline Radar remains phone-only**: it reads Apple Calendars and Reminders in Scriptable and does not read Daybar settings or sync its radar data to the Mac.
 
-## 1. Back up before installing
+## Before you start: protect existing data
 
-1. Stop any running focus timer in the old script. Do not run old and updated versions together: the old Focus Timer can double-credit sessions and old versions write local-only data.
-2. In Files, copy **iCloud Drive → Scriptable** to a dated backup outside that folder. Preserve existing JSON files and your original scripts. Do not replace that folder with this repository.
-3. Back up Scriptable's **local** JSON too (it may not be visible in Files). Before replacing scripts, create a temporary Scriptable script with the following code and run it yourself. Choose a backup location when the export picker opens. It reads local files only; the export contains original JSON strings, including malformed files, without changing them:
+1. Stop any active timer in an older Focus Timer and do not run old and updated Focus Timer scripts together. Older versions can double-credit and write local-only data.
+2. If you already use Scriptable, back up both copies of your data before migration: in Files, copy **iCloud Drive → Scriptable** to a dated location outside that folder; also export Scriptable's **local** JSON as described below (local files may not appear in Files). Preserve existing scripts and JSON, and review your current task names and log history. Do not replace the Scriptable folder with this repository.
+3. Do not rename/delete tasks or history as part of setup. Daybar does not automatically rename or delete existing phone task data. Existing phone users should preserve their actual task names and histories in settings; any deliberate Mac rename/archive should use Daybar's confirmed Settings workflow after backups.
 
-   ```js
-   const fm = FileManager.local();
-   const root = fm.documentsDirectory();
-   const backup = {};
-   for (const file of fm.listContents(root)) {
-     if (/^(daily-log-.+|focus-timer|sleep-data|daybar-settings)\.json$/.test(file)) {
-       backup[file] = fm.readString(fm.joinPath(root, file));
-     }
-   }
-   await DocumentPicker.exportString(JSON.stringify(backup, null, 2), "daybar-local-backup.json");
-   Script.complete();
-   ```
+To export Scriptable's local JSON, create and run a temporary script in Scriptable. Choose a backup location when the export picker opens. It reads local files only and preserves original JSON strings, including malformed files:
 
-   To restore one local export entry, its value is the **raw text** for that filename, not another object to stringify. Restore only while no device is editing; keep a second copy of the current files first.
+```js
+const fm = FileManager.local();
+const root = fm.documentsDirectory();
+const backup = {};
+for (const file of fm.listContents(root)) {
+  if (/^(daily-log-.+|focus-timer|sleep-data|daybar-settings)\.json$/.test(file)) {
+    backup[file] = fm.readString(fm.joinPath(root, file));
+  }
+}
+await DocumentPicker.exportString(JSON.stringify(backup, null, 2), "daybar-local-backup.json");
+Script.complete();
+```
 
-## 2. Copy the scripts
+An exported entry's value is the raw text for that filename, not an object to stringify again. Restore only while no device is editing, and keep another copy of current files first.
 
-1. Enable iCloud Drive for Scriptable in iOS Settings. Open Scriptable once while online.
-2. Open each `.js` file in this directory, copy its entire contents into the corresponding Scriptable script, and retain its exact name. Keep the three `Variables used by Scriptable` header lines first. Alternatively import the `.js` files using the share sheet; remove duplicate imported names only after backing up.
-3. Run **Daily Log**, **Focus Timer**, and **Time Blindness + Sleep** once in the app. Grant notification permission if you want timer/bedtime alerts. Verify your history before editing.
-4. Each reads from Scriptable's iCloud documents. It migrates its same-named local JSON only when **neither the cloud canonical file nor its `.name.json.icloud` placeholder exists**. Local files are left intact. Existing cloud data wins; differing local/cloud histories are **not automatically merged**. Resolve differences from backups deliberately, not by deleting cloud data to force migration.
-5. In Files on iPhone and Finder on Mac, long-press/right-click the Scriptable folder and choose **Keep Downloaded** where offered (otherwise download the files manually). Evicted files are requested and awaited before reading; a failed download stops the script instead of resetting data.
-6. Add medium Scriptable widgets to the Home Screen; choose the appropriate script in each widget's configuration. Daily Log's optional widget parameter selects a separate log (`Other Log` → `daily-log-Other_Log.json`). Leave it empty for `habits.logId`, default `Daily_Tasks`. To migrate a parameterized local log, run that configured widget once. Focus can also preview small; Sleep/Countdown/Daily Log are designed for medium.
+## First shared phone + Mac setup
 
-First test on copies/a spare log. No installer in this repository accesses your real iCloud data.
+1. Install **Scriptable** from the iOS App Store (search for “Scriptable”). Enable iCloud Drive on iPhone and Mac, use the **same Apple ID**, and allow Scriptable to use iCloud Drive in iOS Settings. Open Scriptable once while online. The Mac can still run Daybar on its own; the phone companion requires Scriptable and the scripts.
+2. Make the backups above, then review the task names and Daily Log identity you want to preserve. On Mac, explicitly connect Daybar to the real Scriptable iCloud **Documents** folder only after reviewing those files. In Daybar Settings, select the actual Scriptable folder, enable the real-data opt-in, review and confirm the connection, then save valid shared `daybar-settings.json` settings with the intended task names before first use on phone. Confirm the Mac's displayed `habits.logId` matches the existing `daily-log-<logId>.json` filename: this field is read-only in the Mac UI, so do not try to edit it. If it does not match, pause and resolve the mismatch deliberately before connecting scripts; do not rename/delete files or force migration. Do not rely on the phone scripts' built-in legacy fallback to match Mac data. Daybar backs up managed files before its first real write; confirm that backup exists before editing real data. Selecting/connect may expose real data to the app, so do this only after the backups and review.
+3. Keep shared JSON files directly in **iCloud Drive/Scriptable**, the folder represented by Scriptable's `FileManager.iCloud().documentsDirectory()`. Do not put them in an arbitrary nested folder. In Finder, choose **Keep Downloaded** for the Scriptable folder where available. On iPhone, allow Scriptable to download/await evicted files; do not assume an offline placeholder is ready to edit.
+4. Install the five scripts linked above. For each file, open it from GitHub, use **Raw** to download or copy the complete source into a Scriptable script with the matching name; preserve the three `Variables used by Scriptable` header lines at the top. Alternatively import via the share sheet; remove duplicate script names only after backup. Do not overwrite the originals until you have backups.
+5. Run **Daily Log**, **Focus Timer**, and **Time Blindness + Sleep** once in the Scriptable app and check the result. Grant notification permission if you want their phone alerts. Run **Days Left** and **Deadline Radar** too; grant calendar/reminder permissions to Deadline Radar only if you want those data sources. Permissions and data access are controlled on your device.
+6. Add Scriptable widgets to the Home Screen and choose the matching script in each widget's configuration. Medium is the intended size for Daily Log, Days Left, and Sleep; Focus also supports a small preview. Configure Daily Log's optional widget parameter only when you intentionally want a separate log. Keep it empty to use shared `habits.logId` (default `Daily_Tasks`). A different widget parameter writes to its own `daily-log-<parameter>.json` and will not show as the configured Mac Daily Log. Focus-to-habit credit always targets `habits.logId`, not a separate widget parameter.
 
-## 3. Shared settings
+### Existing Scriptable users and local migration
 
-Place `daybar-settings.json` next to the JSON data in **iCloud Drive/Scriptable**, or let Daybar's Settings screen create it after explicitly selecting that folder. Missing files, sections, and individual keys use built-in defaults; arrays replace rather than merge. A malformed value, unknown field, or unsupported schema version **stops the script with an error** and leaves the file unchanged. Defaults are in each script; authoritative camelCase keys and ranges are in [`contracts/index.ts`](../packages/core/src/contracts/index.ts) and [`DATA_FORMATS.md`](../docs/DATA_FORMATS.md).
+The updated Daily Log, Focus Timer, and Sleep scripts migrate a same-named local JSON file only if **both** its iCloud canonical file and `.<filename>.icloud` placeholder are absent. They leave local files intact. Existing cloud data wins; local/cloud histories are not merged automatically. A parameterized Daily Log's local file is considered only when that exact parameterized widget is run. Back up both locations first, compare differing data deliberately, and never delete cloud data just to force migration. Preserve your existing task names/history in the saved settings; there is no automatic task rename or deletion.
 
-For example (all omitted settings retain defaults):
+The Mac's shared JSON mapping is: `daybar-settings.json` (settings), `daily-log-<logId>.json` (habit history), `focus-timer.json` (timer and focus ledger), and `sleep-data.json` (sleep log/plan). Missing settings keys fall back to built-in values, but the phone retains legacy compatibility defaults while the Mac ships with fictional sample tasks. Save matching shared settings before first phone use instead of relying on either fallback. Unknown schema versions, unknown settings keys, and malformed values stop with an error; scripts do not silently reset files. See the [shared data contract](../docs/DATA_FORMATS.md).
+
+## Shared settings example
+
+The Daybar Mac Settings screen can save the shared settings file once connected to the real Scriptable folder. For a fresh setup, configure the chosen task list before the phone scripts first run; use the `habits.logId` displayed by Mac Settings (read-only), and make sure it matches the intended log filename. For an existing phone setup, retain the real task names and log ID; do not copy this sample blindly. If the ID cannot be matched in the Mac UI, pause rather than renaming or deleting a log. Omitted sections/keys use defaults and arrays replace rather than merge.
 
 ```json
 {
   "schemaVersion": 1,
-  "countdown": { "title": "End of University", "endDate": "2027-05-24" },
+  "countdown": { "title": "Community Garden Opening", "startDate": "2026-10-01", "endDate": "2027-07-01" },
   "habits": {
     "logId": "Daily_Tasks",
-    "tasks": ["Coursework", "Live Trading", "Trade Review", "Apostles work"],
+    "tasks": ["Read a chapter", "Sketch a scene", "Take a walk", "Water the plants"],
     "dayCompleteMin": 1,
-    "focusThresholds": { "Coursework": 50 }
+    "focusThresholds": { "Read a chapter": 50 }
   },
   "focus": { "focusOptions": [25, 50], "blockMinutes": 25, "alerts": true },
   "sleep": { "targetWake": "08:00", "stepMinutes": 15, "bedtimeAlerts": true },
@@ -56,11 +60,11 @@ For example (all omitted settings retain defaults):
 }
 ```
 
-The four scripts apply their relevant titles/dates/tasks/timer presets, sleep targets, plan/phase timings, notification toggles and palette/opacity/grid tokens. Seven grid rows are fixed by the contract. `archivedTasks` is retained as settings metadata; only `tasks` counts for today's checklist. Keep `logId` stable when changing title. Renames/archive actions should be made in the Mac Settings UI so history is transferred, not by simply replacing task names in JSON.
+The four integrated scripts use their relevant settings for titles/dates/tasks, focus presets, sleep targets and plan/phase timings, alerts, and palette/grid tokens. Seven grid rows are fixed. `archivedTasks` is retained as metadata; only `tasks` count in today's checklist. Keep `logId` stable when changing a title. Use the Mac Settings UI for a confirmed rename/archive so history transfers; editing task names in JSON does not migrate history. Daybar's Day/Night/Auto appearance and app-local tray-display preferences are Mac-only, not part of shared settings, and are not synced to the phone.
 
-On phone, choose a focus preset/custom duration, then **No task** or a task. Tagged minutes are totaled per credit date; reaching that task's `focusThresholds` value adds it to the configured Daily Log. This targets `habits.logId`, not a different Daily Log widget parameter. A retry after a habit-write failure repairs the link without adding focus minutes again. Because the contract has no acknowledgement/manual-override field, later Focus runs reassert earned task completion, including if you unchecked that earned task manually.
+On phone, tagged focus minutes accumulate by task and credit date. Reaching the task's `focusThresholds` adds it to the configured Daily Log; a later Focus run can repair an interrupted two-file update. This is not atomic, and earned completion may be reasserted if manually unchecked. For storage behavior, backup recovery, and concurrency limits, see [Safety and limitations](#safety-and-limitations) below.
 
-## 4. Keep the Health Shortcut
+## Keep the Health Shortcut
 
 Keep the existing Shortcut if it already calls **Time Blindness + Sleep**. Its input formats have not been removed:
 
@@ -84,7 +88,7 @@ For a simple manual Shortcut, replace steps 1–3 with a Dictionary containing `
 - JSON is validated **before reads are used and before writes**. Unknown/malformed files are never silently reset. Scriptable displays the thrown error; repair/restore a copy before retrying. No corruption fallback writes empty data.
 - Each mutation re-reads the latest file, applies one operation, writes a unique same-folder temporary file, compares the canonical text again, moves the original to a same-folder recovery backup, then moves the temporary file into place. A failed replacement attempts to restore the original; the backup remains on failure. If recovery fails, the error identifies the backup path. Successful replacements remove the temporary backup. Keep your independent backups.
 - **This is not a transactional atomic replacement or distributed lock.** Scriptable exposes no atomic replace/CAS/lock API. Individual filesystem moves may be atomic, but the backup → replacement sequence has a missing-canonical/crash window, and iCloud is eventually consistent. Another device can race after the final comparison; simultaneous offline edits can still create conflict copies or lose an unseen edit. Do not edit the same file simultaneously on devices. Use the Mac conflict-resolution UI for iCloud conflict copies; the phone does not silently merge/delete those copies. Do not delete `.daybar-backup-*` recovery files until reviewed.
-- **Interrupted write detection:** If a script run finds the canonical JSON file **and** its `.name.json.icloud` placeholder both missing, but sees `.daybar-backup-*` or `.daybar-temp-*` recovery files for that same canonical name, it **stops with an error naming the recovery files** instead of migrating stale local data or creating a new empty file. Evicted recovery files (`.<recovery-filename>.icloud`) also block initialization; if the directory cannot be inspected, the script stops rather than assuming it is empty. This prevents silently replacing the interrupted state with stale data, but does not eliminate cross-device races after the check. To recover: copy the latest `.daybar-backup-*` file to the canonical name (e.g., `daily-log-Daily_Tasks.json.daybar-backup-abc123` → `daily-log-Daily_Tasks.json`), then re-run the widget. The script will not auto-restore — you must choose which backup to promote.
+- **Interrupted write detection:** If a script run finds the canonical JSON file **and** its `.name.json.icloud` placeholder both missing, but sees `.daybar-backup-*` or `.daybar-temp-*` recovery files for that same canonical name, it **stops with an error naming the recovery files** instead of migrating stale local data or creating a new empty file. Evicted recovery files (`.<recovery-filename>.icloud`) also block initialization; if the directory cannot be inspected, the script stops rather than assuming it is empty. This prevents silently replacing the interrupted state with stale data, but does not eliminate cross-device races after the check. To recover: stop writers on both devices and preserve copies of all canonical, temporary and backup files first. Inspect and validate a known-good backup, then copy that chosen file to the canonical name (e.g., `daily-log-Daily_Tasks.json.daybar-backup-abc123` → `daily-log-Daily_Tasks.json`) before retrying. Do not assume the newest file is correct or delete artifacts to bypass the guard. The script will not auto-restore — you must choose which backup to promote.
 - Session keys are exact decimal start-epoch milliseconds, with the shared contract's `type`, `minutes`, `creditedMinutes`, `end`, `date`, optional `task`. Legacy `days` become a baseline once; derived totals never become a second baseline. Crediting an existing key is a no-op. This prevents replay credit, **not** divergent concurrent-device writes that iCloud has not yet delivered.
 - Focus → Habits involves two files, not a cross-file transaction. A later Focus run repairs earned checklist completion after interruption; the session remains credited if habits data is corrupt. There is no atomic transaction across devices/files.
 - Focus shows a **snapshot** countdown clamped to zero rather than iOS's native date timer, which counts upward after expiry. Refresh is requested every minute/at expiry, but iOS controls refresh frequency: it may display a stale positive snapshot until refreshed. End-clock time and the scheduled notification remain available. Settling happens on the next script run, not continuously in the background.

@@ -14,9 +14,15 @@
 
 ## From Scriptable widgets to a desktop app
 
-The starting point was four small home-screen tools: Days Left, Daily Log, Focus Timer, and Time Blindness + Sleep. Each answered one question; on a Mac those questions belong together. Today is the combined view: time until bed, focus controls, today's checklist, focus blocks and the countdown grid. Dedicated pages leave room for history, planning and settings.
+The starting point was five separate Scriptable home-screen tools: Days Left, Daily Log, Focus Timer, Time Blindness + Sleep, and Deadline Radar. Four modules are integrated on Mac; Deadline Radar remains a phone-only calendar/reminders widget until a future Mac release. Today combines time until bed, focus controls, today's checklist, focus blocks and the countdown grid. Original scripts remain untouched in [`legacy/`](legacy/).
 
-**iPhone screenshot placeholder:** personal widget screenshot to be supplied by the owner; no image captured or included yet. Original scripts remain untouched in [`legacy/`](legacy/).
+**iPhone screenshot placeholder:** personal widget screenshot to be supplied by the owner; no image captured or included yet.
+
+## iPhone Scriptable widgets
+
+The five standalone scripts are in [`scriptable/`](scriptable/README.md): [Days Left](scriptable/Days%20Left.js), [Daily Log](scriptable/Daily%20Log.js), [Focus Timer](scriptable/Focus%20Timer.js), [Time Blindness + Sleep](scriptable/Time%20Blindness%20%2B%20Sleep.js), and [Deadline Radar](scriptable/Deadline%20Radar.js). Open each file on GitHub and use **Raw** to download or copy its complete source into Scriptable.
+
+Install **Scriptable** from the iOS App Store by searching its name. For a shared phone/Mac setup, enable iCloud Drive on both devices with the same Apple ID and enable Scriptable's iCloud Drive access. Back up existing phone-local and iCloud Scriptable data before setup. On Mac, explicitly connect Daybar to the real Scriptable **Documents** folder only after reviewing the data and making backups; save valid shared settings with the intended task names before first use on phone, and confirm the Mac's read-only `habits.logId` matches the existing log filename. The Mac app is standalone without the phone; the phone companion requires Scriptable and these scripts. Keep shared files in iCloud Drive's `Scriptable` folder and avoid simultaneous edits. Full setup, widget parameters, data mapping and recovery guidance: [Scriptable setup guide](scriptable/README.md).
 
 The intended desktop experience adds editable settings, habit streaks, history-preserving task renames, focus-to-habit credit and “room for ~N blocks before bed.” Notifications are scheduled by Rust **only while Daybar is running**; this is not a background service. See [capture instructions](docs/screenshots/README.md) before adding portfolio media.
 
