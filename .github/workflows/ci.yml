@@ -1,0 +1,94 @@
+name: macOS checks and unsigned app
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# Actions artifacts, not GitHub Releases: no write token needed.
+permissions:
+  contents: read
+
+concurrency:
+  group: daybar-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Seed synthetic sandbox only
+        run: pnpm seed
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test in Toronto and London
+        run: pnpm test:tz
+      - name: Test standalone phone scripts
+        shell: bash
+        run: |
+          shopt -s nullglob
+          tests=(scriptable/tests/*.test.mjs)
+          if ((${#tests[@]} == 0)); then
+            echo '::error::No phone script tests found.'
+            exit 1
+          fi
+          node --test "${tests[@]}"
+      - name: Rust tests (temporary folders only)
+        run: >-
+          cargo test --locked
+          --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Build static export
+        run: pnpm build
+      - name: Package unsigned app and DMG on version tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: pnpm tauri build --no-sign --bundles app,dmg
+      - name: Archive app bundle preserving permissions and symlinks
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: >-
+          ditto -c -k --sequesterRsrc --keepParent
+          apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app
+          apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app.zip
+      - name: Upload unsigned app
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Daybar-unsigned-app-${{ github.ref_name }}
+          path: apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload unsigned DMG
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Daybar-unsigned-dmg-${{ github.ref_name }}
+          path: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
