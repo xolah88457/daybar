@@ -12,6 +12,8 @@
 
 These downloads need no Node/Rust installation. macOS may warn because the app is unsigned; review the [opening notes](docs/RELEASE.md#opening-an-unsigned-app) before using it.
 
+**Updates:** from v0.2.0, **Settings → Check for updates** looks for a newer release on GitHub, installs it after verifying its updater signature, and offers a restart. It runs only when you click; Daybar never checks in the background. v0.1.0 has no updater, so install v0.2.0 manually once. How releases and the signing key work: [release guide](docs/RELEASE.md#publishing-a-release-and-in-app-updates).
+
 ![Daybar Today dashboard showing synthetic countdown, tasks, focus and sleep data](docs/screenshots/today.png)
 
 *Native app window, 2026-11-15, fictional sandbox data. Not evidence of iCloud sync.*
@@ -89,7 +91,7 @@ pnpm tauri build --no-sign --bundles app,dmg
 
 The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle/macos/` and `bundle/dmg/` respectively (unless Cargo's target directory is overridden). Tauri runs the static build before packaging. Builds are **unsigned and not notarized**; see the [opening notes](docs/RELEASE.md#opening-an-unsigned-app).
 
-[CI](.github/workflows/ci.yml) uses a macOS runner, Node 22, pnpm 10.12.3 and stable Rust; it runs frozen dependency installation, lint, types, timezone tests, phone Node tests (required, never silently skipped), Rust tests and static export. A `v*` tag additionally packages an unsigned `.app` and `.dmg` and uploads them as **Actions artifacts** (14-day retention; the app is zipped to preserve bundle metadata), not a signed GitHub Release. The workflow uses a read-only repository token; no signing credentials, secrets or real iCloud access are configured. The downloads above are the separately verified local build, not Actions artifacts.
+[CI](.github/workflows/ci.yml) uses a macOS runner, Node 22, pnpm 10.12.3 and stable Rust; it runs frozen dependency installation, lint, types, timezone tests, phone Node tests (required, never silently skipped), Rust tests and static export. A `vX.Y.Z` tag additionally checks that the tag matches the app version, packages an unsigned `.app` and `.dmg` plus the signed updater archive and `latest.json`, and creates a **draft** GitHub Release for you to review and publish by hand. Only that last job holds a write token, and the only secrets are the two updater signing-key secrets used by the build step; real iCloud access is never configured. The v0.1.0 downloads above are the separately verified local build, not CI output.
 
 ## Opt in to real data — only after verification
 
@@ -112,7 +114,7 @@ Sandbox acceptance on fictional data covered the tray, external-file refresh, fo
 | `legacy/` | Original five scripts, preserved unchanged |
 | `scripts/seed-sandbox.mjs` | Non-destructive synthetic sandbox seed |
 | `docs/` | Architecture, calculation conventions, data formats, decisions, release/verification, screenshot notes |
-| `.github/workflows/` | macOS checks and unsigned tag artifacts |
+| `.github/workflows/` | macOS checks; tag builds create a draft release with updater files |
 
 ## Roadmap
 
