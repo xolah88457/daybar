@@ -7,6 +7,8 @@ use chrono::Local;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
+#[cfg(target_os = "macos")]
+use std::time::{Duration, Instant};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, OpenOptions},
@@ -16,7 +18,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Mutex,
     },
-    time::{Duration, Instant},
 };
 
 const SETTINGS: &str = "daybar-settings.json";
@@ -113,6 +114,12 @@ fn decode<T: DeserializeOwned + Validate>(content: &[u8]) -> Result<T> {
     let mut d: T = serde_json::from_slice(content).map_err(io)?;
     d.validate()?;
     Ok(d)
+}
+fn decode_current<T: DeserializeOwned + Validate>(
+    files: &BTreeMap<String, Vec<u8>>,
+    name: &str,
+) -> Result<Option<T>> {
+    files.get(name).map(|b| decode(b)).transpose()
 }
 fn managed(name: &str) -> bool {
     matches!(name, SETTINGS | FOCUS | SLEEP)
@@ -215,8 +222,8 @@ impl Store {
             launch_at_login: false,
             hide_dock: false,
             global_shortcut: "CommandOrControl+Shift+F".into(),
-            theme_mode: crate::contracts::ThemeMode::Night,
-            tray_display: crate::contracts::TrayDisplay::Auto,
+            theme_mode: ThemeMode::Night,
+            tray_display: TrayDisplay::Auto,
         };
         if let Some(path) = &preference_file {
             if let Some(raw) = bytes(path)? {
@@ -813,11 +820,7 @@ impl Store {
             let base = &conflict.canonical;
             validate_file(base, &original)?;
             let merged = if base == FOCUS {
-                let mut a: FocusData = files
-                    .get(base)
-                    .map(|b| decode(b))
-                    .transpose()?
-                    .unwrap_or_default();
+                let mut a: FocusData = decode_current(&files, base)?.unwrap_or_default();
                 let mut b: FocusData = decode(&original)?;
                 focus::normalize(&mut a, snap.settings.focus.block_minutes)?;
                 focus::normalize(&mut b, snap.settings.focus.block_minutes)?;
@@ -847,10 +850,7 @@ impl Store {
                 focus::normalize(&mut a, snap.settings.focus.block_minutes)?;
                 encode(&a)?
             } else if base.starts_with("daily-log-") {
-                let mut a = files
-                    .get(base)
-                    .map(|b| decode(b))
-                    .transpose()?
+                let mut a = decode_current(&files, base)?
                     .map(|d| normalize_log(d, &snap.settings.habits.tasks))
                     .unwrap_or_default();
                 union_log(
@@ -859,11 +859,7 @@ impl Store {
                 );
                 encode(&a)?
             } else if base == SLEEP {
-                let mut a: SleepData = files
-                    .get(base)
-                    .map(|b| decode(b))
-                    .transpose()?
-                    .unwrap_or_default();
+                let mut a: SleepData = decode_current(&files, base)?.unwrap_or_default();
                 let b: SleepData = decode(&original)?;
                 merge_map(&mut a.wakes, b.wakes)?;
                 merge_map(&mut a.beds, b.beds)?;
