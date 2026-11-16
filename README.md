@@ -2,13 +2,15 @@
 
 **Your day, at a glance.** Daybar brings a countdown, daily habits, a focus timer and a sleep-shift plan into one quiet macOS window and menu bar. Built from everyday iPhone Scriptable widgets, it keeps the original dark, monospace, tiny-square visual language while using shared JSON in iCloud Drive rather than a server, account or database. No telemetry.
 
-> **Unsigned preview:** [Download Daybar v0.1.0](https://github.com/xolah88457/daybar/releases/tag/v0.1.0) for Apple Silicon, macOS 12.3+. The published app was verified locally from product source `f6fd53084bc5e3912f312a3a9291cd700cc71fe0`; it is not notarized. Real iPhone/iCloud acceptance is not claimed. See the [release, verification and safe-switch guide](docs/RELEASE.md).
+> **Preview:** Apple Silicon, macOS 12.3+. Ad-hoc signed, not notarized. Real iPhone/iCloud acceptance is not claimed. See the [release, verification and safe-switch guide](docs/RELEASE.md).
 
 ## Download the Mac app
 
-- [Download DMG](https://github.com/xolah88457/daybar/releases/download/v0.1.0/Daybar_0.1.0_aarch64.dmg) — mount and copy Daybar to Applications.
-- [Download app ZIP](https://github.com/xolah88457/daybar/releases/download/v0.1.0/Daybar_0.1.0_aarch64.app.zip) — extract the complete app bundle.
-- [SHA-256 checksums](https://github.com/xolah88457/daybar/releases/download/v0.1.0/SHA256SUMS.txt).
+Get the newest version from the [latest release](https://github.com/xolah88457/daybar/releases/latest):
+
+- `Daybar_<version>_aarch64.dmg`: mount it and copy Daybar to Applications.
+- `Daybar_<version>_aarch64.app.zip`: extract the complete app bundle.
+- `SHA256SUMS.txt`: checksums for the files above.
 
 These downloads need no Node/Rust installation. macOS will not recognise the developer on first open; see [opening the app](docs/RELEASE.md#opening-the-app-on-a-mac) for the steps.
 
