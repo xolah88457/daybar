@@ -1091,6 +1091,63 @@ details[open] summary > span {
 .preferences > .caption {
   margin: 0;
 }
+.updates {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 620px;
+}
+.updates > p,
+.updates .button-row {
+  margin: 0;
+}
+.update-status {
+  font-size: 10px;
+  min-height: 1.8em;
+  line-height: 1.8;
+}
+.update-status:empty {
+  display: none;
+}
+.release {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 10px;
+}
+.release strong {
+  font-weight: normal;
+  font-size: 11px;
+}
+.release-notes {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.update-progress small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.update-progress .progress > span {
+  transition-duration: 0.2s;
+}
+.updates .notice {
+  margin: 0;
+}
 .toggle {
   display: flex;
   align-items: center;

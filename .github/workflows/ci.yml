@@ -7,7 +7,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Actions artifacts, not GitHub Releases: no write token needed.
+# Read-only by default. Only the `release` job (version tags) gets write access.
 permissions:
   contents: read
 
@@ -28,6 +28,43 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Check release tag, versions and signing key
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+          HAS_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        shell: bash
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must look like vX.Y.Z (got '$TAG')."
+            exit 1
+          fi
+          if [[ "$HAS_SIGNING_KEY" != 'true' ]]; then
+            echo '::error::Repository secret TAURI_SIGNING_PRIVATE_KEY is missing. Add it (and TAURI_SIGNING_PRIVATE_KEY_PASSWORD) under Settings > Secrets and variables > Actions; see docs/RELEASE.md.'
+            exit 1
+          fi
+          node - <<'EOF'
+          const fs = require('node:fs');
+          const want = process.env.TAG.slice(1);
+          const read = (f) => fs.readFileSync(f, 'utf8');
+          const cargo = /^\[package\][^[]*?^version\s*=\s*"([^"]+)"/ms.exec(
+            read('apps/desktop/src-tauri/Cargo.toml'),
+          );
+          const found = {
+            'apps/desktop/src-tauri/tauri.conf.json': JSON.parse(read('apps/desktop/src-tauri/tauri.conf.json')).version,
+            'apps/desktop/src-tauri/Cargo.toml': cargo && cargo[1],
+            'apps/desktop/package.json': JSON.parse(read('apps/desktop/package.json')).version,
+          };
+          let bad = false;
+          for (const [file, v] of Object.entries(found)) {
+            if (v !== want) {
+              console.log(`::error file=${file}::Tag ${process.env.TAG} expects version ${want} but ${file} has ${v}.`);
+              bad = true;
+            }
+          }
+          if (bad) process.exit(1);
+          console.log(`Tag ${process.env.TAG} matches all three versions.`);
+          EOF
       - uses: pnpm/action-setup@v4
         with:
           version: 10.12.3
@@ -67,28 +104,121 @@ jobs:
           --manifest-path apps/desktop/src-tauri/Cargo.toml
       - name: Build static export
         run: pnpm build
-      - name: Package unsigned app and DMG on version tags
+      # Version tags only from here. The updater signing key is exposed to the
+      # build step alone. Do not pass --no-sign here: it also skips updater
+      # signing, so no .sig would be produced. Apple code signing stays off
+      # because no Apple certificate or signing identity is configured; the
+      # Tauri updater signature is separate and is what the installed app verifies.
+      - name: Package app and DMG, sign updater artifacts
         if: startsWith(github.ref, 'refs/tags/v')
-        run: pnpm tauri build --no-sign --bundles app,dmg
-      - name: Archive app bundle preserving permissions and symlinks
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --bundles app,dmg
+      - name: Stage release files and generate latest.json
         if: startsWith(github.ref, 'refs/tags/v')
-        run: >-
-          ditto -c -k --sequesterRsrc --keepParent
-          apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app
-          apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app.zip
-      - name: Upload unsigned app
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # latest.json below is keyed darwin-aarch64, so refuse any other runner arch.
+          if [[ "$(uname -m)" != 'arm64' ]]; then
+            echo "::error::Runner is $(uname -m); latest.json is only generated for darwin-aarch64."
+            exit 1
+          fi
+          version="${TAG#v}"
+          bundle=apps/desktop/src-tauri/target/release/bundle
+          out=release-assets
+          mkdir "$out"
+          dmg="Daybar_${version}_aarch64.dmg"
+          zip="Daybar_${version}_aarch64.app.zip"
+          updater="Daybar_${version}_aarch64.app.tar.gz"
+          for f in "$bundle/dmg/$dmg" "$bundle/macos/Daybar.app.tar.gz" "$bundle/macos/Daybar.app.tar.gz.sig"; do
+            if [[ ! -s "$f" ]]; then
+              echo "::error::Expected build output is missing or empty: $f"
+              ls -R "$bundle"
+              exit 1
+            fi
+          done
+          cp "$bundle/dmg/$dmg" "$out/$dmg"
+          cp "$bundle/macos/Daybar.app.tar.gz" "$out/$updater"
+          cp "$bundle/macos/Daybar.app.tar.gz.sig" "$out/$updater.sig"
+          ditto -c -k --sequesterRsrc --keepParent "$bundle/macos/Daybar.app" "$out/$zip"
+          VERSION="$version" ASSET="$updater" DIR="$out" node - <<'EOF'
+          const fs = require('node:fs');
+          const { VERSION, ASSET, DIR, TAG, REPO } = process.env;
+          const latest = {
+            version: VERSION,
+            notes: `Daybar ${VERSION}. Full release notes: https://github.com/${REPO}/releases/tag/${TAG}`,
+            pub_date: new Date().toISOString(),
+            platforms: {
+              'darwin-aarch64': {
+                signature: fs.readFileSync(`${DIR}/${ASSET}.sig`, 'utf8').trim(),
+                url: `https://github.com/${REPO}/releases/download/${TAG}/${ASSET}`,
+              },
+            },
+          };
+          fs.writeFileSync(`${DIR}/latest.json`, JSON.stringify(latest, null, 2) + '\n');
+          EOF
+          cat "$out/latest.json"
+          cd "$out"
+          shasum -a 256 "$dmg" "$zip" "$updater" "$updater.sig" latest.json > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Upload release files for the release job
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
-          name: Daybar-unsigned-app-${{ github.ref_name }}
-          path: apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app.zip
+          name: Daybar-release-${{ github.ref_name }}
+          path: release-assets/
           if-no-files-found: error
           retention-days: 14
-      - name: Upload unsigned DMG
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v4
+
+  # Creates a DRAFT release: nothing is public until you publish it by hand.
+  # Needs no checkout and builds nothing; it only uploads what `verify` produced.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          name: Daybar-unsigned-dmg-${{ github.ref_name }}
-          path: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
-          if-no-files-found: error
-          retention-days: 14
+          name: Daybar-release-${{ github.ref_name }}
+          path: release-assets
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "::error::A release for $TAG already exists; delete it first or use a new tag."
+            exit 1
+          fi
+          # `gh release view` may not see drafts, so also look for one in the list.
+          existing="$(gh release list --repo "$REPO" --limit 100 --json tagName,isDraft \
+            --jq "[.[] | select(.tagName == \"$TAG\")] | length")"
+          if [[ "$existing" != '0' ]]; then
+            echo "::error::A release or draft for $TAG already exists. Delete the old draft under Releases, then re-run this job."
+            exit 1
+          fi
+          gh release create "$TAG" release-assets/* \
+            --repo "$REPO" \
+            --verify-tag \
+            --draft \
+            --title "Daybar ${TAG#v}" \
+            --generate-notes
+          gh release view "$TAG" --repo "$REPO" --json isDraft,isPrerelease,assets \
+            --jq '"draft=\(.isDraft) prerelease=\(.isPrerelease)", (.assets[] | "  \(.name) \(.size)")'
+          state="$(gh release view "$TAG" --repo "$REPO" --json isDraft,isPrerelease \
+            --jq '.isDraft and (.isPrerelease | not)')"
+          if [[ "$state" != 'true' ]]; then
+            echo '::error::Release must be a draft and not a prerelease.'
+            exit 1
+          fi

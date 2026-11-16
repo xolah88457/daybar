@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Only the main window may use Daybar IPC","local":true,"windows":["main"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"Only the main window may use Daybar IPC","local":true,"windows":["main"],"permissions":["core:default","updater:allow-check","updater:allow-download-and-install","process:allow-restart"]}}

@@ -1,9 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { preferencesSchema, settingsSchema } from '@daybar/core/contracts';
 import type { Preferences, Settings, Snapshot } from '@daybar/core/contracts';
 import type { Actions } from './modules';
+import type { UpdaterClient } from '../lib/updates';
 import { Section } from './primitives';
+import { UpdatesPanel } from './updates';
 
 const label = (name: string) =>
   name.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
@@ -27,8 +29,12 @@ export function SettingsPanel({
   busy,
   run,
   confirm,
-  savePreferences
-}: Actions & { savePreferences: (p: Preferences) => Promise<boolean> }) {
+  savePreferences,
+  updater
+}: Actions & {
+  savePreferences: (p: Preferences) => Promise<boolean>;
+  updater: UpdaterClient;
+}) {
   const [draft, setDraft] = useState<Settings>(() =>
     structuredClone(snapshot.settings)
   );
@@ -38,6 +44,11 @@ export function SettingsPanel({
   const [newTask, setNewTask] = useState('');
   const [rename, setRename] = useState<Record<string, string>>({});
   const changedExternally = source !== JSON.stringify(snapshot.settings);
+  const preferencesDirty = useRef(false);
+  const hasUnsavedChanges = () =>
+    preferencesDirty.current ||
+    JSON.stringify(draft) !== source ||
+    Object.keys(presetText).length > 0;
   const reload = () => {
     setDraft(structuredClone(snapshot.settings));
     setSource(JSON.stringify(snapshot.settings));
@@ -318,6 +329,13 @@ export function SettingsPanel({
         busy={busy}
         confirm={confirm}
         save={savePreferences}
+        dirty={preferencesDirty}
+      />
+      <UpdatesPanel
+        updater={updater}
+        busy={busy}
+        hasUnsavedChanges={hasUnsavedChanges}
+        confirm={confirm}
       />
       <Section title="Keyboard, not mouse">
         <div className="shortcut-list">
@@ -347,16 +365,25 @@ function PreferencesPanel({
   snapshot,
   busy,
   confirm,
-  save
+  save,
+  dirty
 }: {
   snapshot: Snapshot;
   busy: boolean;
   confirm: Actions['confirm'];
   save: (p: Preferences) => Promise<boolean>;
+  dirty: { current: boolean };
 }) {
   const [draft, setDraft] = useState(() => ({ ...snapshot.preferences }));
   const [error, setError] = useState('');
   const [consent, setConsent] = useState(false);
+  const edited = JSON.stringify(draft) !== JSON.stringify(snapshot.preferences);
+  useEffect(() => {
+    dirty.current = edited;
+    return () => {
+      dirty.current = false;
+    };
+  }, [dirty, edited]);
   const changedFolder =
     draft.dataFolder !== snapshot.preferences.dataFolder ||
     draft.realData !== snapshot.preferences.realData;
@@ -405,7 +432,7 @@ function PreferencesPanel({
               <option value="night">Night</option>
               <option value="auto">Auto · follow system appearance</option>
             </select>
-            <small>Auto follows macOS appearance. Set macOS to Auto for its scheduled day/night changes; Daybar uses no location or network access.</small>
+            <small>Auto follows macOS appearance. Set macOS to Auto for its scheduled day/night changes; Daybar uses no location access, and uses the network only when you click Check for updates.</small>
           </label>
           <label className="field">
             Menu-bar label
