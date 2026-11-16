@@ -53,6 +53,36 @@ describe('updater adapters', () => {
       'No update has been checked yet.'
     );
   });
+  it('refuses a second check or download while one is in flight', async () => {
+    let finish!: () => void;
+    const downloadAndInstall = vi.fn(
+      () => new Promise<void>((resolve) => (finish = resolve))
+    );
+    const close = vi.fn(async () => {});
+    vi.mocked(check).mockClear();
+    vi.mocked(check).mockResolvedValue({
+      version: '0.4.0',
+      body: '',
+      date: null,
+      close,
+      downloadAndInstall
+    } as unknown as Awaited<ReturnType<typeof check>>);
+    await tauriUpdater.check();
+    const first = tauriUpdater.downloadAndInstall(vi.fn());
+    await vi.waitFor(() => expect(downloadAndInstall).toHaveBeenCalled());
+    await expect(tauriUpdater.check()).rejects.toThrow('already in progress');
+    await expect(tauriUpdater.downloadAndInstall(vi.fn())).rejects.toThrow(
+      'already in progress'
+    );
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(downloadAndInstall).toHaveBeenCalledTimes(1);
+    finish();
+    await first;
+    // Settled: checking is allowed again.
+    vi.mocked(check).mockResolvedValue(null);
+    await expect(tauriUpdater.check()).resolves.toBeNull();
+  });
   it('relaunches through the process plugin', async () => {
     await tauriUpdater.restart();
     expect(relaunch).toHaveBeenCalledTimes(1);

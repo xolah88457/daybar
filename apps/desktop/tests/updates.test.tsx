@@ -211,8 +211,88 @@ describe('Updates settings section', () => {
     fireEvent.click(checkButton());
     fireEvent.click(await screen.findByRole('button', { name: 'Restart now' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Quit and reopen Daybar'
+      'quit and reopen Daybar'
     );
+  });
+  it('offers Restart now again after a failed relaunch, without re-checking', async () => {
+    const updater = mockUpdater({
+      check: vi.fn(async () => info),
+      restart: vi
+        .fn<UpdaterClient['restart']>()
+        .mockRejectedValueOnce(new Error('relaunch denied'))
+        .mockResolvedValueOnce(undefined)
+    });
+    panel(updater);
+    fireEvent.click(checkButton());
+    fireEvent.click(await screen.findByRole('button', { name: 'Restart now' }));
+    await screen.findByRole('alert');
+    expect(
+      screen.queryByRole('button', { name: 'Try again' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Restart now' }));
+    await waitFor(() => expect(updater.restart).toHaveBeenCalledTimes(2));
+    expect(updater.check).toHaveBeenCalledTimes(1);
+    expect(updater.downloadAndInstall).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    ['Could not fetch a valid release JSON from the remote', 'No published update was found.'],
+    [
+      'None of the fallback platforms `["darwin-x86_64-app"]` were found in the response `platforms` object',
+      'There’s no update published for this Mac.'
+    ],
+    [
+      'error sending request for url (https://github.com/x/latest.json)',
+      'Make sure you are online'
+    ],
+    ['something unexpected', 'Could not check for updates. Try again in a moment.']
+  ])('maps the check error %j to a friendly message', async (raw, expected) => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const updater = mockUpdater({
+      check: vi.fn(async () => {
+        throw raw;
+      })
+    });
+    panel(updater);
+    fireEvent.click(checkButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent(expected);
+    expect(screen.getByRole('alert')).not.toHaveTextContent(raw);
+    expect(error).toHaveBeenCalledWith(expect.any(String), raw);
+    error.mockRestore();
+  });
+  it('keeps a download going, then shows Restart, across leaving and returning to Settings', async () => {
+    const download = deferred();
+    let report!: (p: UpdateProgress) => void;
+    const updater = mockUpdater({
+      check: vi.fn(async () => info),
+      downloadAndInstall: vi.fn((onProgress) => {
+        report = onProgress;
+        return download.promise;
+      })
+    });
+    render(<Dashboard client={createDemoClient()} updater={updater} />);
+    const nav = await screen.findByRole('navigation', { name: 'Modules' });
+    const open = (name: RegExp) =>
+      fireEvent.click(within(nav).getByRole('button', { name }));
+    open(/Settings/);
+    fireEvent.click(await screen.findByRole('button', { name: 'Check for updates' }));
+    await screen.findByText('Downloading Daybar 0.3.0…');
+    act(() => report({ downloaded: 500, total: 1000 }));
+    // Leave Settings (unmounting the panel), then come back mid-download.
+    open(/Today/);
+    expect(screen.queryByRole('heading', { name: 'Updates' })).not.toBeInTheDocument();
+    open(/Settings/);
+    expect(await screen.findByText('Downloading Daybar 0.3.0…')).toBeInTheDocument();
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(checkButton()).toBeDisabled();
+    expect(updater.check).toHaveBeenCalledTimes(1);
+    // Finish while away: Restart is waiting on return.
+    open(/Today/);
+    await act(async () => download.resolve());
+    open(/Settings/);
+    expect(await screen.findByText(/Daybar 0.3.0 is ready/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Restart now' }));
+    await waitFor(() => expect(updater.restart).toHaveBeenCalledTimes(1));
+    expect(updater.check).toHaveBeenCalledTimes(1);
   });
   it('asks before restarting only when there are unsaved edits', async () => {
     const confirm = vi.fn(async () => false);

@@ -432,7 +432,7 @@ function PreferencesPanel({
               <option value="night">Night</option>
               <option value="auto">Auto · follow system appearance</option>
             </select>
-            <small>Auto follows macOS appearance. Set macOS to Auto for its scheduled day/night changes; Daybar uses no location or network access.</small>
+            <small>Auto follows macOS appearance. Set macOS to Auto for its scheduled day/night changes; Daybar uses no location access, and uses the network only when you click Check for updates.</small>
           </label>
           <label className="field">
             Menu-bar label

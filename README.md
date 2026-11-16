@@ -89,6 +89,8 @@ pnpm build                   # static export: apps/desktop/out/
 pnpm tauri build --no-sign --bundles app,dmg
 ```
 
+`--no-sign` is for local builds without the updater key (otherwise the build errors "A public key has been found, but no private key"); release builds in CI omit it so the updater archive gets signed.
+
 The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle/macos/` and `bundle/dmg/` respectively (unless Cargo's target directory is overridden). Tauri runs the static build before packaging. Builds are **unsigned and not notarized**; see the [opening notes](docs/RELEASE.md#opening-an-unsigned-app).
 
 [CI](.github/workflows/ci.yml) uses a macOS runner, Node 22, pnpm 10.12.3 and stable Rust; it runs frozen dependency installation, lint, types, timezone tests, phone Node tests (required, never silently skipped), Rust tests and static export. A `vX.Y.Z` tag additionally checks that the tag matches the app version, packages an unsigned `.app` and `.dmg` plus the signed updater archive and `latest.json`, and creates a **draft** GitHub Release for you to review and publish by hand. Only that last job holds a write token, and the only secrets are the two updater signing-key secrets used by the build step; real iCloud access is never configured. The v0.1.0 downloads above are the separately verified local build, not CI output.

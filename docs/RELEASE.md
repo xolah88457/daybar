@@ -29,6 +29,8 @@ pnpm build
 pnpm tauri build --no-sign --bundles app,dmg
 ```
 
+Use `--no-sign` for local builds without the updater key: without it, a build with a public key configured fails with "A public key has been found, but no private key". Release builds in CI omit it because it also skips updater signing.
+
 Bundles land in `apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app` and `bundle/dmg/`; the Tauri build runs the static export first. Do not point development or tests at personal data.
 
 ## Publishing a release and in-app updates
@@ -48,7 +50,7 @@ Daybar can update itself, but only when you ask: **Settings → Check for update
 
 1. Bump the version to the same `X.Y.Z` in `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml` and `apps/desktop/package.json` (keep the root `package.json` in step). Refresh `apps/desktop/src-tauri/Cargo.lock` with `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`; CI's `cargo test --locked` fails if the lockfile is stale. Merge to `main`.
 2. Tag that commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. Tags must look like `vX.Y.Z`.
-3. The [CI workflow](../.github/workflows/ci.yml) first fails fast if the tag does not match the three versions or the signing secret is missing. It then runs every check, builds the app and DMG with `pnpm tauri build --no-sign --bundles app,dmg` (Apple signing off, updater signing on) and creates a **draft** GitHub Release. Only that final job has write access to the repository.
+3. The [CI workflow](../.github/workflows/ci.yml) first fails fast if the tag does not match the three versions or the signing secret is missing. It then runs every check, builds the app and DMG with `pnpm tauri build --bundles app,dmg` (no `--no-sign`, since that would also skip updater signing; Apple signing stays off because no Apple certificate or identity is configured) and creates a **draft** GitHub Release. Only that final job has write access to the repository.
 4. Open the draft under **Releases**. It should hold: `Daybar_X.Y.Z_aarch64.dmg`, `Daybar_X.Y.Z_aarch64.app.zip`, `Daybar_X.Y.Z_aarch64.app.tar.gz` and its `.sig` (the updater archive and signature), `latest.json` and `SHA256SUMS.txt`. Review the generated notes and edit them if you like. The `notes` in `latest.json` are not copied from the release page: they are a one-line version plus a link to it.
 5. Publish it as a normal release: leave **Set as a pre-release** unchecked and **Set as the latest release** checked. `/releases/latest/download/latest.json` serves only the newest published, non-prerelease, non-draft release, so a draft or prerelease is invisible to the updater.
 

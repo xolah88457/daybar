@@ -105,14 +105,16 @@ jobs:
       - name: Build static export
         run: pnpm build
       # Version tags only from here. The updater signing key is exposed to the
-      # build step alone. Apple code signing stays off (--no-sign); the Tauri
-      # updater signature is separate and is what the installed app verifies.
+      # build step alone. Do not pass --no-sign here: it also skips updater
+      # signing, so no .sig would be produced. Apple code signing stays off
+      # because no Apple certificate or signing identity is configured; the
+      # Tauri updater signature is separate and is what the installed app verifies.
       - name: Package app and DMG, sign updater artifacts
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm tauri build --no-sign --bundles app,dmg
+        run: pnpm tauri build --bundles app,dmg
       - name: Stage release files and generate latest.json
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -197,6 +199,13 @@ jobs:
           set -euo pipefail
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             echo "::error::A release for $TAG already exists; delete it first or use a new tag."
+            exit 1
+          fi
+          # `gh release view` may not see drafts, so also look for one in the list.
+          existing="$(gh release list --repo "$REPO" --limit 100 --json tagName,isDraft \
+            --jq "[.[] | select(.tagName == \"$TAG\")] | length")"
+          if [[ "$existing" != '0' ]]; then
+            echo "::error::A release or draft for $TAG already exists. Delete the old draft under Releases, then re-run this job."
             exit 1
           fi
           gh release create "$TAG" release-assets/* \

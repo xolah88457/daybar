@@ -1,16 +1,8 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import type { UpdateInfo, UpdateProgress, UpdaterClient } from '../lib/updates';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { getUpdateStore } from '../lib/updates';
+import type { UpdaterClient } from '../lib/updates';
 import { Progress, Section } from './primitives';
-
-type State =
-  | { kind: 'idle' }
-  | { kind: 'checking' }
-  | { kind: 'current' }
-  | { kind: 'downloading'; info: UpdateInfo; progress: UpdateProgress | null }
-  | { kind: 'ready'; info: UpdateInfo }
-  | { kind: 'restarting'; info: UpdateInfo }
-  | { kind: 'error'; message: string; info?: UpdateInfo };
 
 const megabytes = (bytes: number) => (bytes / 1_048_576).toFixed(1);
 
@@ -25,63 +17,35 @@ export function UpdatesPanel({
   hasUnsavedChanges: () => boolean;
   confirm: (message: string) => Promise<boolean>;
 }) {
-  const [state, setState] = useState<State>({ kind: 'idle' });
+  // The state machine lives outside this component so a download keeps its
+  // progress, and Restart stays available, while Settings is not on screen.
+  const store = getUpdateStore(updater);
+  const state = useSyncExternalStore(
+    store.subscribe,
+    store.getState,
+    store.getState
+  );
   const [version, setVersion] = useState<string | null>(null);
-  const alive = useRef(true);
   const working =
     state.kind === 'checking' ||
     state.kind === 'downloading' ||
     state.kind === 'restarting';
   useEffect(() => {
-    alive.current = true;
+    let alive = true;
     // Reads the local app version only; no network.
     updater
       .version()
-      .then((v) => alive.current && setVersion(v))
+      .then((v) => alive && setVersion(v))
       .catch(() => undefined);
     return () => {
-      alive.current = false;
+      alive = false;
     };
   }, [updater]);
-  const update = (next: State) => {
-    if (alive.current) setState(next);
-  };
-  const check = async () => {
-    if (working) return;
-    update({ kind: 'checking' });
-    let info: UpdateInfo | null;
-    try {
-      info = await updater.check();
-    } catch {
-      update({
-        kind: 'error',
-        message:
-          'Could not check for updates. Make sure you are online, then try again.'
-      });
-      return;
-    }
-    if (!info) {
-      update({ kind: 'current' });
-      return;
-    }
-    update({ kind: 'downloading', info, progress: null });
-    try {
-      await updater.downloadAndInstall((progress) => {
-        if (alive.current)
-          setState((s) => (s.kind === 'downloading' ? { ...s, progress } : s));
-      });
-      update({ kind: 'ready', info });
-    } catch {
-      update({
-        kind: 'error',
-        info,
-        message: `Could not download or install Daybar ${info.version}. Nothing was changed; try again in a moment.`
-      });
-    }
-  };
+  const canRestart =
+    state.kind === 'ready' ||
+    (state.kind === 'error' && state.retry === 'restart');
   const restart = async () => {
-    if (state.kind !== 'ready' || busy) return;
-    const info = state.info;
+    if (!canRestart || busy) return;
     if (
       hasUnsavedChanges() &&
       !(await confirm(
@@ -89,16 +53,7 @@ export function UpdatesPanel({
       ))
     )
       return;
-    update({ kind: 'restarting', info });
-    try {
-      await updater.restart();
-    } catch {
-      update({
-        kind: 'error',
-        info,
-        message: `Daybar ${info.version} is installed, but it could not restart itself. Quit and reopen Daybar to finish updating.`
-      });
-    }
+    await store.restart();
   };
   const percent =
     state.kind === 'downloading' && state.progress?.total
@@ -185,7 +140,7 @@ export function UpdatesPanel({
               </p>
             )}
             <div className="button-row">
-              {state.kind === 'ready' || state.kind === 'restarting' ? (
+              {canRestart || state.kind === 'restarting' ? (
                 <button
                   className="primary"
                   disabled={busy || state.kind === 'restarting'}
@@ -194,7 +149,7 @@ export function UpdatesPanel({
                   Restart now
                 </button>
               ) : (
-                <button disabled={working} onClick={() => void check()}>
+                <button disabled={working} onClick={() => void store.check()}>
                   {state.kind === 'error' ? 'Try again' : 'Check for updates'}
                 </button>
               )}

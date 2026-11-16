@@ -151,6 +151,15 @@ describe('settings and safety controls', () => {
     );
     expect(p.run).not.toHaveBeenCalled();
   });
+  it('states accurately that the network is used only for update checks', () => {
+    render(<SettingsPanel {...props()} />);
+    expect(
+      screen.getByText(
+        /uses no location access, and uses the network only when you click Check for updates/
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/no location or network/)).not.toBeInTheDocument();
+  });
   it('does not overwrite externally changed settings from an old draft', () => {
     const p = props();
     const { rerender } = render(<SettingsPanel {...p} />);
