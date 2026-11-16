@@ -5,7 +5,6 @@
   --green: #39d353;
   --blue: #58a6ff;
   --red: #ff5c5c;
-  --orange: #ff9f43;
   --yellow: #f2cc60;
   --gap: 2px;
   --radius: 2px;
@@ -90,7 +89,6 @@ fieldset {
   outline-offset: 4px;
 }
 h1,
-h2,
 h3,
 p {
   margin-top: 0;
@@ -139,7 +137,6 @@ kbd {
   --green: #18764b;
   --blue: #286a9f;
   --red: #b43737;
-  --orange: #a34b15;
   --yellow: #80620b;
   --line: rgba(32, 40, 32, 0.16);
   --muted: rgba(32, 40, 32, 0.68);
@@ -152,16 +149,11 @@ kbd {
     --green: #18764b;
     --blue: #286a9f;
     --red: #b43737;
-    --orange: #a34b15;
     --yellow: #80620b;
     --line: rgba(32, 40, 32, 0.16);
     --muted: rgba(32, 40, 32, 0.68);
   }
 }
-.app-shell[data-theme='day'] .progress,
-.app-shell[data-theme='auto'][data-system-theme='day'] .progress,
-.app-shell[data-theme='day'] .check-row input,
-.app-shell[data-theme='auto'][data-system-theme='day'] .check-row input,
 .app-shell[data-theme='day'] .connection,
 .app-shell[data-theme='day'] .sidebar-bottom p,
 .app-shell[data-theme='day'] .edition,
@@ -173,18 +165,7 @@ kbd {
 .app-shell[data-theme='day'] .live-clock,
 .app-shell[data-theme='day'] .timer-display [role='timer'].idle,
 .app-shell[data-theme='day'] .field small,
-.app-shell[data-theme='day'] .page-footer {
-  color: rgba(32, 40, 32, 0.58);
-}
-.app-shell[data-theme='day'] .progress,
-.app-shell[data-theme='auto'][data-system-theme='day'] .progress {
-  background: rgba(32, 40, 32, 0.12);
-}
-.app-shell[data-theme='day'] .check-row input,
-.app-shell[data-theme='auto'][data-system-theme='day'] .check-row input {
-  border-color: rgba(32, 40, 32, 0.35);
-  background: rgba(32, 40, 32, 0.04);
-}
+.app-shell[data-theme='day'] .page-footer,
 .app-shell[data-theme='auto'] .connection,
 .app-shell[data-theme='auto'] .sidebar-bottom p,
 .app-shell[data-theme='auto'] .edition,
@@ -198,6 +179,15 @@ kbd {
 .app-shell[data-theme='auto'] .field small,
 .app-shell[data-theme='auto'] .page-footer {
   color: rgba(32, 40, 32, 0.58);
+}
+.app-shell[data-theme='day'] .progress,
+.app-shell[data-theme='auto'][data-system-theme='day'] .progress {
+  background: rgba(32, 40, 32, 0.12);
+}
+.app-shell[data-theme='day'] .check-row input,
+.app-shell[data-theme='auto'][data-system-theme='day'] .check-row input {
+  border-color: rgba(32, 40, 32, 0.35);
+  background: rgba(32, 40, 32, 0.04);
 }
 @media (prefers-color-scheme: light) {
   .app-shell[data-theme='auto'] .progress {
@@ -302,7 +292,6 @@ nav button {
 nav button > span {
   font-size: 17px;
   width: 17px;
-  color: inherit;
   line-height: 1;
 }
 nav button kbd {
@@ -641,9 +630,6 @@ h1 {
 .square:focus-visible {
   opacity: 1 !important;
 }
-.square:hover:not(:disabled) {
-  border: 0;
-}
 .legend {
   display: flex;
   align-items: center;
@@ -798,7 +784,6 @@ button.primary:hover:not(:disabled) {
 .inline-field input {
   flex: 1;
   font-size: 10px;
-  max-width: 100%;
 }
 .focus-footer {
   border-top: 1px solid var(--line);
@@ -1321,9 +1306,6 @@ details[open] summary > span {
   .tag {
     font-size: 7px;
   }
-  .section-head h2 {
-    font-size: 12px;
-  }
 }
 @media (max-width: 600px) {
   .sidebar {
@@ -1375,9 +1357,6 @@ details[open] summary > span {
   }
   .today-countdown {
     order: 3;
-  }
-  .today-progress {
-    order: 0;
   }
   .section {
     padding: 20px;
@@ -1465,7 +1444,6 @@ details[open] summary > span {
   .dashboard-grid {
     gap: 14px;
   }
-  .dashboard-grid > .section,
   .dashboard-grid .section {
     padding: 19px;
   }
@@ -1507,12 +1485,7 @@ details[open] summary > span {
   }
   .dashboard-grid {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(290px, 1.1fr);
-    grid-template-rows: auto auto;
     gap: 12px;
-  }
-  .today-progress {
-    grid-column: 1;
-    grid-row: 1;
   }
   .today-habits {
     grid-column: 2;
@@ -1526,7 +1499,6 @@ details[open] summary > span {
     grid-column: 1 / span 2;
     grid-row: 2;
   }
-  .dashboard-grid > .section,
   .dashboard-grid .section {
     padding: 14px;
   }
