@@ -1,6 +1,6 @@
 [package]
 name = "daybar"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -20,6 +20,8 @@ libc = "0.2"
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [dev-dependencies]
 tempfile = "3"
