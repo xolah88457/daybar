@@ -329,6 +329,7 @@ fn debug_restart_revokes_persisted_real_folder_without_probing_it() {
         global_shortcut: String::new(),
         theme_mode: ThemeMode::Night,
         tray_display: TrayDisplay::Auto,
+        features: Features::default(),
     };
     atomic(&prefs, &encode(&p).unwrap()).unwrap();
     let store = Store::open(root.clone(), Some(prefs)).unwrap();
@@ -432,4 +433,32 @@ fn mutex_serializes_simultaneous_mac_mutations() {
     fn task_op(t: &str) -> Operation {
         task("2026-11-15", t)
     }
+}
+#[test]
+fn feature_toggles_persist_and_legacy_preferences_files_still_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let root = base.join("sandbox");
+    let file = base.join("preferences.json");
+    let folder = root.to_string_lossy();
+    // A preferences.json written before the `features` key existed.
+    let legacy = format!(
+        r#"{{"dataFolder":{folder:?},"realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":"","themeMode":"day"}}"#
+    );
+    fs::create_dir_all(&root).unwrap();
+    fs::write(&file, legacy).unwrap();
+    let store = Store::open(root.clone(), Some(file.clone())).unwrap();
+    let mut prefs = store.preferences().unwrap();
+    assert_eq!(prefs.features, Features::default());
+    prefs.features.focus = false;
+    prefs.features.radar.enabled = true;
+    prefs.features.radar.days_ahead = 30;
+    let snapshot = store.set_preferences(prefs.clone()).unwrap();
+    assert!(!snapshot.preferences.features.focus);
+    let reopened = Store::open(root, Some(file)).unwrap();
+    assert_eq!(reopened.preferences().unwrap().features, prefs.features);
+    prefs.features.radar.days_ahead = 0;
+    assert!(store.check_preferences(&prefs).is_err());
+    assert!(store.set_preferences(prefs).is_err());
+    assert_eq!(store.preferences().unwrap().features.radar.days_ahead, 30);
 }

@@ -224,6 +224,7 @@ impl Store {
             global_shortcut: "CommandOrControl+Shift+F".into(),
             theme_mode: ThemeMode::Night,
             tray_display: TrayDisplay::Auto,
+            features: Features::default(),
         };
         if let Some(path) = &preference_file {
             if let Some(raw) = bytes(path)? {

@@ -1,4 +1,10 @@
-use crate::{contracts::*, sleep, store::Store, validation::Result};
+use crate::{
+    contracts::*,
+    features::{self, Alert, AlertKind},
+    sleep,
+    store::Store,
+    validation::Result,
+};
 use chrono::{DateTime, Local};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
@@ -148,6 +154,10 @@ fn native_mutate(app: &AppHandle, op: Operation) {
     std::thread::spawn(move || {
         let backend = app.state::<Backend>();
         if let Ok(snap) = backend.store.snapshot() {
+            // Timer operations belong to the Focus module: hidden means inert.
+            if !snap.preferences.features.focus {
+                return;
+            }
             if quiet_focus_start(&snap, &op, Local::now()) {
                 let _ = app
                     .notification()
@@ -162,23 +172,30 @@ fn native_mutate(app: &AppHandle, op: Operation) {
         finish_mutation(&app, &backend, backend.store.mutate(op).map(drop));
     });
 }
+fn toggle_focus_operation(s: &Snapshot) -> Option<Operation> {
+    if !s.preferences.features.focus {
+        return None;
+    }
+    Some(if s.focus.state.is_some() {
+        Operation::StopTimer
+    } else {
+        Operation::StartTimer {
+            timer_type: "focus".into(),
+            minutes: s.settings.focus.focus_options[0],
+            task: None,
+        }
+    })
+}
 pub fn toggle_focus(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
         let backend = app.state::<Backend>();
         match backend.store.snapshot() {
-            Ok(s) => native_mutate(
-                &app,
-                if s.focus.state.is_some() {
-                    Operation::StopTimer
-                } else {
-                    Operation::StartTimer {
-                        timer_type: "focus".into(),
-                        minutes: s.settings.focus.focus_options[0],
-                        task: None,
-                    }
-                },
-            ),
+            Ok(s) => match toggle_focus_operation(&s) {
+                Some(op) => native_mutate(&app, op),
+                // Focus is switched off: the shortcut only brings the window forward.
+                None => open(&app),
+            },
             Err(e) => error(&app, &backend.store, "shortcut", e),
         }
     });
@@ -210,6 +227,9 @@ fn on_menu(app: &AppHandle, id: &str) {
             let backend = app.state::<Backend>();
             let result = (|| {
                 let s = backend.store.snapshot()?;
+                if !s.preferences.features.habits {
+                    return Ok(());
+                }
                 let date = Local::now().format("%Y-%m-%d").to_string();
                 let done = !s.daily_log.get(&date).is_some_and(|ts| ts.contains(&task));
                 backend
@@ -223,42 +243,48 @@ fn on_menu(app: &AppHandle, id: &str) {
 }
 fn build_menu(app: &AppHandle, s: &Snapshot) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
-    for (label, kind, options) in [
-        ("Focus", "focus", &s.settings.focus.focus_options),
-        ("Break", "break", &s.settings.focus.break_options),
-        ("Long break", "break", &s.settings.focus.long_break_options),
-    ] {
-        for (i, m) in options.iter().enumerate() {
-            let item = MenuItem::with_id(
-                app,
-                format!("start:{kind}:{m}:{label}:{i}"),
-                format!("{label} {m} min"),
-                s.focus.state.is_none(),
-                None::<&str>,
-            )?;
-            menu.append(&item)?;
+    let features = &s.preferences.features;
+    // Items of a module that is switched off are left out entirely.
+    if features.focus {
+        for (label, kind, options) in [
+            ("Focus", "focus", &s.settings.focus.focus_options),
+            ("Break", "break", &s.settings.focus.break_options),
+            ("Long break", "break", &s.settings.focus.long_break_options),
+        ] {
+            for (i, m) in options.iter().enumerate() {
+                let item = MenuItem::with_id(
+                    app,
+                    format!("start:{kind}:{m}:{label}:{i}"),
+                    format!("{label} {m} min"),
+                    s.focus.state.is_none(),
+                    None::<&str>,
+                )?;
+                menu.append(&item)?;
+            }
         }
-    }
-    menu.append(&MenuItem::with_id(
-        app,
-        "stop",
-        "Stop timer / count time worked",
-        s.focus.state.is_some(),
-        None::<&str>,
-    )?)?;
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-    let today = Local::now().format("%Y-%m-%d").to_string();
-    for task in &s.settings.habits.tasks {
-        menu.append(&CheckMenuItem::with_id(
+        menu.append(&MenuItem::with_id(
             app,
-            format!("task:{task}"),
-            task,
-            true,
-            s.daily_log.get(&today).is_some_and(|ts| ts.contains(task)),
+            "stop",
+            "Stop timer / count time worked",
+            s.focus.state.is_some(),
             None::<&str>,
         )?)?;
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
     }
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    if features.habits {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        for task in &s.settings.habits.tasks {
+            menu.append(&CheckMenuItem::with_id(
+                app,
+                format!("task:{task}"),
+                task,
+                true,
+                s.daily_log.get(&today).is_some_and(|ts| ts.contains(task)),
+                None::<&str>,
+            )?)?;
+        }
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+    }
     menu.append(&MenuItem::with_id(
         app,
         "open",
@@ -275,16 +301,10 @@ fn build_menu(app: &AppHandle, s: &Snapshot) -> tauri::Result<Menu<tauri::Wry>> 
     )?)?;
     Ok(menu)
 }
-#[derive(Clone, Debug)]
-struct Alert {
-    id: String,
-    at: i64,
-    title: &'static str,
-    body: &'static str,
-}
 fn deadlines(s: &Snapshot, now: DateTime<Local>) -> Vec<Alert> {
     let mut out = Vec::new();
-    if s.settings.focus.alerts {
+    // A module that is switched off schedules nothing; its data stays untouched.
+    if s.preferences.features.focus && s.settings.focus.alerts {
         if let Some(timer) = &s.focus.state {
             if timer.end > now.timestamp_millis() {
                 out.push(Alert {
@@ -294,17 +314,20 @@ fn deadlines(s: &Snapshot, now: DateTime<Local>) -> Vec<Alert> {
                         "Focus session done"
                     } else {
                         "Break over"
-                    },
+                    }
+                    .into(),
                     body: if timer.r#type == "focus" {
                         "Nice work. Take a break."
                     } else {
                         "Ready for the next session?"
-                    },
+                    }
+                    .into(),
+                    kind: AlertKind::Focus,
                 });
             }
         }
     }
-    if s.settings.sleep.bedtime_alerts {
+    if s.preferences.features.sleep && s.settings.sleep.bedtime_alerts {
         if let Ok(v) = sleep::view(&s.sleep, &s.settings.sleep, now) {
             if !v.asleep {
                 for (id, minutes, title, body) in [
@@ -332,14 +355,16 @@ fn deadlines(s: &Snapshot, now: DateTime<Local>) -> Vec<Alert> {
                         out.push(Alert {
                             id: format!("{id}:{}", v.bed.timestamp_millis()),
                             at,
-                            title,
-                            body,
+                            title: title.into(),
+                            body: body.into(),
+                            kind: AlertKind::Sleep,
                         });
                     }
                 }
             }
         }
     }
+    out.extend(features::alerts(s, now));
     out.sort_by_key(|a| a.at);
     out
 }
@@ -355,6 +380,12 @@ fn alert_current(
         .any(|i| !i.file.starts_with("runtime:"))
     {
         return false;
+    }
+    match alert.kind {
+        AlertKind::Feature { .. } => return features::is_current(alert, latest),
+        AlertKind::Focus if !latest.preferences.features.focus => return false,
+        AlertKind::Sleep if !latest.preferences.features.sleep => return false,
+        _ => (),
     }
     if let Some(id) = alert.id.strip_prefix("timer:") {
         return latest.settings.focus.alerts
@@ -403,17 +434,38 @@ fn bedtime_title(s: &Snapshot, now: DateTime<Local>) -> String {
         .map(|v| sleep::title(&v, now))
         .unwrap_or_else(|_| "Daybar".into())
 }
+// Auto: the running timer, otherwise time until bed. Modules that are off are skipped.
 fn timer_title(s: &Snapshot, now: DateTime<Local>) -> String {
-    s.focus.state.as_ref().map_or_else(
-        || bedtime_title(s, now),
-        |timer| countdown_label(timer, now),
-    )
+    let features = &s.preferences.features;
+    match &s.focus.state {
+        Some(timer) if features.focus => countdown_label(timer, now),
+        _ if features.sleep => bedtime_title(s, now),
+        _ => "Daybar".into(),
+    }
+}
+// A display mode that belongs to a module that is off behaves as Auto.
+fn effective_display(s: &Snapshot) -> TrayDisplay {
+    use crate::contracts::TrayDisplay::*;
+    let features = &s.preferences.features;
+    let wanted = s.preferences.tray_display;
+    let available = match wanted {
+        Auto => true,
+        FocusMinutes | FocusHours | FocusBlocks | ActiveTimer => features.focus,
+        Bedtime => features.sleep,
+        NextTask => features.habits,
+        Countdown => features.countdown,
+    };
+    if available {
+        wanted
+    } else {
+        Auto
+    }
 }
 fn tray_title(s: &Snapshot, now: DateTime<Local>) -> String {
     use crate::contracts::TrayDisplay::*;
     use chrono::NaiveDate;
     let today = now.format("%Y-%m-%d").to_string();
-    match s.preferences.tray_display {
+    match effective_display(s) {
         Auto => timer_title(s, now),
         FocusMinutes => format!("{} min", s.focus.days.get(&today).map_or(0, |d| d.minutes)),
         FocusHours => {
@@ -557,8 +609,8 @@ fn worker(
                 if let Err(e) = app
                     .notification()
                     .builder()
-                    .title(alert.title)
-                    .body(alert.body)
+                    .title(alert.title.clone())
+                    .body(alert.body.clone())
                     .show()
                 {
                     error(&app, &store, "notifications", e.to_string());
@@ -594,6 +646,7 @@ fn worker(
                         s.daily_log.get(&day),
                         s.focus.state.is_some(),
                         &day,
+                        &s.preferences.features,
                     ))
                     .unwrap_or_default();
                     if key != menu_key {
@@ -656,6 +709,7 @@ mod tests {
                 global_shortcut: String::new(),
                 theme_mode: ThemeMode::Night,
                 tray_display,
+                features: Features::default(),
             },
             issues: vec![],
             conflicts: vec![],
@@ -865,6 +919,105 @@ mod tests {
             .all(|a| !a.id.starts_with("timer:")));
         s.settings.sleep.bedtime_alerts = false;
         assert!(deadlines(&s, now).is_empty());
+    }
+    fn timer(now: DateTime<Local>, kind: &str, minutes: i64) -> TimerState {
+        TimerState {
+            r#type: kind.into(),
+            minutes: minutes as u32,
+            start: now.timestamp_millis(),
+            end: now.timestamp_millis() + minutes * 60_000,
+            task: None,
+        }
+    }
+    #[test]
+    fn disabled_modules_stop_their_alerts_and_stale_ones_are_not_current() {
+        use chrono::TimeZone;
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 12, 0, 0)
+            .single()
+            .unwrap();
+        let mut s = snapshot(TrayDisplay::Auto);
+        s.focus.state = Some(timer(now, "focus", 25));
+        let all = deadlines(&s, now);
+        assert!(all.iter().any(|a| a.kind == AlertKind::Focus));
+        assert!(all.iter().any(|a| a.kind == AlertKind::Sleep));
+        let sleep_alert = all.iter().find(|a| a.kind == AlertKind::Sleep).unwrap();
+        let focus_alert = all.iter().find(|a| a.kind == AlertKind::Focus).unwrap();
+        let later = now + chrono::Duration::hours(30);
+        let mut off = s.clone();
+        off.preferences.features.focus = false;
+        let kinds: Vec<_> = deadlines(&off, now).into_iter().map(|a| a.kind).collect();
+        assert!(!kinds.contains(&AlertKind::Focus) && kinds.contains(&AlertKind::Sleep));
+        assert!(!alert_current(focus_alert, &off, &s, later));
+        assert!(alert_current(sleep_alert, &off, &s, later));
+        let mut off = s.clone();
+        off.preferences.features.sleep = false;
+        let kinds: Vec<_> = deadlines(&off, now).into_iter().map(|a| a.kind).collect();
+        assert!(kinds.contains(&AlertKind::Focus) && !kinds.contains(&AlertKind::Sleep));
+        assert!(!alert_current(sleep_alert, &off, &s, later));
+        off.preferences.features.focus = false;
+        assert!(deadlines(&off, now).is_empty());
+    }
+    #[test]
+    fn tray_title_falls_back_to_auto_when_a_modules_display_is_off() {
+        use chrono::TimeZone;
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 12, 0, 0)
+            .single()
+            .unwrap();
+        let mut s = snapshot(TrayDisplay::FocusMinutes);
+        s.focus.days.insert(
+            now.format("%Y-%m-%d").to_string(),
+            FocusDay {
+                count: 1,
+                minutes: 25,
+            },
+        );
+        assert_eq!(tray_title(&s, now), "25 min");
+        s.preferences.features.focus = false;
+        // Auto without Focus skips the timer and shows bedtime.
+        assert!(tray_title(&s, now).ends_with("→ bed"));
+        s.focus.state = Some(timer(now, "focus", 5));
+        assert!(tray_title(&s, now).ends_with("→ bed"));
+        s.preferences.features.sleep = false;
+        assert_eq!(tray_title(&s, now), "Daybar");
+        s.preferences.features.focus = true;
+        assert_eq!(tray_title(&s, now), "25 min");
+        for (mode, hide) in [
+            (TrayDisplay::NextTask, "habits"),
+            (TrayDisplay::Countdown, "countdown"),
+            (TrayDisplay::Bedtime, "sleep"),
+            (TrayDisplay::ActiveTimer, "focus"),
+        ] {
+            let mut s = snapshot(mode);
+            s.focus.state = Some(timer(now, "focus", 5));
+            let shown = tray_title(&s, now);
+            match hide {
+                "habits" => s.preferences.features.habits = false,
+                "countdown" => s.preferences.features.countdown = false,
+                "sleep" => s.preferences.features.sleep = false,
+                _ => s.preferences.features.focus = false,
+            }
+            let hidden = tray_title(&s, now);
+            s.preferences.tray_display = TrayDisplay::Auto;
+            assert_ne!(shown, hidden, "{hide}");
+            assert_eq!(hidden, tray_title(&s, now), "{hide} behaves as auto");
+        }
+    }
+    #[test]
+    fn focus_shortcut_only_opens_the_window_when_focus_is_off() {
+        let mut s = snapshot(TrayDisplay::Auto);
+        assert!(matches!(
+            toggle_focus_operation(&s),
+            Some(Operation::StartTimer { .. })
+        ));
+        s.focus.state = Some(timer(Local::now(), "focus", 25));
+        assert!(matches!(
+            toggle_focus_operation(&s),
+            Some(Operation::StopTimer)
+        ));
+        s.preferences.features.focus = false;
+        assert!(toggle_focus_operation(&s).is_none());
     }
     #[test]
     fn watcher_observes_phone_edit() {

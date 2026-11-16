@@ -103,10 +103,67 @@ export type FocusData = z.infer<typeof focusDataSchema>;
 export type SleepPlan = z.infer<typeof sleepPlanSchema>;
 export type SleepData = z.infer<typeof sleepDataSchema>;
 
+// App-local feature toggles and configuration. Mac-only: never part of the shared settings.json.
+const clockOrOff = z.union([clock, z.literal('')]);
+const flag = z.boolean().default(false);
+const nameList = z.array(name).max(100).default([]);
+const toggleOnly = z.object({ enabled: flag }).strict();
+const radarSchema = z.object({
+  enabled: flag, calendars: nameList, reminderLists: nameList, includeReminders: z.boolean().default(true),
+  daysAhead: z.number().int().min(1).max(365).default(60), overdueDaysBack: z.number().int().min(0).max(90).default(14),
+  keywords: nameList, dueAlerts: flag, alertTime: clock.default('09:00')
+}).strict();
+const hourlyChimeSchema = z.object({
+  enabled: flag, quietStart: clock.default('22:00'), quietEnd: clock.default('08:00'), sound: z.boolean().default(true)
+}).strict();
+const checkInsSchema = z.object({
+  enabled: flag, morningTime: clockOrOff.default('08:00'), eveningTime: clockOrOff.default('20:00')
+}).strict();
+const streakSaverSchema = z.object({ enabled: flag, minutesBeforeBed: z.number().int().min(0).max(720).default(90) }).strict();
+const autoCycleSchema = z.object({ enabled: flag, longBreakEvery: z.number().int().min(2).max(12).default(4) }).strict();
+const shortcutName = z.string().max(120).default('');
+const focusShortcutsSchema = z.object({ enabled: flag, onStart: shortcutName, onEnd: shortcutName }).strict();
+const awayDetectionSchema = z.object({ enabled: flag, idleMinutes: z.number().int().min(1).max(60).default(5) }).strict();
+const movementNudgesSchema = z.object({
+  enabled: flag, intervalMinutes: z.number().int().min(10).max(240).default(50),
+  activeStart: clock.default('09:00'), activeEnd: clock.default('18:00')
+}).strict();
+const extraCountdownSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/), title: name, startDate: dateKeySchema, endDate: dateKeySchema
+}).strict().refine(c => c.endDate >= c.startDate, 'End date precedes start date');
+const extraCountdownsSchema = z.object({
+  enabled: flag,
+  items: z.array(extraCountdownSchema).max(12).refine(xs => new Set(xs.map(x => x.id)).size === xs.length, 'Duplicate countdown IDs').default([])
+}).strict();
+export const featuresSchema = z.object({
+  countdown: z.boolean().default(true), habits: z.boolean().default(true), focus: z.boolean().default(true), sleep: z.boolean().default(true),
+  radar: radarSchema.default(() => radarSchema.parse({})), roomBeforeEvent: toggleOnly.default(() => toggleOnly.parse({})), hourlyChime: hourlyChimeSchema.default(() => hourlyChimeSchema.parse({})), checkIns: checkInsSchema.default(() => checkInsSchema.parse({})),
+  streakSaver: streakSaverSchema.default(() => streakSaverSchema.parse({})), autoCycle: autoCycleSchema.default(() => autoCycleSchema.parse({})), focusShortcuts: focusShortcutsSchema.default(() => focusShortcutsSchema.parse({})),
+  awayDetection: awayDetectionSchema.default(() => awayDetectionSchema.parse({})), movementNudges: movementNudgesSchema.default(() => movementNudgesSchema.parse({})), insights: toggleOnly.default(() => toggleOnly.parse({})),
+  exportHistory: toggleOnly.default(() => toggleOnly.parse({})), commandPalette: toggleOnly.default(() => toggleOnly.parse({})), extraCountdowns: extraCountdownsSchema.default(() => extraCountdownsSchema.parse({}))
+}).strict();
+export const defaultFeatures = featuresSchema.parse({});
+export type Features = z.infer<typeof featuresSchema>;
+export type RadarConfig = Features['radar'];
+export type RoomBeforeEventConfig = Features['roomBeforeEvent'];
+export type HourlyChimeConfig = Features['hourlyChime'];
+export type CheckInsConfig = Features['checkIns'];
+export type StreakSaverConfig = Features['streakSaver'];
+export type AutoCycleConfig = Features['autoCycle'];
+export type FocusShortcutsConfig = Features['focusShortcuts'];
+export type AwayDetectionConfig = Features['awayDetection'];
+export type MovementNudgesConfig = Features['movementNudges'];
+export type InsightsConfig = Features['insights'];
+export type ExportHistoryConfig = Features['exportHistory'];
+export type CommandPaletteConfig = Features['commandPalette'];
+export type ExtraCountdownsConfig = Features['extraCountdowns'];
+export type ExtraCountdown = ExtraCountdownsConfig['items'][number];
+
 export const preferencesSchema = z.object({
   dataFolder: z.string(), realData: z.boolean(), launchAtLogin: z.boolean(), hideDock: z.boolean(), globalShortcut: z.string(),
   themeMode: z.enum(['day', 'night', 'auto']).default('night'),
-  trayDisplay: z.enum(['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown']).default('auto')
+  trayDisplay: z.enum(['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown']).default('auto'),
+  features: featuresSchema.default(() => featuresSchema.parse({}))
 }).strict();
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type Operation =
