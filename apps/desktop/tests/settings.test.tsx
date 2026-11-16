@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsPanel } from '../src/components/settings';
 import { DayProgress, Focus } from '../src/components/modules';
+import { demoUpdater } from '../src/lib/updates';
 import { fixture } from './fixtures';
 
 const now = new Date(2026, 10, 15, 12);
@@ -12,7 +13,8 @@ function props() {
     busy: false,
     run: vi.fn(async () => true),
     confirm: vi.fn(async (message: string) => window.confirm(message)),
-    savePreferences: vi.fn(async () => true)
+    savePreferences: vi.fn(async () => true),
+    updater: demoUpdater
   };
 }
 

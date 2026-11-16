@@ -11,6 +11,8 @@ import type {
 import { confirmAction } from '../lib/confirm';
 import { createDemoClient } from '../lib/demo';
 import { tauriClient } from '../lib/ipc';
+import { demoUpdater, tauriUpdater } from '../lib/updates';
+import type { UpdaterClient } from '../lib/updates';
 import {
   confirmFocusStart,
   Countdown,
@@ -49,11 +51,14 @@ function message(error: unknown) {
 }
 
 export function Dashboard({
-  client: suppliedClient
+  client: suppliedClient,
+  updater: suppliedUpdater
 }: {
   client?: DaybarClient;
+  updater?: UpdaterClient;
 }) {
   const [client, setClient] = useState<DaybarClient | null>(null);
+  const [updater, setUpdater] = useState<UpdaterClient | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [now, setNow] = useState<Date | null>(null);
   const [view, setView] = useState<View>('Today');
@@ -73,6 +78,7 @@ export function Dashboard({
     const browser = !('__TAURI_INTERNALS__' in window);
     setDemo(!suppliedClient && browser);
     setClient(suppliedClient ?? (browser ? createDemoClient() : tauriClient));
+    setUpdater(suppliedUpdater ?? (browser ? demoUpdater : tauriUpdater));
     setNow(new Date());
     const appearance = window.matchMedia?.('(prefers-color-scheme: dark)');
     if (appearance) setSystemDark(appearance.matches);
@@ -83,7 +89,7 @@ export function Dashboard({
       window.clearInterval(tick);
       appearance?.removeEventListener('change', updateAppearance);
     };
-  }, [suppliedClient]);
+  }, [suppliedClient, suppliedUpdater]);
   const accept = useCallback((data: Snapshot) => {
     current.current = data;
     setSnapshot(data);
@@ -534,10 +540,11 @@ export function Dashboard({
                 <Sleep {...moduleActions} />
               </div>
             )}
-            {view === 'Settings' && (
+            {view === 'Settings' && updater && (
               <div className="stack">
                 <SettingsPanel
                   {...actions}
+                  updater={updater}
                   busy={busy}
                   savePreferences={savePreferences}
                 />
