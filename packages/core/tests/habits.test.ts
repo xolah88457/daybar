@@ -41,6 +41,7 @@ describe('habit additions and immutable history', () => {
     const log = {'2026-11-15': ['A', 'B', 'Old'], '2026-11-14': ['Old']};
     const s = settings(); s.habits.tasks = ['A'];
     expect(getHabitStats(log, s, now).todayDone).toBe(1);
+    expect(log['2026-11-15']).toContain('Old');
   });
 
   it('legacy-array migration also matches real legacy heatmap and stats', async () => {

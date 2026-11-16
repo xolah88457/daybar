@@ -5,9 +5,9 @@
 | Module | Contents |
 | --- | --- |
 | `dates.ts` | Local-calendar day keys and date arithmetic |
-| `habits.ts` | Day colors, daily-log normalization/rename, habit stats, habit and countdown grids |
-| `focus.ts` | Focus ledger: normalize, settle, start, stop, countdown text, room before bed, tagged-task thresholds, block cells, tag rename |
-| `sleep.ts` | Circular time math, `parseWhen`/`resolveDates`/`findSleepSessions` parsing, averages, plan shifting, current state and view, logging and plan start/stop/clear, no-phone confirmation |
+| `habits.ts` | Day colors, daily-log normalization, habit stats, habit and countdown grids |
+| `focus.ts` | Focus ledger: normalize, settle, start, stop, countdown text, room before bed, tagged-task thresholds, block cells |
+| `sleep.ts` | Circular time math, `parseWhen`/`resolveDates`/`findSleepSessions` parsing, averages, plan shifting, current state and view, plan nights, wake/bed logging |
 
 ## Conventions
 - Pass an explicit `now: Date` everywhere. `parseWhen` keeps an optional `now` default for compatibility; always pass it in application code and tests.

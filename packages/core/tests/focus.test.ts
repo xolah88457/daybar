@@ -78,6 +78,10 @@ describe('focus golden parity and ledger', () => {
     expect(linkedTasks(data, settings, '2026-11-15')).toEqual([]);
     data = settleFocus(data, new Date(+start + 25 * 60000), 25);
     expect(linkedTasks(data, settings, '2026-11-15')).toEqual(['Coursework']);
+    const second = new Date(+start + 30 * 60000);
+    data = settleFocus(startFocus(data, 'focus', 10, second, 25, 'constructor'), new Date(+second + 10 * 60000), 25);
+    expect(Object.values(data.sessions!).map(s => s.task)).toEqual(['Coursework', 'constructor']);
+    expect(linkedTasks(data, settings, '2026-11-15')).toEqual(['Coursework', 'constructor']);
     expect(linkedTasks(data, settings, '2026-11-14')).toEqual([]);
     settings.habits.tasks = [];
     expect(linkedTasks(data, settings, '2026-11-15')).toEqual([]);
