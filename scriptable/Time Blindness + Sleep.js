@@ -21,67 +21,7 @@ const DB = (() => {
   const fields = (x, allowed, required = allowed) => object(x) && Object.keys(x).every(k => allowed.includes(k)) && required.every(k => Object.prototype.hasOwnProperty.call(x,k));
   const record = (x, k, v) => object(x) && Object.entries(x).every(([a,b]) => k(a) && v(b));
   const names = x => Array.isArray(x) && x.every(name);
-  const day = x => fields(x,["count","minutes"]) && u32(x.count) && u32(x.minutes);
-  const timer = x => fields(x,["type","minutes","start","end","task"],["type","minutes","start","end"]) && ["focus","break"].includes(x.type) && u32(x.minutes) && x.minutes >= 1 && x.minutes <= 240 && integer(x.start) && integer(x.end) && x.end - x.start === x.minutes * 60000 && (x.task === undefined || name(x.task));
-  const sessionKey = k => /^(0|[1-9]\d*)$/.test(k);
-  const session = x => fields(x,["type","minutes","creditedMinutes","end","date","task"],["type","minutes","creditedMinutes","end","date"]) && ["focus","break"].includes(x.type) && u32(x.minutes) && x.minutes >= 1 && x.minutes <= 240 && u32(x.creditedMinutes) && x.creditedMinutes <= x.minutes && (x.type === "focus" || x.creditedMinutes === 0) && integer(x.end) && date(x.date) && (x.task === undefined || name(x.task)) && (() => {
-    const endDate = new Date(x.end);
-    const endUTC = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
-    const sessionDate = new Date(x.date + 'T00:00:00Z');
-    const sessionUTC = Date.UTC(sessionDate.getUTCFullYear(), sessionDate.getUTCMonth(), sessionDate.getUTCDate());
-    const diffDays = Math.round((sessionUTC - endUTC) / 86400000);
-    return diffDays >= -1 && diffDays <= 1;
-  })();
   function valid(kind,x) {
-    if (kind === "log") return Array.isArray(x) ? x.every(date) : record(x,date,names);
-    if (kind === "focus") {
-      if (!fields(x,["state","days","sessions","baseline"],["state","days"])) return false;
-      if (x.state !== null && !timer(x.state)) return false;
-      if (!record(x.days,date,day)) return false;
-      const hasSessions = x.sessions !== undefined;
-      const hasBaseline = x.baseline !== undefined;
-      if (!hasSessions && hasBaseline) {
-        for (const [d, dayData] of Object.entries(x.days)) {
-          const baselineDay = x.baseline[d];
-          if (dayData.minutes > 0) {
-            if (!baselineDay || baselineDay.minutes !== dayData.minutes) return false;
-          }
-        }
-        for (const [d, baselineDay] of Object.entries(x.baseline)) {
-          if (baselineDay.minutes > 0 && (!x.days[d] || x.days[d].minutes !== baselineDay.minutes)) return false;
-        }
-      }
-      if (hasSessions) {
-        if (!record(x.sessions, sessionKey, session)) return false;
-        // Validate key-value relationship: key is start timestamp, value has end, minutes, creditedMinutes
-        for (const [startKey, s] of Object.entries(x.sessions)) {
-          const start = Number(startKey);
-          if (!Number.isSafeInteger(start) || start < 0) return false;
-          if (s.end < start || s.end > start + s.minutes * 60000) return false;
-          if (s.creditedMinutes * 60000 > s.end - start) return false;
-        }
-        const derived = {};
-        if (hasBaseline) {
-          for (const [d, dayData] of Object.entries(x.baseline)) derived[d] = { ...dayData };
-        }
-        for (const s of Object.values(x.sessions)) {
-          if (s.type === "focus" && s.creditedMinutes > 0) {
-            const d = s.date;
-            derived[d] = derived[d] || { count: 0, minutes: 0 };
-            derived[d].minutes += s.creditedMinutes;
-          }
-        }
-        for (const [d, dayData] of Object.entries(x.days)) {
-          if (dayData.minutes > 0) {
-            const derivedDay = derived[d];
-            if (!derivedDay || dayData.minutes > derivedDay.minutes) return false;
-          }
-        }
-        for (const t of Object.values(derived)) if (t.minutes > 4294967295) return false;
-      }
-      if (hasBaseline && !record(x.baseline,date,day)) return false;
-      return true;
-    }
     if (kind === "sleep") return fields(x,["wakes","beds","plan"]) && record(x.wakes,date,v => u32(v) && v <= 1439) && record(x.beds,date,v => u32(v) && v <= 1439) && (x.plan === null || (fields(x.plan,["start","wake","bed"]) && date(x.plan.start) && u32(x.plan.wake) && x.plan.wake <= 1439 && u32(x.plan.bed) && x.plan.bed <= 1439));
     return false;
   }
@@ -206,7 +146,7 @@ const DB = (() => {
     if (JSON.stringify(value) === latest.raw) return value;
     return commit(name,kind,value,latest.raw);
   }
-  return {settings,read,mutate,valid,date,check};
+  return {settings,read,mutate};
 })();
 const shared = await DB.settings();
 const setting = (section,key,fallback) => shared[section]?.[key] ?? fallback;
@@ -240,10 +180,6 @@ const WIDGET_WIDTH = 320;
 
 const STALE_HOURS = AWAKE_HOURS + 6;   // after this long, a logged wake is assumed old
 const MENLO = new Font("Menlo", 11);
-const MENLO_BOLD = new Font("Menlo-Bold", 12);
-
-const fm = FileManager.iCloud();
-const dataPath = fm.joinPath(fm.documentsDirectory(), "sleep-data.json");
 
 // ---------- time helpers ----------
 function pad(n) { return String(n).padStart(2, "0"); }
@@ -391,7 +327,6 @@ async function ingest(param) {
     return `wake ${fmtFullDate(last.e)}\nbed ${fmtFullDate(last.s)}\n(${nights.length} night(s) logged from ${st.length} segments)`;
   }
 
-
   const w = parseWhen(obj.wake), b = parseWhen(obj.bed);
   const now = new Date();
   let wakeDate = null, bedDate = null, bedSkipped = null;
@@ -418,12 +353,7 @@ async function ingest(param) {
     }
   }
   if (!w && !b) return `could not read: ${JSON.stringify(obj).slice(0, 120)}`;
-  const fmtFull = d => {
-    const f = new DateFormatter();
-    f.dateFormat = "EEE MMM d, h:mm a";
-    return f.string(d);
-  };
-  return `wake ${wakeDate ? fmtFull(wakeDate) : "-"}\nbed ${bedDate ? fmtFull(bedDate) : bedSkipped ? "skipped (" + fmtFull(bedSkipped) + " is from an earlier night)" : "-"}`;
+  return `wake ${wakeDate ? fmtFullDate(wakeDate) : "-"}\nbed ${bedDate ? fmtFullDate(bedDate) : bedSkipped ? "skipped (" + fmtFullDate(bedSkipped) + " is from an earlier night)" : "-"}`;
 }
 
 // ---------- averages and plan ----------
@@ -618,7 +548,7 @@ async function createWidget() {
 }
 
 // ---------- in-app screens ----------
-async function pickTime(title, allowSkip) {
+async function pickTime(title) {
   const a = new Alert();
   a.title = title;
   a.addAction("Just now");
@@ -633,7 +563,6 @@ async function pickTime(title, allowSkip) {
   }
   return null;
 }
-function fmtHHMM(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 
 async function planScreen(data) {
   const table = new UITable();

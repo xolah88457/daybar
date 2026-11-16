@@ -360,6 +360,8 @@ function PreferencesPanel({
   const changedFolder =
     draft.dataFolder !== snapshot.preferences.dataFolder ||
     draft.realData !== snapshot.preferences.realData;
+  const set = <K extends keyof Preferences>(field: K, value: Preferences[K]) =>
+    setDraft((p) => ({ ...p, [field]: value }));
   const submit = async () => {
     const parsed = preferencesSchema.safeParse(draft);
     if (!parsed.success || !draft.dataFolder.trim()) {
@@ -396,7 +398,7 @@ function PreferencesPanel({
               aria-label="Appearance"
               value={draft.themeMode}
               onChange={(e) =>
-                setDraft((p) => ({ ...p, themeMode: e.target.value as Preferences['themeMode'] }))
+                set('themeMode', e.target.value as Preferences['themeMode'])
               }
             >
               <option value="day">Day</option>
@@ -411,7 +413,7 @@ function PreferencesPanel({
               aria-label="Menu-bar label"
               value={draft.trayDisplay}
               onChange={(e) =>
-                setDraft((p) => ({ ...p, trayDisplay: e.target.value as Preferences['trayDisplay'] }))
+                set('trayDisplay', e.target.value as Preferences['trayDisplay'])
               }
             >
               <option value="auto">Auto · timer, then bedtime</option>
@@ -430,7 +432,7 @@ function PreferencesPanel({
             <input
               value={draft.dataFolder}
               onChange={(e) => {
-                setDraft((p) => ({ ...p, dataFolder: e.target.value }));
+                set('dataFolder', e.target.value);
                 setConsent(false);
               }}
               spellCheck={false}
@@ -441,7 +443,7 @@ function PreferencesPanel({
               type="checkbox"
               checked={draft.realData}
               onChange={(e) => {
-                setDraft((p) => ({ ...p, realData: e.target.checked }));
+                set('realData', e.target.checked);
                 setConsent(false);
               }}
             />
@@ -472,7 +474,7 @@ function PreferencesPanel({
               type="checkbox"
               checked={draft.launchAtLogin}
               onChange={(e) =>
-                setDraft((p) => ({ ...p, launchAtLogin: e.target.checked }))
+                set('launchAtLogin', e.target.checked)
               }
             />
             Launch at login
@@ -482,7 +484,7 @@ function PreferencesPanel({
               type="checkbox"
               checked={draft.hideDock}
               onChange={(e) =>
-                setDraft((p) => ({ ...p, hideDock: e.target.checked }))
+                set('hideDock', e.target.checked)
               }
             />
             Hide Dock icon (keep Daybar in the menu bar)
@@ -493,7 +495,7 @@ function PreferencesPanel({
               placeholder="CommandOrControl+Shift+F"
               value={draft.globalShortcut}
               onChange={(e) =>
-                setDraft((p) => ({ ...p, globalShortcut: e.target.value }))
+                set('globalShortcut', e.target.value)
               }
             />
             <small>Use Tauri shortcut syntax. Empty disables it.</small>

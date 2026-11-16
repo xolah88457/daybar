@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, atMinutes, baseline, circMean, clearSleep, currentState, findSleepSessions, fmtDuration, getPlanNights, getSleepView, key, logSleep, needsFocusConfirmation, parseWhen, planDays, recentAvg, resolveDates, shiftToward, signedDiff, startSleepPlan, stopSleepPlan, toMin, wrap } from '../src';
+import { addDays, atMinutes, baseline, circMean, currentState, findSleepSessions, fmtDuration, getPlanNights, getSleepView, key, logSleep, parseWhen, planDays, recentAvg, resolveDates, shiftToward, signedDiff, toMin, wrap } from '../src';
 import { defaultSettings, type SleepData } from '../src/contracts';
 import cases from './fixtures/golden-cases.json';
 import { legacy, texts, type WidgetNode } from './legacy-harness';
@@ -133,16 +133,11 @@ describe('sleep immutable operations and phases', () => {
     const preview = getPlanNights(data, now, settings);
     expect(preview).toHaveLength(8);
     expect(preview.some(n => n.current)).toBe(false);
-    const plan = startSleepPlan(data, now, settings);
-    expect(plan.plan).toEqual({start: '2026-11-15', wake: 600, bed: 120});
+    expect(baseline(data, settings)).toMatchObject({wake: 600, bed: 120});
+    const plan: SleepData = {...data, plan: {start: '2026-11-15', wake: 600, bed: 120}};
     expect(getPlanNights(plan, now, settings)[0]).toEqual({night: 1, wake: 585, bed: 105, current: true});
     expect(getPlanNights(plan, addDays(now, 2), settings)[2].current).toBe(true);
     expect(getPlanNights(plan, addDays(now, 20), settings).some(n => n.current)).toBe(false);
-    expect(stopSleepPlan(plan)).toEqual(data);
-    expect(clearSleep()).toEqual(empty());
-    expect(data.plan).toBeNull();
-    expect(plan.plan).not.toBeNull();
-    expect(() => startSleepPlan(empty(), now, settings)).toThrow('wake');
     expect(getPlanNights(empty(), now, settings)).toEqual([]);
     const onTarget = {wakes: {'2026-11-15': 480}, beds: {'2026-11-14': 0}, plan: null};
     expect(getPlanNights(onTarget, now, settings)).toEqual([]);
@@ -156,7 +151,6 @@ describe('sleep immutable operations and phases', () => {
     for (const [hour, minute, color, phase] of [[21, 59, settings.appearance.green, null], [22, 0, settings.appearance.yellow, 'Night routine • bed prep'], [23, 0, settings.appearance.yellow, 'No phone time'], [0, 0, settings.appearance.red, null]] as const) {
       const now = new Date(2026, 10, hour === 0 ? 16 : 15, hour, minute), view = getSleepView(data, now, settings);
       expect(view.color).toBe(color); expect(view.phase).toBe(phase);
-      expect(needsFocusConfirmation(data, now, settings)).toBe(phase === 'No phone time');
     }
     const future = logSleep(empty(), 'wake', new Date(2026, 10, 16, 8));
     expect(currentState(future, new Date(2026, 10, 15, 12), settings).logged).toBe(false);

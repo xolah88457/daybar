@@ -92,7 +92,3 @@ export function getCountdown(settings: Settings, now: Date) {
   }
   return { total, elapsed, daysLeft, percent: Math.round(Math.min(1, Math.max(0, (elapsed - 1 + fraction) / total)) * 100), weeksLeft: Math.floor(daysLeft / 7), columns, cells };
 }
-export function renameTask(log: DailyLog, from: string, to: string): DailyLog {
-  if (!to.trim()) throw new RangeError('Task name is empty');
-  return Object.fromEntries(Object.entries(log).map(([date, tasks]) => [date, [...new Set(tasks.map(t => t === from ? to : t))]]));
-}

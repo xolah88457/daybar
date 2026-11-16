@@ -39,6 +39,19 @@ export type Actions = {
   run: (op: Operation) => Promise<boolean>;
   confirm: (message: string) => Promise<boolean>;
 };
+// True unless it is no-phone time and the user declines to start a focus session anyway.
+export async function confirmFocusStart(
+  view: ReturnType<typeof getSleepView>,
+  noPhoneMinutes: number,
+  confirm: Actions['confirm']
+) {
+  return !(
+    !view.asleep &&
+    view.leftMinutes > 0 &&
+    view.leftMinutes <= noPhoneMinutes &&
+    !(await confirm('It is no-phone time. Start a focus session anyway?'))
+  );
+}
 export function Countdown({ snapshot, now }: Actions) {
   const result = getCountdown(snapshot.settings, now);
   return (
@@ -78,7 +91,7 @@ export function Countdown({ snapshot, now }: Actions) {
     </Section>
   );
 }
-export function Checklist({
+function Checklist({
   snapshot,
   now,
   busy,
@@ -110,10 +123,10 @@ export function Checklist({
 }
 export function Habits(props: Actions & { compact?: boolean }) {
   const { snapshot, now, compact } = props;
-  const [selected, setSelected] = useState(key(now));
+  const today = key(now);
+  const [selected, setSelected] = useState(today);
   const { ref, width } = useWidth();
   const s = snapshot.settings;
-  const today = key(now);
   const stats = useMemo(
     () =>
       compact ? null : getHabitStats(snapshot.dailyLog, s, parseKey(today)),
@@ -126,7 +139,7 @@ export function Habits(props: Actions & { compact?: boolean }) {
         : getHabitGrid(snapshot.dailyLog, s, parseKey(today), width),
     [compact, snapshot.dailyLog, s, today, width]
   );
-  const date = compact ? key(now) : selected;
+  const date = compact ? today : selected;
   return (
     <Section
       title={s.habits.title}
@@ -138,7 +151,7 @@ export function Habits(props: Actions & { compact?: boolean }) {
         </span>
       }
     >
-      {!compact && stats && grid && (
+      {stats && grid && (
         <>
           <div ref={ref}>
             <Heatmap
@@ -147,7 +160,7 @@ export function Habits(props: Actions & { compact?: boolean }) {
               label="Habit history"
               fixedSize={!!s.habits.endDate}
               onPick={(d) => {
-                if (d <= key(now)) setSelected(d);
+                if (d <= today) setSelected(d);
               }}
             />
           </div>
@@ -182,10 +195,10 @@ export function Habits(props: Actions & { compact?: boolean }) {
               <input
                 aria-label="Edit habit day"
                 type="date"
-                max={key(now)}
+                max={today}
                 value={selected}
                 onChange={(e) => {
-                  if (e.target.value && e.target.value <= key(now))
+                  if (e.target.value && e.target.value <= today)
                     setSelected(e.target.value);
                 }}
               />
@@ -197,7 +210,7 @@ export function Habits(props: Actions & { compact?: boolean }) {
         </>
       )}
       <Checklist {...props} date={date} />
-      {!compact && stats && (
+      {stats && (
         <div className="task-rates">
           <h3>Per-task completion</h3>
           {s.habits.tasks.map((t) => (
@@ -291,12 +304,7 @@ export function Focus(props: Actions) {
   const start = async (timerType: 'focus' | 'break', minutes: number) => {
     if (
       timerType === 'focus' &&
-      !view.asleep &&
-      view.leftMinutes > 0 &&
-      view.leftMinutes <= s.sleep.noPhoneMinutes &&
-      !(await confirm(
-        'It is no-phone time. Start a focus session anyway?'
-      ))
+      !(await confirmFocusStart(view, s.sleep.noPhoneMinutes, confirm))
     )
       return;
     void run({
@@ -306,6 +314,26 @@ export function Focus(props: Actions) {
       ...(timerType === 'focus' && task ? { task } : {})
     });
   };
+  const presets = (
+    name: string,
+    timerType: 'focus' | 'break',
+    options: number[],
+    primary = false
+  ) => (
+    <div className="presets">
+      <span>{name}</span>
+      {options.map((m, i) => (
+        <button
+          className={primary ? 'primary' : undefined}
+          key={i}
+          disabled={busy}
+          onClick={() => void start(timerType, m)}
+        >
+          {m} min{primary && <> <span>↗</span></>}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <Section
       title={s.focus.title}
@@ -341,43 +369,9 @@ export function Focus(props: Actions) {
               ))}
             </select>
           </label>
-          <div className="presets">
-            <span>Focus</span>
-            {s.focus.focusOptions.map((m, i) => (
-              <button
-                className="primary"
-                key={i}
-                disabled={busy}
-                onClick={() => void start('focus', m)}
-              >
-                {m} min <span>↗</span>
-              </button>
-            ))}
-          </div>
-          <div className="presets">
-            <span>Break</span>
-            {s.focus.breakOptions.map((m, i) => (
-              <button
-                key={i}
-                disabled={busy}
-                onClick={() => void start('break', m)}
-              >
-                {m} min
-              </button>
-            ))}
-          </div>
-          <div className="presets">
-            <span>Long break</span>
-            {s.focus.longBreakOptions.map((m, i) => (
-              <button
-                key={i}
-                disabled={busy}
-                onClick={() => void start('break', m)}
-              >
-                {m} min
-              </button>
-            ))}
-          </div>
+          {presets('Focus', 'focus', s.focus.focusOptions, true)}
+          {presets('Break', 'break', s.focus.breakOptions)}
+          {presets('Long break', 'break', s.focus.longBreakOptions)}
           <form
             className="custom-focus"
             onSubmit={(e) => {

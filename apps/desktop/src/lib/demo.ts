@@ -23,7 +23,7 @@ import type {
   Snapshot
 } from '@daybar/core/contracts';
 
-export function demoSnapshot(now = new Date()): Snapshot {
+function demoSnapshot(now = new Date()): Snapshot {
   const settings = structuredClone(defaultSettings);
   const dailyLog: Snapshot['dailyLog'] = {};
   const sleep: Snapshot['sleep'] = { wakes: {}, beds: {}, plan: null };
@@ -63,13 +63,9 @@ export function createDemoClient(
 ): DaybarClient {
   let memory = structuredClone(initial ?? demoSnapshot(clock()));
   const listeners = new Set<() => void>();
-  const logs = new Map([
-    [memory.settings.habits.logId, structuredClone(memory.dailyLog)]
-  ]);
   const copy = () => structuredClone(memory);
   const publish = (next: Snapshot) => {
     memory = next;
-    logs.set(next.settings.habits.logId, structuredClone(next.dailyLog));
     listeners.forEach((fn) => fn());
     return copy();
   };
@@ -199,22 +195,13 @@ export function createDemoClient(
           break;
         case 'save_settings': {
           const parsed = settingsSchema.parse(operation.settings);
+          // Additions are safe; history-bearing renames/removals use explicit operations.
           if (
-            JSON.stringify(parsed.habits.tasks) !==
-              JSON.stringify(s.habits.tasks) ||
+            s.habits.tasks.some((t) => !parsed.habits.tasks.includes(t)) ||
             JSON.stringify(parsed.habits.archivedTasks) !==
               JSON.stringify(s.habits.archivedTasks)
-          ) {
-            // Additions are safe; history-bearing renames/removals use explicit operations.
-            if (
-              s.habits.tasks.some((t) => !parsed.habits.tasks.includes(t)) ||
-              JSON.stringify(parsed.habits.archivedTasks) !==
-                JSON.stringify(s.habits.archivedTasks)
-            )
-              throw new Error(
-                'Use Rename or Archive to preserve task history.'
-              );
-          }
+          )
+            throw new Error('Use Rename or Archive to preserve task history.');
           if (parsed.habits.logId !== s.habits.logId)
             throw new Error(
               'Log ID is stable and cannot be changed. Use the same log ID to preserve history.'

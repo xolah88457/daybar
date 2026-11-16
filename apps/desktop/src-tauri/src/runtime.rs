@@ -136,6 +136,13 @@ fn quiet_focus_start(s: &Snapshot, op: &Operation, now: DateTime<Local>) -> bool
         !v.asleep && left > 0 && left <= i64::from(s.settings.sleep.no_phone_minutes) * 60
     })
 }
+fn finish_mutation(app: &AppHandle, backend: &Backend, result: Result<()>) {
+    match result {
+        Ok(()) => backend.store.report("mutation", None),
+        Err(e) => error(app, &backend.store, "mutation", e),
+    }
+    backend.changed();
+}
 fn native_mutate(app: &AppHandle, op: Operation) {
     let app = app.clone();
     std::thread::spawn(move || {
@@ -152,12 +159,7 @@ fn native_mutate(app: &AppHandle, op: Operation) {
                 return;
             }
         }
-        if let Err(e) = backend.store.mutate(op) {
-            error(&app, &backend.store, "mutation", e);
-        } else {
-            backend.store.report("mutation", None);
-        }
-        backend.changed();
+        finish_mutation(&app, &backend, backend.store.mutate(op).map(drop));
     });
 }
 pub fn toggle_focus(app: &AppHandle) {
@@ -213,14 +215,9 @@ fn on_menu(app: &AppHandle, id: &str) {
                 backend
                     .store
                     .mutate(Operation::SetTask { date, task, done })?;
-                Ok::<_, String>(())
+                Ok(())
             })();
-            if let Err(e) = result {
-                error(&app, &backend.store, "mutation", e);
-            } else {
-                backend.store.report("mutation", None);
-            }
-            backend.changed();
+            finish_mutation(&app, &backend, result);
         });
     }
 }
@@ -388,24 +385,29 @@ fn alert_current(
             .ends_with(&format!(":{}", v.bed.timestamp_millis()))
     })
 }
+fn countdown_label(timer: &TimerState, now: DateTime<Local>) -> String {
+    let secs = ((timer.end - now.timestamp_millis() + 999) / 1000).max(0);
+    format!(
+        "{} {}:{:02}",
+        if timer.r#type == "focus" {
+            "Focus"
+        } else {
+            "Break"
+        },
+        secs / 60,
+        secs % 60
+    )
+}
+fn bedtime_title(s: &Snapshot, now: DateTime<Local>) -> String {
+    sleep::view(&s.sleep, &s.settings.sleep, now)
+        .map(|v| sleep::title(&v, now))
+        .unwrap_or_else(|_| "Daybar".into())
+}
 fn timer_title(s: &Snapshot, now: DateTime<Local>) -> String {
-    if let Some(timer) = &s.focus.state {
-        let secs = ((timer.end - now.timestamp_millis() + 999) / 1000).max(0);
-        format!(
-            "{} {}:{:02}",
-            if timer.r#type == "focus" {
-                "Focus"
-            } else {
-                "Break"
-            },
-            secs / 60,
-            secs % 60
-        )
-    } else {
-        sleep::view(&s.sleep, &s.settings.sleep, now)
-            .map(|v| sleep::title(&v, now))
-            .unwrap_or_else(|_| "Daybar".into())
-    }
+    s.focus.state.as_ref().map_or_else(
+        || bedtime_title(s, now),
+        |timer| countdown_label(timer, now),
+    )
 }
 fn tray_title(s: &Snapshot, now: DateTime<Local>) -> String {
     use crate::contracts::TrayDisplay::*;
@@ -419,30 +421,18 @@ fn tray_title(s: &Snapshot, now: DateTime<Local>) -> String {
             format!("{}h {}m", minutes / 60, minutes % 60)
         }
         FocusBlocks => format!("{} blocks", s.focus.days.get(&today).map_or(0, |d| d.count)),
-        ActiveTimer => s.focus.state.as_ref().map_or_else(
-            || "Timer idle".into(),
-            |timer| {
-                let secs = ((timer.end - now.timestamp_millis() + 999) / 1000).max(0);
-                format!(
-                    "{} {}:{:02}",
-                    if timer.r#type == "focus" {
-                        "Focus"
-                    } else {
-                        "Break"
-                    },
-                    secs / 60,
-                    secs % 60
-                )
-            },
-        ),
-        Bedtime => sleep::view(&s.sleep, &s.settings.sleep, now)
-            .map(|v| sleep::title(&v, now))
-            .unwrap_or_else(|_| "Daybar".into()),
+        ActiveTimer => s
+            .focus
+            .state
+            .as_ref()
+            .map_or_else(|| "Timer idle".into(), |timer| countdown_label(timer, now)),
+        Bedtime => bedtime_title(s, now),
         NextTask => {
             let h = &s.settings.habits;
-            if today < h.start_date || (!h.end_date.is_empty() && today > h.end_date) {
-                "No tasks today".into()
-            } else if h.tasks.is_empty() {
+            if today < h.start_date
+                || (!h.end_date.is_empty() && today > h.end_date)
+                || h.tasks.is_empty()
+            {
                 "No tasks today".into()
             } else if let Some(task) = h.tasks.iter().find(|task| {
                 !s.daily_log
@@ -573,7 +563,6 @@ fn worker(
                 {
                     error(&app, &store, "notifications", e.to_string());
                 }
-                expired = true;
             }
         }
         pending.retain(|a| a.at > now.timestamp_millis());
@@ -653,6 +642,25 @@ fn worker(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn snapshot(tray_display: TrayDisplay) -> Snapshot {
+        Snapshot {
+            settings: Settings::default(),
+            daily_log: Default::default(),
+            focus: FocusData::default(),
+            sleep: SleepData::default(),
+            preferences: Preferences {
+                data_folder: "/sandbox".into(),
+                real_data: false,
+                launch_at_login: false,
+                hide_dock: false,
+                global_shortcut: String::new(),
+                theme_mode: ThemeMode::Night,
+                tray_display,
+            },
+            issues: vec![],
+            conflicts: vec![],
+        }
+    }
     #[test]
     fn scheduler_cancels_and_titles_clamp() {
         use chrono::TimeZone;
@@ -661,8 +669,6 @@ mod tests {
             .single()
             .unwrap();
         let s = Snapshot {
-            settings: Settings::default(),
-            daily_log: Default::default(),
             focus: FocusData {
                 state: Some(TimerState {
                     r#type: "focus".into(),
@@ -673,18 +679,7 @@ mod tests {
                 }),
                 ..Default::default()
             },
-            sleep: SleepData::default(),
-            preferences: Preferences {
-                data_folder: "/sandbox".into(),
-                real_data: false,
-                launch_at_login: false,
-                hide_dock: false,
-                global_shortcut: String::new(),
-                theme_mode: crate::contracts::ThemeMode::Night,
-                tray_display: crate::contracts::TrayDisplay::Auto,
-            },
-            issues: vec![],
-            conflicts: vec![],
+            ..snapshot(TrayDisplay::Auto)
         };
         assert_eq!(tray_title(&s, now), "Focus 0:00");
         assert!(deadlines(&s, now)
@@ -718,8 +713,6 @@ mod tests {
             .unwrap();
         let today = now.format("%Y-%m-%d").to_string();
         let mut s = Snapshot {
-            settings: Settings::default(),
-            daily_log: Default::default(),
             focus: FocusData {
                 days: std::collections::BTreeMap::from([
                     (
@@ -739,18 +732,7 @@ mod tests {
                 ]),
                 ..Default::default()
             },
-            sleep: SleepData::default(),
-            preferences: Preferences {
-                data_folder: "/sandbox".into(),
-                real_data: false,
-                launch_at_login: false,
-                hide_dock: false,
-                global_shortcut: String::new(),
-                theme_mode: ThemeMode::Night,
-                tray_display: TrayDisplay::FocusMinutes,
-            },
-            issues: vec![],
-            conflicts: vec![],
+            ..snapshot(TrayDisplay::FocusMinutes)
         };
         for (mode, expected) in [
             (TrayDisplay::FocusMinutes, "85 min"),
@@ -828,23 +810,7 @@ mod tests {
     #[test]
     fn tray_countdown_matches_remaining_days_and_auto_preserves_legacy_title() {
         use chrono::TimeZone;
-        let mut s = Snapshot {
-            settings: Settings::default(),
-            daily_log: Default::default(),
-            focus: FocusData::default(),
-            sleep: SleepData::default(),
-            preferences: Preferences {
-                data_folder: "/sandbox".into(),
-                real_data: false,
-                launch_at_login: false,
-                hide_dock: false,
-                global_shortcut: String::new(),
-                theme_mode: ThemeMode::Night,
-                tray_display: TrayDisplay::Countdown,
-            },
-            issues: vec![],
-            conflicts: vec![],
-        };
+        let mut s = snapshot(TrayDisplay::Countdown);
         let at = |y, m, d| Local.with_ymd_and_hms(y, m, d, 12, 0, 0).single().unwrap();
         s.settings.countdown.start_date = "2026-11-15".into();
         s.settings.countdown.end_date = "2027-07-01".into();
@@ -875,23 +841,7 @@ mod tests {
     #[test]
     fn scheduler_rebuild_removes_cancelled_or_disabled_alerts() {
         let now = Local::now();
-        let mut s = Snapshot {
-            settings: Settings::default(),
-            daily_log: Default::default(),
-            focus: FocusData::default(),
-            sleep: SleepData::default(),
-            preferences: Preferences {
-                data_folder: "/sandbox".into(),
-                real_data: false,
-                launch_at_login: false,
-                hide_dock: false,
-                global_shortcut: String::new(),
-                theme_mode: crate::contracts::ThemeMode::Night,
-                tray_display: crate::contracts::TrayDisplay::Auto,
-            },
-            issues: vec![],
-            conflicts: vec![],
-        };
+        let mut s = snapshot(TrayDisplay::Auto);
         s.focus.state = Some(TimerState {
             r#type: "break".into(),
             minutes: 5,

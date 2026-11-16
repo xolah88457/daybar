@@ -5,7 +5,7 @@ target/
 .dev-data/
 .DS_Store
 *.tsbuildinfo
-playwright-report/
-test-results/
 .worktrees/
+.claude/worktrees/
+apps/desktop/src-tauri/gen/schemas/linux-schema.json
 .env*

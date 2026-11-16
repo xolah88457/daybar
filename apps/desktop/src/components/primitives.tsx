@@ -22,17 +22,15 @@ export function Section({
   title,
   index,
   aside,
-  children,
-  className = ''
+  children
 }: {
   title: string;
   index?: string;
   aside?: ReactNode;
   children: ReactNode;
-  className?: string;
 }) {
   return (
-    <section className={`section ${className}`}>
+    <section className="section">
       <header className="section-head">
         <h2>
           {index && <span className="index">{index}</span>}
@@ -181,18 +179,19 @@ export function Progress({
   color: string;
   label: string;
 }) {
+  const fraction = Math.max(0, Math.min(1, value));
   return (
     <div
       className="progress"
       role="progressbar"
       aria-label={label}
-      aria-valuenow={Math.round(Math.max(0, Math.min(1, value)) * 100)}
+      aria-valuenow={Math.round(fraction * 100)}
       aria-valuemin={0}
       aria-valuemax={100}
     >
       <span
         style={{
-          width: `${Math.max(0, Math.min(1, value)) * 100}%`,
+          width: `${fraction * 100}%`,
           background: color
         }}
       />
@@ -219,8 +218,9 @@ export function theme(s: Settings): CSSProperties {
     ...layoutTheme(s)
   } as CSSProperties;
 }
-// Keep these values in sync with the day palette in globals.css. They are
-// used only for module rendering; Settings always receives the raw snapshot.
+// Keep these values in sync with the day palette in globals.css. orange has no
+// CSS variable there; only JS (habit colours) reads it. They are used only for
+// module rendering; Settings always receives the raw snapshot.
 const dayPalette = {
   background: '#f4f3ed',
   text: '#202820',
