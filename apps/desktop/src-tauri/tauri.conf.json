@@ -3,5 +3,5 @@
  "build":{"beforeDevCommand":"pnpm dev", "beforeBuildCommand":"pnpm build", "devUrl":"http://127.0.0.1:3000", "frontendDist":"../out"},
  "app":{"macOSPrivateApi":true, "windows":[{"title":"Daybar", "width":1200, "height":840,"minWidth":760,"minHeight":560}], "security":{"csp":"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; connect-src ipc: http://ipc.localhost"}},
  "bundle":{"active":true,"createUpdaterArtifacts":true,"targets":["app","dmg"],"category":"Productivity","shortDescription":"Your day, at a glance.","macOS":{"minimumSystemVersion":"12.3"}},
- "plugins":{"updater":{"pubkey":"DAYBAR_UPDATER_PUBKEY_PLACEHOLDER", "endpoints":["https://github.com/xolah88457/daybar/releases/latest/download/latest.json"]}}
+ "plugins":{"updater":{"pubkey":"dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxMDBFMEUwMzNFNzBFMjkKUldRcER1Y3o0T0FBUWNFTHJiS0R5RmMrWGsxdUNlR2dXNFAxMU1tT0owRUpITGNBQ1JpUkYyQkEK", "endpoints":["https://github.com/xolah88457/daybar/releases/latest/download/latest.json"]}}
 }
