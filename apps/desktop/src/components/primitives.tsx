@@ -218,8 +218,9 @@ export function theme(s: Settings): CSSProperties {
     ...layoutTheme(s)
   } as CSSProperties;
 }
-// Keep these values in sync with the day palette in globals.css. They are
-// used only for module rendering; Settings always receives the raw snapshot.
+// Keep these values in sync with the day palette in globals.css. orange has no
+// CSS variable there; only JS (habit colours) reads it. They are used only for
+// module rendering; Settings always receives the raw snapshot.
 const dayPalette = {
   background: '#f4f3ed',
   text: '#202820',

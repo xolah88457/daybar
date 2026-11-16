@@ -23,7 +23,7 @@ import type {
   Snapshot
 } from '@daybar/core/contracts';
 
-export function demoSnapshot(now = new Date()): Snapshot {
+function demoSnapshot(now = new Date()): Snapshot {
   const settings = structuredClone(defaultSettings);
   const dailyLog: Snapshot['dailyLog'] = {};
   const sleep: Snapshot['sleep'] = { wakes: {}, beds: {}, plan: null };
