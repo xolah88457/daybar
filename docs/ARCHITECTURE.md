@@ -27,8 +27,16 @@ File-level rename is atomic, but iCloud Drive provides no cross-device compare-a
 - Phone writes retain a recovery backup and fail closed while interrupted-write artifacts remain; after a crash, recover those manually ([phone guide](../scriptable/README.md)). Focus-to-habit completion spans two files and is repaired, not made atomic, by a later Focus run.
 - Merge conflict copies explicitly; never silently discard. Cross-file task-history changes must preserve old entries if a later write fails. Symlinks, path traversal and a developer-supplied path must not bypass sandbox policy.
 
+## Features and toggles
+Every optional part of Daybar, including the four built-in modules (Countdown, Habits, Focus, Sleep), has a switch under Settings → Features. The switches and each feature's configuration live in `preferences.features` in the Mac-local `preferences.json`. The shared `settings.json` that the phone scripts validate strictly is untouched. A `preferences.json` without a `features` key still loads: every field has a default (modules on, new features off).
+
+- **Schema:** `featuresSchema` in `packages/core/src/contracts/index.ts` and `Features` in `src-tauri/src/contracts.rs` mirror each other; limits are checked again in `validation.rs`. Run `pnpm schemas` after changing the schema.
+- **Hiding a module** removes its sidebar item, Today card, tray label and menu items, alerts and global-shortcut action. Its data is never modified or deleted.
+- **Frontend registry:** `apps/desktop/src/features/registry.ts` lists every feature (label, description, group, permission, dependency). Each new feature owns `src/features/<id>.tsx`, whose exports the registry picks up by name: `Config` (settings panel under the switch), and optionally `View` (a sidebar page; the registry entry also carries its `nav` label/symbol) and `TodayCard` (a card on Today). Views and cards render only while the feature is on; the number keys follow `visibleViews()` in `features/views.ts`.
+- **Rust:** `src-tauri/src/features/` has one stub module per feature that needs native code. `features::alerts(snapshot, now)` is merged into the scheduler's deadlines, and a fired `AlertKind::Feature { id, key }` alert is re-validated by asking the aggregator again (`features::is_current`). Feature Tauri commands are registered in the `invoke_handler` list in `lib.rs`. The scheduler rebuilds on every preferences save.
+
 ## Extension seam
-Deadline Radar remains a disabled navigation slot. A future implementation can introduce a Swift EventKit helper behind typed Rust commands without giving the frontend filesystem access. Insights and a bundled phone core are stretch only.
+New behaviour goes behind a feature switch: add its config to `featuresSchema` (TS and Rust), implement it in its own `src/features/<id>.tsx` and, if it needs native code, `src-tauri/src/features/<module>.rs`. Deadline Radar and Insights are registered without a view yet; a Radar implementation can add a Swift EventKit helper behind typed Rust commands without giving the frontend filesystem access. A bundled phone core stays stretch only.
 
 ## Toolchain notes
 Next uses `output: 'export'`, `frontendDist: '../out'` and unoptimized images per the [Tauri Next.js guide](https://v2.tauri.app/start/frontend/nextjs/); the build uses Next's webpack path for predictable monorepo static export. Tauri's notification plugin has no reliable desktop future scheduling, so Rust owns timing ([decision 004](DECISIONS.md)). Exact versions live in the lockfiles.

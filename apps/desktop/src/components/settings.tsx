@@ -4,6 +4,8 @@ import { preferencesSchema, settingsSchema } from '@daybar/core/contracts';
 import type { Preferences, Settings, Snapshot } from '@daybar/core/contracts';
 import type { Actions } from './modules';
 import type { UpdaterClient } from '../lib/updates';
+import { FeaturesPanel } from '../features/panel';
+import { visibleViews } from '../features/views';
 import { Section } from './primitives';
 import { UpdatesPanel } from './updates';
 
@@ -83,6 +85,7 @@ export function SettingsPanel({
       setPresetText({});
     }
   };
+  const views = visibleViews(snapshot.preferences.features);
   return (
     <>
       <Section
@@ -225,6 +228,11 @@ export function SettingsPanel({
           </fieldset>
         </form>
       </Section>
+      <FeaturesPanel
+        snapshot={snapshot}
+        busy={busy}
+        savePreferences={savePreferences}
+      />
       <Section
         title="Tasks, with their history"
         aside={<span className="tag">ARCHIVE, NEVER ERASE</span>}
@@ -324,7 +332,7 @@ export function SettingsPanel({
         )}
       </Section>
       <PreferencesPanel
-        key={JSON.stringify(snapshot.preferences)}
+        key={JSON.stringify(withoutFeatures(snapshot.preferences))}
         snapshot={snapshot}
         busy={busy}
         confirm={confirm}
@@ -340,11 +348,11 @@ export function SettingsPanel({
       <Section title="Keyboard, not mouse">
         <div className="shortcut-list">
           <p>
-            <kbd>1–6</kbd>
-            <span>Today / Countdown / Habits / Focus / Sleep / Settings</span>
+            <kbd>1–{views.length}</kbd>
+            <span>{views.map((v) => v.label).join(' / ')}</span>
           </p>
           <p>
-            <kbd>⌘ / Ctrl</kbd> + <kbd>1–6</kbd>
+            <kbd>⌘ / Ctrl</kbd> + <kbd>1–{views.length}</kbd>
             <span>Same module shortcuts when using a modifier</span>
           </p>
           <p>
@@ -360,6 +368,8 @@ export function SettingsPanel({
     </>
   );
 }
+
+const withoutFeatures = (p: Preferences) => ({ ...p, features: null });
 
 function PreferencesPanel({
   snapshot,
@@ -377,7 +387,10 @@ function PreferencesPanel({
   const [draft, setDraft] = useState(() => ({ ...snapshot.preferences }));
   const [error, setError] = useState('');
   const [consent, setConsent] = useState(false);
-  const edited = JSON.stringify(draft) !== JSON.stringify(snapshot.preferences);
+  // Feature switches save immediately from the Features section, so they are not part of this form.
+  const edited =
+    JSON.stringify(withoutFeatures(draft)) !==
+    JSON.stringify(withoutFeatures(snapshot.preferences));
   useEffect(() => {
     dirty.current = edited;
     return () => {
@@ -405,7 +418,7 @@ function PreferencesPanel({
     )
       return;
     setError('');
-    await save(parsed.data);
+    await save({ ...parsed.data, features: snapshot.preferences.features });
   };
   return (
     <Section
