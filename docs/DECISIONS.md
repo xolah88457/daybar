@@ -15,7 +15,7 @@ UI task toggles issue `set_task(date,task,done)`, making retry safe. Keep logId 
 Future notification scheduling is not portable on desktop. Rust checks pending deadlines while the app is alive and rebuilds on starts/data changes. No background service or server.
 
 ## 005 — Toolchain and packaging
-Next static export + Tauri 2, pnpm workspace, Zod schemas and serde mirrors. Use webpack build explicitly rather than relying on evolving Turbopack behaviour. Mac builds are unsigned. Apple code signing remains off; update archives are signed with a separate Tauri updater (minisign) key, and the user-initiated update check is the one deliberate network exception. App name lives in Tauri config, frontend metadata and README.
+Next static export + Tauri 2, pnpm workspace, Zod schemas and serde mirrors. Use webpack build explicitly rather than relying on evolving Turbopack behaviour. Mac bundles are ad-hoc signed (`signingIdentity: "-"`), not Developer ID signed or notarized. Update archives are signed with a separate Tauri updater (minisign) key, and the user-initiated update check is the one deliberate network exception. App name lives in Tauri config, frontend metadata and README.
 
 ## 007 — Ambiguous focus ledgers fail closed (2026-11-15)
 A file containing a session ledger but no baseline cannot safely treat saved `days` as either legacy baseline or session-derived totals. If they disagree with zero-baseline derivation, refuse rather than normalize and erase history. Manual recovery is safer than guessing. Shared TypeScript/Rust/phone validators were aligned after independent review.

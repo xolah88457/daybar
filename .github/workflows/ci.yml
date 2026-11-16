@@ -106,9 +106,10 @@ jobs:
         run: pnpm build
       # Version tags only from here. The updater signing key is exposed to the
       # build step alone. Do not pass --no-sign here: it also skips updater
-      # signing, so no .sig would be produced. Apple code signing stays off
-      # because no Apple certificate or signing identity is configured; the
-      # Tauri updater signature is separate and is what the installed app verifies.
+      # signing, so no .sig would be produced. The app is ad-hoc signed through
+      # signingIdentity "-" in tauri.conf.json (no Apple certificate, no
+      # notarization); the Tauri updater signature is separate and is what the
+      # installed app verifies.
       - name: Package app and DMG, sign updater artifacts
         if: startsWith(github.ref, 'refs/tags/v')
         env:

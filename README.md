@@ -10,7 +10,7 @@
 - [Download app ZIP](https://github.com/xolah88457/daybar/releases/download/v0.1.0/Daybar_0.1.0_aarch64.app.zip) — extract the complete app bundle.
 - [SHA-256 checksums](https://github.com/xolah88457/daybar/releases/download/v0.1.0/SHA256SUMS.txt).
 
-These downloads need no Node/Rust installation. macOS may warn because the app is unsigned; review the [opening notes](docs/RELEASE.md#opening-an-unsigned-app) before using it.
+These downloads need no Node/Rust installation. macOS will not recognise the developer on first open; see [opening the app](docs/RELEASE.md#opening-the-app-on-a-mac) for the steps.
 
 **Updates:** from v0.2.0, **Settings → Check for updates** looks for a newer release on GitHub, installs it after verifying its updater signature, and offers a restart. It runs only when you click; Daybar never checks in the background. v0.1.0 has no updater, so install v0.2.0 manually once. How releases and the signing key work: [release guide](docs/RELEASE.md#publishing-a-release-and-in-app-updates).
 
@@ -91,9 +91,9 @@ pnpm tauri build --no-sign --bundles app,dmg
 
 `--no-sign` is for local builds without the updater key (otherwise the build errors "A public key has been found, but no private key"); release builds in CI omit it so the updater archive gets signed.
 
-The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle/macos/` and `bundle/dmg/` respectively (unless Cargo's target directory is overridden). Tauri runs the static build before packaging. Builds are **unsigned and not notarized**; see the [opening notes](docs/RELEASE.md#opening-an-unsigned-app).
+The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle/macos/` and `bundle/dmg/` respectively (unless Cargo's target directory is overridden). Tauri runs the static build before packaging. Release builds are **ad-hoc signed, not notarized** (`--no-sign` builds are unsigned); see [opening the app](docs/RELEASE.md#opening-the-app-on-a-mac).
 
-[CI](.github/workflows/ci.yml) uses a macOS runner, Node 22, pnpm 10.12.3 and stable Rust; it runs frozen dependency installation, lint, types, timezone tests, phone Node tests (required, never silently skipped), Rust tests and static export. A `vX.Y.Z` tag additionally checks that the tag matches the app version, packages an unsigned `.app` and `.dmg` plus the signed updater archive and `latest.json`, and creates a **draft** GitHub Release for you to review and publish by hand. Only that last job holds a write token, and the only secrets are the two updater signing-key secrets used by the build step; real iCloud access is never configured. The v0.1.0 downloads above are the separately verified local build, not CI output.
+[CI](.github/workflows/ci.yml) uses a macOS runner, Node 22, pnpm 10.12.3 and stable Rust; it runs frozen dependency installation, lint, types, timezone tests, phone Node tests (required, never silently skipped), Rust tests and static export. A `vX.Y.Z` tag additionally checks that the tag matches the app version, packages an ad-hoc signed, non-notarized `.app` and `.dmg` plus the signed updater archive and `latest.json`, and creates a **draft** GitHub Release for you to review and publish by hand. Only that last job holds a write token, and the only secrets are the two updater signing-key secrets used by the build step; real iCloud access is never configured. The v0.1.0 downloads above are the separately verified local build, not CI output.
 
 ## Opt in to real data — only after verification
 

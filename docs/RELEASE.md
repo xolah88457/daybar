@@ -12,9 +12,15 @@ The [v0.1.0 unsigned preview](https://github.com/xolah88457/daybar/releases/tag/
 
 `shasum -a 256 -c SHA256SUMS.txt` checks the two downloads. The published digests matched the local files and an unauthenticated public DMG download. `hdiutil verify` and a read-only mount passed, and the mounted app's metadata and executable matched the tested bundle. These hashes identify this build only; rebuilding can change them.
 
-### Opening an unsigned app
+### Opening the app on a Mac
 
-macOS may warn because the app is unsigned. Check provenance and compare hashes through a trusted channel first, then use Finder **right-click → Open** on the copy in Applications and confirm Open if offered. Gatekeeper behaviour varies by macOS and security policy; do not disable Gatekeeper or strip quarantine globally. If blocked, build from reviewed source. Opening has not been verified on another Mac or an older macOS release.
+From v0.2.1 the app is ad-hoc signed (`signingIdentity: "-"`) but not Developer ID signed or notarized, so macOS cannot verify who made it. Check the download against `SHA256SUMS.txt` first (`shasum -a 256 -c SHA256SUMS.txt`), then:
+
+1. Drag Daybar to Applications and open it. macOS says it cannot verify the developer.
+2. Open **System Settings → Privacy & Security**, scroll to the Daybar message and click **Open Anyway** (macOS 15 and later; earlier versions also allow right-click → Open). Confirm once; later launches are normal.
+3. If macOS says **"Daybar.app" is damaged and can't be opened** (copies downloaded from v0.2.0 or older, which had no bundle signature), remove the quarantine flag from that app only: `xattr -dr com.apple.quarantine /Applications/Daybar.app`. Do not disable Gatekeeper or strip quarantine anywhere else.
+
+In-app updates do not show this warning: the updater downloads and verifies the archive itself, so nothing is quarantined. Removing the first-open warning entirely needs an Apple Developer ID certificate and notarization, which are not configured. These steps are untested on a downloaded release build.
 
 ## Reproduce locally
 
@@ -35,7 +41,7 @@ Bundles land in `apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app` 
 
 ## Publishing a release and in-app updates
 
-Daybar can update itself, but only when you ask: **Settings → Check for updates** fetches `latest.json` from the newest published GitHub Release (`https://github.com/xolah88457/daybar/releases/latest/download/latest.json`), then downloads, verifies and installs the update and offers **Restart now**. There are no automatic or background checks, and the app makes no other network requests. The update archive is verified against the public key in `plugins.updater.pubkey` in [`tauri.conf.json`](../apps/desktop/src-tauri/tauri.conf.json); this is Tauri's own updater signature and is unrelated to Apple code signing, so the app is still unsigned and not notarized.
+Daybar can update itself, but only when you ask: **Settings → Check for updates** fetches `latest.json` from the newest published GitHub Release (`https://github.com/xolah88457/daybar/releases/latest/download/latest.json`), then downloads, verifies and installs the update and offers **Restart now**. There are no automatic or background checks, and the app makes no other network requests. The update archive is verified against the public key in `plugins.updater.pubkey` in [`tauri.conf.json`](../apps/desktop/src-tauri/tauri.conf.json); this is Tauri's own updater signature and is unrelated to Apple code signing; the app is ad-hoc signed and not notarized.
 
 **0.1.0 has no updater.** Anyone on v0.1.0 installs v0.2.0 manually once (the [README](../README.md#download-the-mac-app) download links); from then on Settings can fetch later releases.
 
@@ -50,7 +56,7 @@ Daybar can update itself, but only when you ask: **Settings → Check for update
 
 1. Bump the version to the same `X.Y.Z` in `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml` and `apps/desktop/package.json` (keep the root `package.json` in step). Refresh `apps/desktop/src-tauri/Cargo.lock` with `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`; CI's `cargo test --locked` fails if the lockfile is stale. Merge to `main`.
 2. Tag that commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. Tags must look like `vX.Y.Z`.
-3. The [CI workflow](../.github/workflows/ci.yml) first fails fast if the tag does not match the three versions or the signing secret is missing. It then runs every check, builds the app and DMG with `pnpm tauri build --bundles app,dmg` (no `--no-sign`, since that would also skip updater signing; Apple signing stays off because no Apple certificate or identity is configured) and creates a **draft** GitHub Release. Only that final job has write access to the repository.
+3. The [CI workflow](../.github/workflows/ci.yml) first fails fast if the tag does not match the three versions or the signing secret is missing. It then runs every check, builds the app and DMG with `pnpm tauri build --bundles app,dmg` (no `--no-sign`, since that would also skip updater signing; the bundle is ad-hoc signed via `signingIdentity: "-"`, with no Apple certificate and no notarization) and creates a **draft** GitHub Release. Only that final job has write access to the repository.
 4. Open the draft under **Releases**. It should hold: `Daybar_X.Y.Z_aarch64.dmg`, `Daybar_X.Y.Z_aarch64.app.zip`, `Daybar_X.Y.Z_aarch64.app.tar.gz` and its `.sig` (the updater archive and signature), `latest.json` and `SHA256SUMS.txt`. Review the generated notes and edit them if you like. The `notes` in `latest.json` are not copied from the release page: they are a one-line version plus a link to it.
 5. Publish it as a normal release: leave **Set as a pre-release** unchecked and **Set as the latest release** checked. `/releases/latest/download/latest.json` serves only the newest published, non-prerelease, non-draft release, so a draft or prerelease is invisible to the updater.
 
@@ -78,7 +84,7 @@ Typing, composition and dialog guards for bare navigation keys were checked in a
 - Real iPhone, Scriptable installation, Shortcut, real iCloud materialization, or cross-device sync and convergence.
 - OS notification delivery, launch-at-login and Dock-visibility behavior.
 - The native conflict notice/merge/discard walkthrough (Rust merge/discard logic is unit-tested). No promise of automatic recovery for interrupted Scriptable writes.
-- Signing/notarization, Intel/universal builds, older macOS, a tag-built artifact download, and a real in-app update from one published release to the next.
+- Developer ID signing/notarization, a Mac opening a downloaded ad-hoc signed build, Intel/universal builds, older macOS, a tag-built artifact download, and a real in-app update from one published release to the next.
 - An owner-supplied iPhone screenshot ([media notes](screenshots/README.md)).
 
 To check any of these yourself, do it in a disposable sandbox (`pnpm seed`, then `pnpm tauri dev`): confirm the **SANDBOX DATA** badge, exercise one case at a time, and compare the managed JSON files before and after.
