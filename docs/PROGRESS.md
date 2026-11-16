@@ -10,6 +10,10 @@
 - **Native app:** all six bare 1–6 shortcuts, Day/Night controls and saved appearance, Auto matching current macOS Light, eight menu-bar choices and actual status-item labels. Countdown/Day survived normal Quit/relaunch. Every preference case kept `realData=false`; all four sandbox JSON hashes remained unchanged.
 - **Packaging:** Node 22 unsigned `.app` and `.dmg` succeeded (`/tmp/daybar-custom-tray-native-build.log`): arm64, minimum macOS 12.3, app 13.34 MiB / DMG 3.73 MiB. `hdiutil verify` and read-only mount passed; mounted app executable/metadata match the tested bundle. Exact hashes: `/tmp/daybar-release-final-manifest.json`.
 
+## GitHub publication
+
+Source is pushed to [xolah88457/daybar](https://github.com/xolah88457/daybar), with the [v0.1.0 unsigned preview](https://github.com/xolah88457/daybar/releases/tag/v0.1.0) containing the DMG, app ZIP and SHA256SUMS.txt. Uploaded digests matched; an unauthenticated public DMG download matched the local hash. The ZIP was extracted and executable/metadata/permissions checked. Initial hosted CI runs were cancelled before any steps, so no hosted CI pass is claimed.
+
 ## Requested refinements — complete
 
 - Safe bare **1–6** navigation ignores typing, IME, dialogs and modified keystrokes; existing modified/global shortcuts remain.

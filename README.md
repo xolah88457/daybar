@@ -2,7 +2,15 @@
 
 **Your day, at a glance.** Daybar brings a countdown, daily habits, a focus timer and a sleep-shift plan into one quiet macOS window and menu bar. Built from everyday iPhone Scriptable widgets, it keeps the original dark, monospace, tiny-square visual language while using shared JSON in iCloud Drive rather than a server, account or database. No telemetry.
 
-> **Local release candidate:** the arm64 app and DMG were built and verified locally from product source `f6fd53084bc5e3912f312a3a9291cd700cc71fe0`. The artifact is unsigned and not notarized. This is not a hosted release or a claim of real iPhone/iCloud acceptance. See the [release and safe-switch guide](docs/RELEASE.md) and [scoped verification ledger](docs/VERIFICATION.md).
+> **Unsigned preview:** [Download Daybar v0.1.0](https://github.com/xolah88457/daybar/releases/tag/v0.1.0) for Apple Silicon, macOS 12.3+. The published app was verified locally from product source `f6fd53084bc5e3912f312a3a9291cd700cc71fe0`; it is not notarized. Real iPhone/iCloud acceptance is not claimed. See the [release and safe-switch guide](docs/RELEASE.md) and [scoped verification ledger](docs/VERIFICATION.md).
+
+## Download the Mac app
+
+- [Download DMG](https://github.com/xolah88457/daybar/releases/download/v0.1.0/Daybar_0.1.0_aarch64.dmg) — mount and copy Daybar to Applications.
+- [Download app ZIP](https://github.com/xolah88457/daybar/releases/download/v0.1.0/Daybar_0.1.0_aarch64.app.zip) — extract the complete app bundle.
+- [SHA-256 checksums](https://github.com/xolah88457/daybar/releases/download/v0.1.0/SHA256SUMS.txt).
+
+These downloads need no Node/Rust installation. macOS may warn because the app is unsigned; review the [opening and safety notes](docs/RELEASE.md) before using it.
 
 ![Daybar Today dashboard showing synthetic countdown, tasks, focus and sleep data](docs/screenshots/today.png)
 
@@ -86,7 +94,7 @@ pnpm tauri build --no-sign --bundles app,dmg
 
 The app and DMG are produced under `apps/desktop/src-tauri/target/release/bundle/macos/` and `bundle/dmg/` respectively (unless Cargo's target directory is overridden). Tauri runs the static build before packaging. Builds are **unsigned and not notarized**. After mounting a trusted DMG and copying Daybar to Applications, **right-click Daybar → Open**, then confirm Open if macOS offers it. Gatekeeper behaviour varies by macOS/security policy; do not disable Gatekeeper or strip quarantine globally. If blocked, build from source or use the system's app-specific approval flow only after reviewing provenance.
 
-[CI](.github/workflows/ci.yml) uses a macOS runner, Node 22, pnpm 10.12.3 and stable Rust; it runs frozen dependency installation, lint, types, timezone tests, phone Node tests, Rust tests and static export. Phone tests are required, not silently skipped if missing. A `v*` tag additionally packages an unsigned `.app` and `.dmg` and uploads them as **Actions artifacts**, not a signed GitHub Release. Download them from that tag's Actions run; the app is zipped to preserve bundle metadata and artifact retention is 14 days. The workflow uses a read-only repository token; no signing credentials, secrets or real iCloud access are configured. Writing this workflow does **not** mean GitHub CI has run or passed.
+[CI](.github/workflows/ci.yml) uses a macOS runner, Node 22, pnpm 10.12.3 and stable Rust; it runs frozen dependency installation, lint, types, timezone tests, phone Node tests, Rust tests and static export. Phone tests are required, not silently skipped if missing. A `v*` tag additionally packages an unsigned `.app` and `.dmg` and uploads them as **Actions artifacts**, not a signed GitHub Release. Download them from that tag's Actions run; the app is zipped to preserve bundle metadata and artifact retention is 14 days. The workflow uses a read-only repository token; no signing credentials, secrets or real iCloud access are configured. The initial hosted runs were cancelled before any job steps executed; **hosted CI is not claimed as passing**. The release downloads above are the separately verified local build, not Actions artifacts.
 
 ## Opt in to real data — only after verification
 

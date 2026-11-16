@@ -1,8 +1,14 @@
-# Local release candidate and safe data switch
+# Release downloads and safe data switch
 
 ## What exists
 
-The current local candidate was built from product source `f6fd53084bc5e3912f312a3a9291cd700cc71fe0` on 2026-11-15. It is a macOS **arm64** app, minimum macOS **12.3**, version **0.1.0**. The `.app` and `.dmg` are local artifacts, unsigned and not notarized; they are not hosted, pushed, or a signed production release. No universal/Intel or older-macOS build is claimed.
+The [v0.1.0 unsigned preview](https://github.com/xolah88457/daybar/releases/tag/v0.1.0) is published on GitHub. It was built from product source `f6fd53084bc5e3912f312a3a9291cd700cc71fe0` on 2026-11-15: macOS **arm64**, minimum macOS **12.3**. It is not signed/notarized or a production-ready certification; no universal/Intel or older-macOS build is claimed.
+
+- [Download DMG](https://github.com/xolah88457/daybar/releases/download/v0.1.0/Daybar_0.1.0_aarch64.dmg)
+- [Download app ZIP](https://github.com/xolah88457/daybar/releases/download/v0.1.0/Daybar_0.1.0_aarch64.app.zip)
+- [Download SHA256SUMS.txt](https://github.com/xolah88457/daybar/releases/download/v0.1.0/SHA256SUMS.txt)
+
+All three uploaded asset sizes/digests matched local files. An unauthenticated public DMG download also matched the recorded SHA-256. The app ZIP was extracted and its executable, metadata and execute permission verified before upload.
 
 Build log: `/tmp/daybar-custom-tray-native-build.log` (Tauri build includes Next static export). Local bundle paths:
 
@@ -14,6 +20,7 @@ Exact artifact manifest: `/tmp/daybar-release-final-manifest.json`.
 | Artifact/check | Recorded result |
 | --- | --- |
 | DMG SHA-256 | `94be7f25c3cf49efcca2cb1bef36bb26ec4895fa6f1bbd866fd52749f795852f` |
+| App ZIP SHA-256 | `1ade21f7f200062bc0508baf42e1ae7bd1d986cc70560d74d18775021dc3ffa0` |
 | App executable SHA-256 | `22aebd61faab2f39a6096fd58034f0d353c671175ce923d0f75215c8764db453` |
 | `hdiutil verify` | Passed |
 | Read-only mount and mounted app metadata/executable equality | Passed |
@@ -34,7 +41,7 @@ pnpm build
 pnpm tauri build --no-sign --bundles app,dmg
 ```
 
-The Tauri build runs the static export as its before-build command. Output paths are listed above. Do not point development/tests at personal data. Latest recorded gates: `/tmp/daybar-tray-integrated-node22.log` (lint/types and 247 tests per timezone: 138 core, 50 desktop, 59 phone in Toronto and London), `/tmp/daybar-tray-parent-rust.log` (32 Rust tests), `/tmp/daybar-custom-tray-browser.log` (browser layout/interactions), and `/tmp/daybar-custom-tray-native-build.log`. Hosted CI has **not** been claimed or verified. See the [scoped verification ledger](VERIFICATION.md).
+The Tauri build runs the static export as its before-build command. Output paths are listed above. Do not point development/tests at personal data. Latest recorded gates: `/tmp/daybar-tray-integrated-node22.log` (lint/types and 247 tests per timezone: 138 core, 50 desktop, 59 phone in Toronto and London), `/tmp/daybar-tray-parent-rust.log` (32 Rust tests), `/tmp/daybar-custom-tray-browser.log` (browser layout/interactions), and `/tmp/daybar-custom-tray-native-build.log`. The initial hosted CI runs were cancelled before job steps; no hosted CI pass is claimed. See the [scoped verification ledger](VERIFICATION.md).
 
 The actual `today.png` and `today-day.png` are fictional-data native-window captures. `menu-bar.gif` is eight actual owned status-item mode crops at two seconds each (500×80), not four popup frames, continuous video, or proof of a running live clock. Media detail: [screenshots README](screenshots/README.md).
 
@@ -60,7 +67,7 @@ Scriptable cannot atomically replace a file or provide compare-and-swap. Its gua
 
 ## Not established by this candidate
 
-- No pushed/hosted release, hosted CI run, signed/notarized distribution, Intel/universal artifact, or older-macOS acceptance.
+- No passing hosted CI run, signed/notarized distribution, Intel/universal artifact, or older-macOS acceptance. The published downloads are the locally verified build.
 - No real iPhone, Scriptable installation, Shortcut, real iCloud folder/materialization, or cross-device sync/convergence test.
 - No OS notification delivery, login-at-login behavior, Dock visibility behavior, or complete native conflict-notice/merge/discard walkthrough.
 - No native conflict UI evidence or promise of automatic recovery for interrupted Scriptable writes.
