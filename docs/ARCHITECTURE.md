@@ -2,7 +2,7 @@
 
 The overview diagram and one-minute summary are in the [README](../README.md#architecture-in-a-minute). This page records the boundaries behind them.
 
-No server, accounts, telemetry or runtime network access. The static Next export runs in a Tauri 2 WKWebView. Rust alone reads and writes files; the browser preview uses memory, never a filesystem. Pure TypeScript receives explicit `now` and settings so its tests can reproduce midnight and DST. Calculation conventions: [CORE_API](CORE_API.md).
+No server, accounts or telemetry, and no network access except one user-initiated update check: only when you click **Check for updates** in Settings does Tauri's updater plugin (in Rust) fetch `latest.json` from GitHub Releases and, if you proceed, download the update archive, verifying its signature against the public key in `tauri.conf.json`. There are no automatic or background checks. Release procedure: [RELEASE](RELEASE.md#publishing-a-release-and-in-app-updates). The static Next export runs in a Tauri 2 WKWebView. Rust alone reads and writes files; the browser preview uses memory, never a filesystem. Pure TypeScript receives explicit `now` and settings so its tests can reproduce midnight and DST. Calculation conventions: [CORE_API](CORE_API.md).
 
 ## Boundaries
 - `packages/core/src/contracts/index.ts`: authoritative field names, settings defaults, schemas, IPC operation union; JSON Schemas alongside (`pnpm schemas` regenerates them). Rust mirrors these in `src-tauri/src/contracts.rs` and validates on both read and before write. File shapes: [DATA_FORMATS](DATA_FORMATS.md).
