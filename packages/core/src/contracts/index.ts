@@ -14,12 +14,11 @@ const name = z.string().trim().min(1).max(120);
 const opacity = z.number().min(0).max(1);
 export const dailyLogSchema = z.union([z.record(dateKeySchema, z.array(name)), z.array(dateKeySchema)]);
 export type DailyLog = Record<string, string[]>;
-export type LegacyDailyLog = string[];
-export const timerStateSchema = z.object({
+const timerStateSchema = z.object({
   type: z.enum(['focus', 'break']), minutes: positive, start: epoch, end: epoch, task: name.optional()
 }).strict().refine(s => s.end - s.start === s.minutes * 60000, 'Timer duration must match planned minutes');
-export const focusDaySchema = z.object({ count: z.number().int().min(0).max(0xffffffff), minutes: z.number().int().min(0).max(0xffffffff) }).strict();
-export const sessionSchema = z.object({
+const focusDaySchema = z.object({ count: z.number().int().min(0).max(0xffffffff), minutes: z.number().int().min(0).max(0xffffffff) }).strict();
+const sessionSchema = z.object({
   type: z.enum(['focus', 'break']), minutes: positive, creditedMinutes: z.number().int().nonnegative().max(240),
   end: epoch, date: dateKeySchema, task: name.optional()
 }).strict().refine(s => s.creditedMinutes <= s.minutes && (s.type === 'focus' || s.creditedMinutes === 0), 'Invalid session credit');
@@ -50,34 +49,34 @@ export const focusDataSchema = z.object({
   }
   if ([...totals.values()].some(minutes => minutes > 0xffffffff)) ctx.addIssue({ code: 'custom', path: ['sessions'], message: 'Focus total overflow' });
 });
-export const sleepPlanSchema = z.object({ start: dateKeySchema, wake: minutesOfDay, bed: minutesOfDay }).strict();
+const sleepPlanSchema = z.object({ start: dateKeySchema, wake: minutesOfDay, bed: minutesOfDay }).strict();
 export const sleepDataSchema = z.object({
   wakes: z.record(dateKeySchema, minutesOfDay), beds: z.record(dateKeySchema, minutesOfDay), plan: sleepPlanSchema.nullable()
 }).strict();
 
-export const countdownSettingsSchema = z.object({
+const countdownSettingsSchema = z.object({
   startDate: dateKeySchema.default('2026-10-01'), endDate: dateKeySchema.default('2027-07-01'), title: name.default('Community Garden Opening')
 }).strict();
-export const habitSettingsSchema = z.object({
+const habitSettingsSchema = z.object({
   startDate: dateKeySchema.default('2026-11-01'), endDate: z.union([dateKeySchema, z.literal('')]).default(''),
   title: name.default('Daily Tasks'), logId: z.string().regex(/^[a-zA-Z0-9_]+$/).default('Daily_Tasks'),
   tasks: z.array(name).min(1).refine(xs => new Set(xs).size === xs.length, 'Duplicate tasks').default(['Read a chapter', 'Sketch a scene', 'Take a walk', 'Water the plants']),
   archivedTasks: z.array(name).default([]), dayCompleteMin: z.number().int().min(1).default(1),
   focusThresholds: z.record(name, z.number().int().min(1).max(1440)).default({})
 }).strict();
-export const focusSettingsSchema = z.object({
+const focusSettingsSchema = z.object({
   title: name.default('Focus'), focusOptions: z.array(positive).min(1).default([25,50]),
   breakOptions: z.array(positive).min(1).default([5,10]), longBreakOptions: z.array(positive).min(1).default([15,30]),
   blockMinutes: positive.default(25), alerts: z.boolean().default(true)
 }).strict();
-export const sleepSettingsSchema = z.object({
+const sleepSettingsSchema = z.object({
   title: name.default('Time'), awakeHours: z.number().min(1).max(24).default(16), sleepHours: z.number().min(1).max(24).default(8),
   targetWake: clock.default('08:00'), targetBed: z.union([clock, z.literal('')]).default(''),
   stepMinutes: positive.default(15), averageDays: z.number().int().min(1).max(365).default(7),
   bedtimeAlerts: z.boolean().default(true), routineMinutes: z.number().int().min(0).max(1440).default(120),
   noPhoneMinutes: z.number().int().min(0).max(1440).default(60)
 }).strict();
-export const appearanceSchema = z.object({
+const appearanceSchema = z.object({
   background: color.default('#0d1117'), text: color.default('#ffffff'), green: color.default('#39d353'),
   blue: color.default('#58a6ff'), red: color.default('#ff5c5c'), orange: color.default('#ff9f43'), yellow: color.default('#f2cc60'),
   emptyOpacity: opacity.default(0.05), minDoneOpacity: opacity.default(0.3), futureOpacity: opacity.default(0.12),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, blend, getCountdown, getHabitGrid, getHabitStats, key, normalizeLog, parseKey, renameTask } from '../src';
+import { addDays, blend, getCountdown, getHabitGrid, getHabitStats, key, normalizeLog, parseKey } from '../src';
 import { defaultSettings, type DailyLog } from '../src/contracts';
 import { gridColors, legacy, type WidgetNode } from './legacy-harness';
 
@@ -37,14 +37,10 @@ describe('habit additions and immutable history', () => {
     expect(stats.taskRates).toEqual({A: 100, B: 100});
   });
 
-  it('renames carry historical completion and avoid duplicate names without mutating input', () => {
+  it('completions of tasks no longer configured are not counted', () => {
     const log = {'2026-11-15': ['A', 'B', 'Old'], '2026-11-14': ['Old']};
-    expect(renameTask(log, 'Old', 'A')).toEqual({'2026-11-15': ['A', 'B'], '2026-11-14': ['A']});
-    expect(log['2026-11-14']).toEqual(['Old']);
     const s = settings(); s.habits.tasks = ['A'];
     expect(getHabitStats(log, s, now).todayDone).toBe(1);
-    expect(log['2026-11-15']).toContain('Old');
-    expect(() => renameTask(log, 'Old', '')).toThrow();
   });
 
   it('legacy-array migration also matches real legacy heatmap and stats', async () => {

@@ -148,14 +148,3 @@ export function logSleep(data: SleepData, entry: 'wake' | 'bed', date: Date): Sl
   out[entry === 'wake' ? 'wakes' : 'beds'][key(day)] = date.getHours() * 60 + date.getMinutes();
   return out;
 }
-export function startSleepPlan(data: SleepData, now: Date, settings: Settings): SleepData {
-  const out = sleepDataSchema.parse(data), base = baseline(out, settings);
-  if (!base) throw new Error('Log a wake time before starting a plan');
-  out.plan = { start: key(now), wake: base.wake, bed: base.bed };
-  return out;
-}
-export function stopSleepPlan(data: SleepData): SleepData { return { ...sleepDataSchema.parse(data), plan: null }; }
-export function clearSleep(): SleepData { return { wakes: {}, beds: {}, plan: null }; }
-export function needsFocusConfirmation(data: SleepData, now: Date, settings: Settings): boolean {
-  return getSleepView(data, now, settings).phase === 'No phone time';
-}
