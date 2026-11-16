@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCountdown, getFocusBlocks, key, linkedTasks, normalizeFocus, renameFocusTask, roomForBlocks, settleFocus, startFocus, stopFocus } from '../src';
+import { formatCountdown, getFocusBlocks, key, linkedTasks, normalizeFocus, roomForBlocks, settleFocus, startFocus, stopFocus } from '../src';
 import { defaultSettings, focusDataSchema, type FocusData } from '../src/contracts';
 import { legacy, type WidgetNode } from './legacy-harness';
 
@@ -70,7 +70,7 @@ describe('focus golden parity and ledger', () => {
     expect(next.state?.type).toBe('break');
   });
 
-  it('links tagged settled minutes only, with rename and archived exclusion', () => {
+  it('links tagged settled minutes only, with archived exclusion', () => {
     const settings = structuredClone(defaultSettings);
     settings.habits.tasks = ['Coursework', 'constructor'];
     settings.habits.focusThresholds = {Coursework: 25, constructor: 10};
@@ -78,9 +78,7 @@ describe('focus golden parity and ledger', () => {
     expect(linkedTasks(data, settings, '2026-11-15')).toEqual([]);
     data = settleFocus(data, new Date(+start + 25 * 60000), 25);
     expect(linkedTasks(data, settings, '2026-11-15')).toEqual(['Coursework']);
-    const renamed = renameFocusTask(data, 'Coursework', 'constructor');
-    expect(linkedTasks(renamed, settings, '2026-11-15')).toEqual(['constructor']);
-    expect(linkedTasks(renamed, settings, '2026-11-14')).toEqual([]);
+    expect(linkedTasks(data, settings, '2026-11-14')).toEqual([]);
     settings.habits.tasks = [];
     expect(linkedTasks(data, settings, '2026-11-15')).toEqual([]);
     expect(Object.values(data.sessions!)[0].task).toBe('Coursework');

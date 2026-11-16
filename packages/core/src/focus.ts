@@ -80,10 +80,3 @@ export function getFocusBlocks(day: FocusDay | undefined, settings: Settings, wi
   return { columns, cellSize: (width - (columns - 1) * a.gap) / columns,
     cells: Array.from({length: columns}, (_, i) => ({ color: i < count ? a.green : a.text, opacity: i < count ? 1 : a.futureOpacity })) };
 }
-export function renameFocusTask(data: FocusData, from: string, to: string): FocusData {
-  if (!to.trim() || to.length > 120) throw new RangeError('Invalid task');
-  const out = focusDataSchema.parse(data);
-  if (out.state?.task === from) out.state.task = to;
-  for (const s of Object.values(out.sessions ?? {})) if (s.task === from) s.task = to;
-  return out;
-}
