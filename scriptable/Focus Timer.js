@@ -81,7 +81,6 @@ const DB = (() => {
       if (hasBaseline && !record(x.baseline,date,day)) return false;
       return true;
     }
-    if (kind === "sleep") return fields(x,["wakes","beds","plan"]) && record(x.wakes,date,v => u32(v) && v <= 1439) && record(x.beds,date,v => u32(v) && v <= 1439) && (x.plan === null || (fields(x.plan,["start","wake","bed"]) && date(x.plan.start) && u32(x.plan.wake) && x.plan.wake <= 1439 && u32(x.plan.bed) && x.plan.bed <= 1439));
     return false;
   }
   const clock = x => typeof x === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(x);
@@ -205,7 +204,7 @@ const DB = (() => {
     if (JSON.stringify(value) === latest.raw) return value;
     return commit(name,kind,value,latest.raw);
   }
-  return {settings,read,mutate,valid,date,check};
+  return {settings,read,mutate,valid};
 })();
 const shared = await DB.settings();
 const setting = (section,key,fallback) => shared[section]?.[key] ?? fallback;
@@ -217,6 +216,7 @@ const FOCUS_OPTIONS = setting("focus", "focusOptions", [25, 50]);        // focu
 const BREAK_OPTIONS = setting("focus", "breakOptions", [5, 10]);         // regular breaks
 const LONG_BREAK_OPTIONS = setting("focus", "longBreakOptions", [15, 30]);   // long breaks
 const BLOCK_MINUTES = setting("focus", "blockMinutes", 25);              // one block = this many focus minutes (50 min = 2 blocks)
+const HABIT_TASKS = setting("habits", "tasks", ["Coursework", "Live Trading", "Trade Review", "Apostles work"]);   // tasks focus sessions can be linked to
 
 // Look
 const BG_COLOR = setting("appearance", "background", "#0d1117");
@@ -232,8 +232,6 @@ const SIDE_PADDING = 12;
 const WIDGET_WIDTH = 354;          // medium widget width in points; adjust if the row does not reach the right edge
 // ============================================
 
-const fm = FileManager.iCloud();
-const dataPath = fm.joinPath(fm.documentsDirectory(), "focus-timer.json");
 const MENLO = new Font("Menlo", 11);
 const MENLO_BOLD = new Font("Menlo-Bold", 12);
 
@@ -290,11 +288,10 @@ function recordSession(data, now) {
   return credited;
 }
 async function completeLinkedTasks(data) {
-  const tasks = setting("habits", "tasks", ["Coursework", "Live Trading", "Trade Review", "Apostles work"]);
   const thresholds = setting("habits", "focusThresholds", {});
   const totals = new Map();
   for (const s of Object.values(data.sessions || {})) {
-    if (s.type !== "focus" || !tasks.includes(s.task) || !thresholds[s.task]) continue;
+    if (s.type !== "focus" || !HABIT_TASKS.includes(s.task) || !thresholds[s.task]) continue;
     const id = JSON.stringify([s.date,s.task]);
     totals.set(id, (totals.get(id) || 0) + s.creditedMinutes);
   }
@@ -303,7 +300,7 @@ async function completeLinkedTasks(data) {
     if (minutes < thresholds[task]) continue;
     const file = "daily-log-" + setting("habits", "logId", "Daily_Tasks") + ".json";
     await DB.mutate(file, "log", () => ({}), raw => {
-      const log = Array.isArray(raw) ? Object.fromEntries(raw.map(k => [k,tasks.slice()])) : raw;
+      const log = Array.isArray(raw) ? Object.fromEntries(raw.map(k => [k,HABIT_TASKS.slice()])) : raw;
       log[date] = [...new Set([...(log[date] || []), task])];
       return log;
     });
@@ -357,14 +354,13 @@ async function stopTimer(expectedStart) {
 }
 async function chooseTask(type) {
   if (type !== "focus") return undefined;
-  const tasks = setting("habits", "tasks", ["Coursework", "Live Trading", "Trade Review", "Apostles work"]);
   const menu = new Alert();
   menu.title = "Link focus to a task?";
   menu.addAction("No task");
-  for (const task of tasks) menu.addAction(task);
+  for (const task of HABIT_TASKS) menu.addAction(task);
   menu.addCancelAction("Cancel");
   const choice = await menu.presentSheet();
-  return choice < 0 ? null : choice === 0 ? undefined : tasks[choice - 1];
+  return choice < 0 ? null : choice === 0 ? undefined : HABIT_TASKS[choice - 1];
 }
 
 function createWidget(data) {
