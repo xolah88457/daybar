@@ -6,4 +6,6 @@ target/
 .DS_Store
 *.tsbuildinfo
 .worktrees/
+.claude/worktrees/
+apps/desktop/src-tauri/gen/schemas/linux-schema.json
 .env*
