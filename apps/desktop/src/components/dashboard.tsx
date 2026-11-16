@@ -11,7 +11,14 @@ import type {
 import { confirmAction } from '../lib/confirm';
 import { createDemoClient } from '../lib/demo';
 import { tauriClient } from '../lib/ipc';
-import { Countdown, DayProgress, Focus, Habits, Sleep } from './modules';
+import {
+  confirmFocusStart,
+  Countdown,
+  DayProgress,
+  Focus,
+  Habits,
+  Sleep
+} from './modules';
 import { theme, layoutTheme, dayProjectedSettings } from './primitives';
 import { SettingsPanel } from './settings';
 
@@ -222,20 +229,9 @@ export function Dashboard({
       )
         return;
       const index = Number(event.key) - 1;
-      const bareNavigation =
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        index >= 0 &&
-        index < views.length;
-      const modifiedNavigation =
-        (event.metaKey || event.ctrlKey) &&
-        !event.altKey &&
-        !event.shiftKey &&
-        index >= 0 &&
-        index < views.length;
-      if (bareNavigation || modifiedNavigation) {
+      const navigation =
+        !event.altKey && !event.shiftKey && index >= 0 && index < views.length;
+      if (navigation) {
         event.preventDefault();
         setView(views[index]);
         main.current?.focus();
@@ -251,13 +247,11 @@ export function Dashboard({
         event.preventDefault();
         if (data.focus.state) void run({ kind: 'stop_timer' });
         else {
-          const sleep = getSleepView(data.sleep, new Date(), data.settings);
           if (
-            !sleep.asleep &&
-            sleep.leftMinutes > 0 &&
-            sleep.leftMinutes <= data.settings.sleep.noPhoneMinutes &&
-            !(await confirm(
-              'It is no-phone time. Start a focus session anyway?'
+            !(await confirmFocusStart(
+              getSleepView(data.sleep, new Date(), data.settings),
+              data.settings.sleep.noPhoneMinutes,
+              confirm
             ))
           )
             return;
@@ -382,7 +376,7 @@ export function Dashboard({
               aria-label={`Switch to ${nextTheme} appearance`}
               title="Toggle day/night appearance"
               onClick={() => {
-                if (!snapshot || !client) return;
+                if (!snapshot) return;
                 void savePreferences({
                   ...snapshot.preferences,
                   themeMode: nextTheme
