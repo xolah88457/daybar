@@ -137,6 +137,10 @@ fn quiet_focus_start(s: &Snapshot, op: &Operation, now: DateTime<Local>) -> bool
     if !matches!(op, Operation::StartTimer { timer_type, .. } if timer_type == "focus") {
         return false;
     }
+    // With the Sleep module off there is no bedtime, so there is no no-phone time to confirm.
+    if !s.preferences.features.sleep {
+        return false;
+    }
     sleep::view(&s.sleep, &s.settings.sleep, now).is_ok_and(|v| {
         let left = (v.bed - now).num_seconds();
         !v.asleep && left > 0 && left <= i64::from(s.settings.sleep.no_phone_minutes) * 60
@@ -548,6 +552,27 @@ fn watch(root: &std::path::Path, tx: Sender<Signal>) -> Result<RecommendedWatche
 }
 pub fn start(app: AppHandle, store: Store) -> Result<Backend> {
     let store = Arc::new(store);
+    // Focus extras: run the user's Shortcuts on every committed focus start/end (any path), and
+    // keep the away-detection state the scheduler thread updates.
+    let report: features::shortcuts::Report = {
+        let (app, store) = (app.clone(), Arc::downgrade(&store));
+        Arc::new(move |failure| {
+            let Some(store) = store.upgrade() else { return };
+            match failure {
+                Some(message) => error(&app, &store, "shortcuts", message),
+                None => {
+                    store.report("shortcuts", None);
+                    let _ = app.emit("daybar://changed", ());
+                }
+            }
+        })
+    };
+    store.observe_focus(Box::new(move |change| {
+        features::shortcuts::on_focus_change(change, &|_, name| {
+            features::shortcuts::enqueue(name, &report)
+        })
+    }));
+    app.manage(features::away::AwayState::default());
     let (tx, rx) = mpsc::channel();
     let tray = TrayIconBuilder::with_id("daybar")
         .title("Daybar")
@@ -591,9 +616,16 @@ fn worker(
     let mut title = String::new();
     let mut refresh = true;
     let mut minute = -1;
+    let mut woken = None;
     loop {
         let now = Local::now();
         let mut expired = false;
+        // Auto-cycle: settle a due focus timer promptly even when its alert is off.
+        if snapshot.as_ref().is_some_and(|s| {
+            features::autocycle::wants_refresh(s, now.timestamp_millis(), &mut woken)
+        }) {
+            refresh = true;
+        }
         let latest = if pending.iter().any(|a| a.at <= now.timestamp_millis()) {
             store.inspect().ok()
         } else {
@@ -606,11 +638,25 @@ fn worker(
                 .is_some_and(|(latest, scheduled)| alert_current(alert, latest, scheduled, now));
             expired = true;
             if current && fired.insert(alert.id.clone()) {
+                // Auto-cycle: settle the finished timer and start the break first, so this
+                // notification can say so. Idempotent: the refresh below finds it already started.
+                let mut body = alert.body.clone();
+                if alert.id.starts_with("timer:")
+                    && latest
+                        .as_ref()
+                        .is_some_and(|l| l.preferences.features.active("autoCycle"))
+                {
+                    match features::autocycle::settle_and_run(&store, now.timestamp_millis()) {
+                        Ok(Some(minutes)) => body = features::autocycle::started_body(minutes),
+                        Ok(None) => (),
+                        Err(e) => error(&app, &store, "auto-cycle", e),
+                    }
+                }
                 if let Err(e) = app
                     .notification()
                     .builder()
                     .title(alert.title.clone())
-                    .body(alert.body.clone())
+                    .body(body)
                     .show()
                 {
                     error(&app, &store, "notifications", e.to_string());
@@ -619,6 +665,7 @@ fn worker(
         }
         pending.retain(|a| a.at > now.timestamp_millis());
         let current_minute = now.timestamp_millis() / 60_000;
+        let mut cycled = false;
         if refresh || expired || current_minute != minute {
             match store.root() {
                 Ok(next) if next != root || watcher.is_none() => {
@@ -659,6 +706,11 @@ fn worker(
                         .into_iter()
                         .filter(|a| !fired.contains(&a.id))
                         .collect();
+                    // Auto-cycle: right after settlement, start the break the saved state calls for.
+                    match features::autocycle::run(&store, &s, now.timestamp_millis()) {
+                        Ok(started) => cycled = started.is_some(),
+                        Err(e) => error(&app, &store, "auto-cycle", e),
+                    }
                     snapshot = Some(s);
                 }
                 Err(e) => error(&app, &store, "snapshot", e),
@@ -666,10 +718,12 @@ fn worker(
             if refresh || expired {
                 let _ = app.emit("daybar://changed", ());
             }
-            refresh = false;
+            refresh = cycled;
             minute = current_minute;
         }
         if let Some(s) = &snapshot {
+            // Away detection reads the idle time only while a focus timer runs (every ~30 s).
+            features::away::poll(&app, s, now.timestamp_millis());
             let next = tray_title(s, now);
             if next != title {
                 if let Err(e) = tray.set_title(Some(&next)) {
@@ -1018,6 +1072,29 @@ mod tests {
         ));
         s.preferences.features.focus = false;
         assert!(toggle_focus_operation(&s).is_none());
+    }
+    #[test]
+    fn no_phone_confirmation_is_skipped_when_the_sleep_module_is_off() {
+        use chrono::TimeZone;
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 23, 30, 0)
+            .single()
+            .unwrap();
+        let mut s = snapshot(TrayDisplay::Auto);
+        let focus_start = Operation::StartTimer {
+            timer_type: "focus".into(),
+            minutes: 25,
+            task: None,
+        };
+        // Bed is 5 minutes away: with the Sleep module on this is no-phone time.
+        s.sleep.plan = Some(SleepPlan {
+            start: "2026-11-15".into(),
+            wake: 8 * 60,
+            bed: 23 * 60 + 35,
+        });
+        assert!(quiet_focus_start(&s, &focus_start, now));
+        s.preferences.features.sleep = false;
+        assert!(!quiet_focus_start(&s, &focus_start, now));
     }
     #[test]
     fn watcher_observes_phone_edit() {

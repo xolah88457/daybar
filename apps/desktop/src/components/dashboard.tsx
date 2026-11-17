@@ -258,7 +258,8 @@ export function Dashboard({
             !(await confirmFocusStart(
               getSleepView(data.sleep, new Date(), data.settings),
               data.settings.sleep.noPhoneMinutes,
-              confirm
+              confirm,
+              data.preferences.features.sleep
             ))
           )
             return;

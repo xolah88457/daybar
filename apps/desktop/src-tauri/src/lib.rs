@@ -91,11 +91,12 @@ pub fn run() {
             //
             // features::export::export_history,
             //
-            // features::shortcuts::run_focus_shortcut,
+            features::shortcuts::run_focus_shortcut,
             //
             // features::radar::radar_snapshot,
             //
-            // features::away::idle_seconds,
+            features::away::away_status,
+            features::away::away_dismiss,
         ])
         .setup(|app| {
             let sandbox = if cfg!(debug_assertions) {
