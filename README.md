@@ -26,14 +26,36 @@ These downloads need no Node/Rust installation. macOS will not recognise the dev
 
 ## Everyday controls
 
-- Press **1–6** to switch modules; typing, composition and open dialogs are protected.
+- Press the number keys to switch screens; the numbers follow the sidebar, so they shift when you turn modules or features on or off. Typing, composition and open dialogs are protected.
 - Use the header **Day/Night** button, or **Settings → On this Mac → Appearance → Auto** to follow macOS. Set macOS itself to Auto for scheduled day/night changes; Daybar requests no location.
-- Choose **Settings → On this Mac → Menu-bar label**, then **Save Mac preferences**: Auto, focus minutes/hours/blocks, active timer, bedtime, next task or countdown days only. Focus totals are today's credited work; explicit modes stay selected even during a timer.
+- Choose **Settings → On this Mac → Menu-bar label**, then **Save Mac preferences**: Auto, focus minutes/hours/blocks, active timer, bedtime, next task, countdown days only or, with Deadline Radar on, next deadline. Focus totals are today's credited work; explicit modes stay selected even during a timer.
 - Landscape Today is compact; portrait stacks the cards. Small windows and long forms scroll rather than hide controls.
+
+## Optional features
+
+**Settings → Features** has a switch for each module and feature. The switches are stored only on this Mac (`preferences.json`); the settings file shared with the phone is never changed. Countdown, Habits, Focus and Sleep start on; turning one off hides its screen, Today card, menu-bar label and alerts, and keeps its data. Everything below starts **off**, so updating changes nothing until you opt in.
+
+| Group | Feature | What it does |
+| --- | --- | --- |
+| Deadline Radar | Deadline Radar | Calendar events and reminders with due dates, colored by urgency like the phone widget. Own screen, Today card, optional "next deadline" menu-bar label and a daily "Due tomorrow" alert. Asks for Calendars/Reminders access only when you turn it on. |
+| | Room before next event | "Room for ~N focus blocks before Design review at 12:15", from your next timed event today. Needs Deadline Radar. |
+| Time awareness | Hourly chime | A notification on the hour, outside quiet hours. |
+| | Check-ins | "Plan your day" in the morning; "N tasks left" in the evening (skipped when you're done). |
+| | Streak saver | One alert before bed if today's habits would break your streak. |
+| | Movement nudges | "Stand up and stretch" every N minutes in your active hours, skipped during focus. |
+| Focus | Auto-cycle | When a focus session runs to the end, the break starts by itself; a long break every Nth session. |
+| | Run a Shortcut | Runs a macOS Shortcut you name when focus starts and ends, e.g. to turn on Do Not Disturb. |
+| | Away detection | If the Mac sits idle during focus, asks "Still focusing?" and offers to stop the timer. |
+| Review & extras | Weekly insights | Focus, habits and sleep this week vs last week, built from data you already have. |
+| | Export history | Saves focus, habit and sleep history as CSV or JSON to Downloads. Never changes your data. |
+| | Command palette | ⌘K to jump to a screen, start or stop focus, tick off a task or log wake/bed. |
+| | Extra countdowns | More countdowns on Today. Mac only; the phone keeps the main countdown. |
+
+Alerts only fire while Daybar is running, like every other Daybar notification. None of these features use the network.
 
 ## From Scriptable widgets to a desktop app
 
-The starting point was five separate Scriptable home-screen tools: Days Left, Daily Log, Focus Timer, Time Blindness + Sleep, and Deadline Radar. Four modules are integrated on Mac; Deadline Radar remains a phone-only calendar/reminders widget until a future Mac release. Today combines time until bed, focus controls, today's checklist, focus blocks and the countdown grid. Original scripts remain untouched in [`legacy/`](legacy/).
+The starting point was five separate Scriptable home-screen tools: Days Left, Daily Log, Focus Timer, Time Blindness + Sleep, and Deadline Radar. All five are on Mac: Deadline Radar is an optional feature that reads Calendar and Reminders on the Mac itself (the phone widget keeps reading the phone's own calendars). Today combines time until bed, focus controls, today's checklist, focus blocks and the countdown grid. Original scripts remain untouched in [`legacy/`](legacy/).
 
 ## iPhone Scriptable widgets
 
@@ -53,7 +75,7 @@ flowchart TD
   IPC --> Rust[Tauri Rust: DataStore / scheduler / tray / preferences]
   Rust <--> Files[Sandbox JSON by default / explicitly selected iCloud JSON]
   Phone[iPhone Scriptable widgets] <--> Files
-  Radar[Future: Deadline Radar via Swift EventKit helper] -.-> Rust
+  Rust <--> EventKit[Calendar + Reminders via EventKit, only with Deadline Radar on]
 ```
 
 Next.js is statically exported into Tauri's WKWebView: no SSR, server actions or runtime server. The frontend never accesses the filesystem directly. Rust owns validation, atomic file writes and OS integration; `packages/core` owns deterministic calculations. Browser development uses an in-memory IPC preview, not live shared files. Details: [architecture](docs/ARCHITECTURE.md), [calculation conventions](docs/CORE_API.md), [data formats](docs/DATA_FORMATS.md), [decisions](docs/DECISIONS.md).
@@ -123,8 +145,6 @@ Sandbox acceptance on fictional data covered the tray, external-file refresh, fo
 ## Roadmap
 
 - Owner acceptance: real phone/iCloud setup, pending native/OS checks and a tag-built release; see [what is not established](docs/RELEASE.md#not-established).
-- **Deadline Radar:** intentionally out of v1; navigation/module seam for a small **Swift EventKit helper** to read calendar events and reminders with explicit permissions.
-- Insights relating sleep consistency, focus and habits (stretch).
 - Bundle the tested core for Scriptable `importModule()` reuse (stretch).
 
 ## License
