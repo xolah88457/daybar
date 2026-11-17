@@ -29,6 +29,15 @@ export type FeatureViewProps = Actions & {
 };
 /** Props for a card a feature contributes to the Today view. */
 export type FeatureCardProps = Actions;
+/**
+ * Props for a feature's `Overlay`: UI the dashboard renders once at the shell level (outside any
+ * view) while the feature is on, such as a command palette or a global dialog.
+ */
+export type FeatureOverlayProps = Actions & {
+  /** Switch to a view by id (any `id` from `visibleViews(features)`) and move focus to the page. */
+  navigate: (viewId: string) => void;
+  savePreferences: (preferences: Preferences) => Promise<boolean>;
+};
 
 /**
  * What `src/features/<id>.tsx` may export. The registry picks these up by name, so a feature agent
@@ -38,6 +47,8 @@ export type FeatureModule<K extends FeatureId = FeatureId> = {
   Config?: K extends ConfigFeatureId ? ComponentType<FeatureConfigProps<K>> : never;
   View?: ComponentType<FeatureViewProps>;
   TodayCard?: ComponentType<FeatureCardProps>;
+  /** Rendered at the app-shell level while the feature is on; see `FeatureOverlayProps`. */
+  Overlay?: ComponentType<FeatureOverlayProps>;
 };
 
 /** Sidebar metadata for a feature that owns a view. The view appears only once `View` is exported. */
@@ -63,4 +74,5 @@ export interface FeatureDef {
   Config?: ComponentType<FeatureConfigProps>;
   View?: ComponentType<FeatureViewProps>;
   TodayCard?: ComponentType<FeatureCardProps>;
+  Overlay?: ComponentType<FeatureOverlayProps>;
 }
