@@ -1,0 +1,44 @@
+/* Export history Config. Theme variables only. */
+.help {
+  margin: 0 0 12px;
+  font-size: 10px;
+  line-height: 1.8;
+  color: var(--muted);
+  max-width: 640px;
+}
+.help code {
+  font: inherit;
+  color: var(--text);
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.result {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border: 1px solid var(--green);
+  border-radius: 5px;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.result strong {
+  font-weight: normal;
+  color: var(--green);
+}
+.path {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  user-select: all;
+}
+.error {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border: 1px solid var(--red);
+  border-radius: 5px;
+  font-size: 10px;
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
