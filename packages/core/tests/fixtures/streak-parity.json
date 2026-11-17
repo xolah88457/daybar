@@ -1,0 +1,31 @@
+{
+  "comment": "currentStreak cases shared by the TypeScript getHabitStats test and the Rust streak saver (apps/desktop/src-tauri/src/features/streak.rs). Keep both in step.",
+  "tasks": ["A", "B", "C"],
+  "cases": [
+    { "name": "no data", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 1, "log": {}, "currentStreak": 0 },
+    { "name": "unfinished today keeps yesterday's streak", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-12": ["A"], "2026-11-13": ["B"], "2026-11-14": ["C"] }, "currentStreak": 3 },
+    { "name": "finishing today extends it", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-12": ["A"], "2026-11-13": ["B"], "2026-11-14": ["C"], "2026-11-15": ["A"] }, "currentStreak": 4 },
+    { "name": "a missed day resets the run", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-10": ["A"], "2026-11-11": ["A"], "2026-11-13": ["A"], "2026-11-14": ["A"] }, "currentStreak": 2 },
+    { "name": "a missed yesterday means no streak", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-12": ["A"], "2026-11-13": ["A"] }, "currentStreak": 0 },
+    { "name": "two tasks needed per day", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 2,
+      "log": { "2026-11-13": ["A"], "2026-11-14": ["A", "B"] }, "currentStreak": 1 },
+    { "name": "repeated entries count like the TypeScript rule", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 2,
+      "log": { "2026-11-14": ["A", "A"] }, "currentStreak": 1 },
+    { "name": "unknown and archived tasks never count", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-14": ["Z"], "2026-11-13": ["A"] }, "currentStreak": 0 },
+    { "name": "before the start date", "today": "2026-11-15", "startDate": "2026-11-20", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-14": ["A"] }, "currentStreak": 0 },
+    { "name": "after the end date the run stops at the end", "today": "2026-11-15", "startDate": "2026-11-01", "endDate": "2026-11-10", "dayCompleteMin": 1,
+      "log": { "2026-11-08": ["A"], "2026-11-09": ["A"], "2026-11-10": ["A"] }, "currentStreak": 3 },
+    { "name": "first day, unfinished", "today": "2026-11-15", "startDate": "2026-11-15", "endDate": "", "dayCompleteMin": 1,
+      "log": {}, "currentStreak": 0 },
+    { "name": "first day, finished", "today": "2026-11-15", "startDate": "2026-11-15", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-15": ["C"] }, "currentStreak": 1 },
+    { "name": "days before the start are ignored", "today": "2026-11-15", "startDate": "2026-11-13", "endDate": "", "dayCompleteMin": 1,
+      "log": { "2026-11-11": ["A"], "2026-11-12": ["A"], "2026-11-13": ["A"], "2026-11-14": ["A"] }, "currentStreak": 2 }
+  ]
+}
