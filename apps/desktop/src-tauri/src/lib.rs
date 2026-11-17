@@ -93,7 +93,10 @@ pub fn run() {
             //
             // features::shortcuts::run_focus_shortcut,
             //
-            // features::radar::radar_snapshot,
+            features::radar::radar_status,
+            features::radar::radar_request_access,
+            features::radar::radar_calendars,
+            features::radar::radar_items,
             //
             // features::away::idle_seconds,
         ])

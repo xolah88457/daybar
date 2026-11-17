@@ -37,7 +37,8 @@
         "activeTimer",
         "bedtime",
         "nextTask",
-        "countdown"
+        "countdown",
+        "nextDeadline"
       ]
     },
     "features": {
