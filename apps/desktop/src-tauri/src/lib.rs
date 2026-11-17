@@ -1,4 +1,5 @@
 mod contracts;
+mod features;
 mod focus;
 mod runtime;
 mod sleep;
@@ -83,7 +84,22 @@ pub fn run() {
             get_snapshot,
             mutate,
             set_preferences,
-            resolve_conflict
+            resolve_conflict,
+            // Feature commands: each feature agent uncomments (or adds) ONLY its own line below.
+            // Lines are kept apart by comments so parallel edits merge cleanly. A command is a
+            // `#[tauri::command] pub async fn` in the feature's module under `features/`.
+            //
+            features::export::export_history,
+            //
+            features::shortcuts::run_focus_shortcut,
+            //
+            features::radar::radar_status,
+            features::radar::radar_request_access,
+            features::radar::radar_calendars,
+            features::radar::radar_items,
+            //
+            features::away::away_status,
+            features::away::away_dismiss,
         ])
         .setup(|app| {
             let sandbox = if cfg!(debug_assertions) {

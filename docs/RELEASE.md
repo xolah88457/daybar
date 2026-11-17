@@ -86,6 +86,7 @@ Typing, composition and dialog guards for bare navigation keys were checked in a
 - The native conflict notice/merge/discard walkthrough (Rust merge/discard logic is unit-tested). No promise of automatic recovery for interrupted Scriptable writes.
 - Developer ID signing/notarization, a Mac opening a downloaded ad-hoc signed build, Intel/universal builds, older macOS, a tag-built artifact download, and a real in-app update from one published release to the next.
 - An owner-supplied iPhone screenshot ([media notes](screenshots/README.md)).
+- For the 0.3.0 optional features, everything that needs a real Mac: the Calendars/Reminders permission prompts (macOS 14+ and 12.3–13) and whether macOS asks again after an update; real calendar data in Deadline Radar; notification delivery and the chime sound; running a named Shortcut; idle detection; Finder reveal after export; ⌘K inside the native window. These are covered by unit tests and a macOS type-check only.
 
 To check any of these yourself, do it in a disposable sandbox (`pnpm seed`, then `pnpm tauri dev`): confirm the **SANDBOX DATA** badge, exercise one case at a time, and compare the managed JSON files before and after.
 

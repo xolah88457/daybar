@@ -1,4 +1,4 @@
-import { defaultSettings } from '@daybar/core/contracts';
+import { defaultFeatures, defaultSettings } from '@daybar/core/contracts';
 import type { Snapshot } from '@daybar/core/contracts';
 
 export function fixture(): Snapshot {
@@ -14,7 +14,8 @@ export function fixture(): Snapshot {
       hideDock: false,
       globalShortcut: '',
       themeMode: 'night',
-      trayDisplay: 'auto'
+      trayDisplay: 'auto',
+      features: structuredClone(defaultFeatures)
     },
     issues: [],
     conflicts: []

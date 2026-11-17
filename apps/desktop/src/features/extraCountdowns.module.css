@@ -1,0 +1,124 @@
+/* Extra countdowns: Config list editor and Today card. Theme variables only. */
+.help {
+  margin: 0 0 12px;
+  font-size: 10px;
+  line-height: 1.8;
+  color: var(--muted);
+  max-width: 640px;
+}
+.list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(140px, 2fr) minmax(130px, 1fr) minmax(130px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.row[data-invalid='true'] {
+  border-color: var(--red);
+}
+.field {
+  display: grid;
+  gap: 3px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 0;
+}
+.field input {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  color: var(--text);
+  width: 100%;
+}
+.tools {
+  display: flex;
+  gap: 4px;
+}
+.tools button {
+  padding: 8px 10px;
+  min-width: 34px;
+}
+.error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10px;
+  color: var(--red);
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.count {
+  font-size: 9px;
+  color: var(--muted);
+}
+.status {
+  margin: 8px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.card {
+  display: grid;
+  gap: 18px;
+}
+.item {
+  display: grid;
+  gap: 7px;
+}
+.itemHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.itemTitle {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.left {
+  flex: none;
+  font-size: 18px;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+}
+.left small {
+  margin-left: 5px;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 9px;
+  color: var(--muted);
+}
+.empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+@media (max-width: 800px) {
+  .row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .row > :first-child {
+    grid-column: 1 / -1;
+  }
+}

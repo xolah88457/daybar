@@ -1,0 +1,125 @@
+/* Command palette: only theme variables from globals.css, so it follows day and night. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--background) 62%, transparent);
+}
+.palette {
+  position: fixed;
+  z-index: 41;
+  top: 14vh;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(520px, 72vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+.palette:not([open]) {
+  display: none;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.glyph {
+  color: var(--muted);
+  font-size: 14px;
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  padding: 8px 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+.input:focus-visible {
+  outline: none;
+}
+.top:focus-within {
+  box-shadow: inset 0 -2px 0 var(--green);
+}
+.close {
+  padding: 3px 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  flex: 1;
+}
+.option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.option[aria-selected='true'] {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  box-shadow: inset 2px 0 0 var(--green);
+}
+.option[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.meta {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.empty {
+  padding: 22px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+.footer {
+  display: flex;
+  gap: 14px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 9px;
+  color: var(--muted);
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.note {
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted);
+}

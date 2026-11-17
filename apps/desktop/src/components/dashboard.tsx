@@ -1,5 +1,6 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { defaultFeatures } from '@daybar/core/contracts';
 import { getSleepView } from '@daybar/core';
 import type {
   DaybarClient,
@@ -14,6 +15,7 @@ import { tauriClient } from '../lib/ipc';
 import { demoUpdater, tauriUpdater } from '../lib/updates';
 import type { UpdaterClient } from '../lib/updates';
 import {
+  type Actions,
   confirmFocusStart,
   Countdown,
   DayProgress,
@@ -21,27 +23,11 @@ import {
   Habits,
   Sleep
 } from './modules';
+import { featureOverlays, todayCards } from '../features/registry';
+import { todayView, visibleViews } from '../features/views';
 import { theme, layoutTheme, dayProjectedSettings } from './primitives';
 import { SettingsPanel } from './settings';
 
-const views = [
-  'Today',
-  'Countdown',
-  'Habits',
-  'Focus',
-  'Sleep',
-  'Settings'
-] as const;
-type View = (typeof views)[number];
-const symbols = ['◫', '▦', '✓', '◷', '☾', '⚙'];
-const descriptions: Record<View, string> = {
-  Today: 'A little more room in your day.',
-  Countdown: 'The big picture, one square at a time.',
-  Habits: 'Small things. Done consistently.',
-  Focus: 'Give one thing your full attention.',
-  Sleep: 'Find a rhythm you can return to.',
-  Settings: 'Your rhythm. Your rules.'
-};
 function message(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -61,7 +47,7 @@ export function Dashboard({
   const [updater, setUpdater] = useState<UpdaterClient | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [now, setNow] = useState<Date | null>(null);
-  const [view, setView] = useState<View>('Today');
+  const [viewId, setViewId] = useState<string>(todayView.id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -74,6 +60,19 @@ export function Dashboard({
   const request = useRef(0);
   const settled = useRef<number | null>(null);
   const main = useRef<HTMLElement>(null);
+  const features = snapshot?.preferences.features ?? defaultFeatures;
+  const views = useMemo(() => visibleViews(features), [features]);
+  // Number keys and the sidebar follow the visible views; a hidden view falls back to Today.
+  const activeView = views.find((v) => v.id === viewId) ?? views[0];
+  const view = activeView.id;
+  const overlays = useMemo(() => featureOverlays(features), [features]);
+  const viewsRef = useRef(views);
+  viewsRef.current = views;
+  const focusEnabled = useRef(features.focus);
+  focusEnabled.current = features.focus;
+  useEffect(() => {
+    if (activeView.id !== viewId) setViewId(activeView.id);
+  }, [activeView.id, viewId]);
   useEffect(() => {
     const browser = !('__TAURI_INTERNALS__' in window);
     setDemo(!suppliedClient && browser);
@@ -235,11 +234,12 @@ export function Dashboard({
       )
         return;
       const index = Number(event.key) - 1;
+      const visible = viewsRef.current;
       const navigation =
-        !event.altKey && !event.shiftKey && index >= 0 && index < views.length;
+        !event.altKey && !event.shiftKey && index >= 0 && index < visible.length;
       if (navigation) {
         event.preventDefault();
-        setView(views[index]);
+        setViewId(visible[index].id);
         main.current?.focus();
       }
       if (
@@ -250,6 +250,8 @@ export function Dashboard({
       ) {
         const data = current.current;
         if (!data || working.current || data.issues.length) return;
+        // Focus is switched off: the shortcut does nothing.
+        if (!focusEnabled.current) return;
         event.preventDefault();
         if (data.focus.state) void run({ kind: 'stop_timer' });
         else {
@@ -257,7 +259,8 @@ export function Dashboard({
             !(await confirmFocusStart(
               getSleepView(data.sleep, new Date(), data.settings),
               data.settings.sleep.noPhoneMinutes,
-              confirm
+              confirm,
+              data.preferences.features.sleep
             ))
           )
             return;
@@ -272,8 +275,8 @@ export function Dashboard({
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
   }, [run, confirm]);
-  const navigate = (next: View) => {
-    setView(next);
+  const navigate = (next: string) => {
+    setViewId(next);
     main.current?.focus();
   };
   const actions =
@@ -327,24 +330,17 @@ export function Dashboard({
           </span>
         </div>
         <nav aria-label="Modules">
-          {views.map((name, i) => (
+          {views.map((v, i) => (
             <button
-              key={name}
-              aria-current={view === name ? 'page' : undefined}
-              onClick={() => navigate(name)}
+              key={v.id}
+              aria-current={view === v.id ? 'page' : undefined}
+              onClick={() => navigate(v.id)}
             >
-              <span aria-hidden="true">{symbols[i]}</span>
-              {name}
+              <span aria-hidden="true">{v.symbol}</span>
+              {v.label}
               <kbd>{i + 1}</kbd>
             </button>
           ))}
-          <button
-            className="radar"
-            disabled
-            title="Coming later via a native EventKit helper"
-          >
-            <span aria-hidden="true">⌖</span>Deadline Radar<small>SOON</small>
-          </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="connection">
@@ -370,10 +366,10 @@ export function Dashboard({
           <div>
             <p className="eyebrow">
               YOUR TIME, MADE VISIBLE{' '}
-              <span>/ {String(views.indexOf(view) + 1).padStart(2, '0')}</span>
+              <span>/ {String(views.indexOf(activeView) + 1).padStart(2, '0')}</span>
             </p>
-            <h1>{view === 'Today' ? 'Here & now.' : view}</h1>
-            <p className="page-description">{descriptions[view]}</p>
+            <h1>{view === 'Today' ? 'Here & now.' : activeView.label}</h1>
+            <p className="page-description">{activeView.description}</p>
           </div>
           <div className="head-actions">
             <button
@@ -512,22 +508,7 @@ export function Dashboard({
           </div>
         ) : (
           <>
-            {view === 'Today' && (
-              <div className="dashboard-grid">
-                <div className="today-progress">
-                  <DayProgress {...moduleActions} />
-                </div>
-                <div className="today-focus">
-                  <Focus {...moduleActions} />
-                </div>
-                <div className="today-habits">
-                  <Habits {...moduleActions} compact />
-                </div>
-                <div className="today-countdown">
-                  <Countdown {...moduleActions} />
-                </div>
-              </div>
-            )}
+            {view === 'Today' && <Today {...moduleActions} />}
             {view === 'Countdown' && <Countdown {...moduleActions} />}
             {view === 'Habits' && <Habits {...moduleActions} />}
             {view === 'Focus' && (
@@ -539,6 +520,12 @@ export function Dashboard({
               <div className="stack">
                 <Sleep {...moduleActions} />
               </div>
+            )}
+            {activeView.View && (
+              <activeView.View
+                {...moduleActions}
+                savePreferences={savePreferences}
+              />
             )}
             {view === 'Settings' && updater && (
               <div className="stack">
@@ -566,6 +553,61 @@ export function Dashboard({
           </span>
         </footer>
       </main>
+      {/* Shell-level overlays contributed by enabled features (see features/registry.ts). */}
+      {actions &&
+        overlays.map(({ id, Overlay }) => (
+          <Overlay
+            key={id}
+            {...actions}
+            navigate={navigate}
+            savePreferences={savePreferences}
+          />
+        ))}
+    </div>
+  );
+}
+
+// Today's cards: the built-in modules that are on, then cards contributed by enabled features.
+function Today(actions: Actions) {
+  const features = actions.snapshot.preferences.features;
+  const extra = todayCards(features);
+  const anyModule =
+    features.sleep || features.focus || features.habits || features.countdown;
+  const allModules =
+    features.sleep && features.focus && features.habits && features.countdown;
+  return (
+    <div className={`dashboard-grid${!allModules || extra.length ? ' flow' : ''}`}>
+      {features.sleep && (
+        <div className="today-progress">
+          <DayProgress {...actions} />
+        </div>
+      )}
+      {features.focus && (
+        <div className="today-focus">
+          <Focus {...actions} />
+        </div>
+      )}
+      {features.habits && (
+        <div className="today-habits">
+          <Habits {...actions} compact />
+        </div>
+      )}
+      {features.countdown && (
+        <div className="today-countdown">
+          <Countdown {...actions} />
+        </div>
+      )}
+      {extra.map(({ id, Card }) => (
+        <div className="today-card" data-feature={id} key={id}>
+          <Card {...actions} />
+        </div>
+      ))}
+      {!anyModule && extra.length === 0 && (
+        <p className="muted today-empty">
+          Every module is switched off. Turn some back on in Settings → Features;
+          your data is kept.
+        </p>
+      )}
     </div>
   );
 }

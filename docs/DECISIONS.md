@@ -25,3 +25,9 @@ The HTML `<dialog>` confirmation helper requires macOS 12.3+ in the target WKWeb
 
 ## 009 — Mac-local appearance and tray preferences (2026-11-15)
 Keep `themeMode` (`day|night|auto`, missing defaults to night) and `trayDisplay` (strict eight-value enum, missing defaults to auto) in the separate native preferences contract, not shared `daybar-settings.json` or phone settings. Auto appearance follows macOS's configured light/dark schedule without Daybar location access. Tray Auto preserves timer-first then bedtime; explicit choices stay selected. Validation, types and Rust serde reject unknown values.
+
+## 010 — Feature switches are Mac-local and default off (2026-11-17)
+Module and feature switches, and each feature's settings, live in `preferences.features` in the Mac-only preferences file, never in shared `daybar-settings.json`, which the iPhone scripts validate strictly. Existing modules default on and every new feature defaults off, so an update changes nothing until the user opts in. Turning a module off hides it and silences its alerts but never modifies data. A missing `features` key loads as defaults on both the TypeScript and Rust sides.
+
+## 011 — Deadline Radar reads EventKit from Rust (2026-11-17)
+Instead of the planned Swift helper, Rust calls EventKit directly through the `objc2-event-kit` bindings, behind typed commands, so the frontend still gets no calendar or filesystem access of its own. Access is requested only when the user turns Radar on (macOS 14+ full-access APIs, the older request API on 12.3–13). The bundle carries usage strings in `Info.plist` and the calendars entitlement required under the hardened runtime. Because builds are ad-hoc signed, macOS may treat each update as a new app and ask for access again. Radar alerts and the "next deadline" label read an in-process cache that refreshes on a timer and on demand.

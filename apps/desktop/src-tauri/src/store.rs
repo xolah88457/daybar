@@ -16,7 +16,7 @@ use std::{
     path::{Component, Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Mutex,
+        Mutex, OnceLock,
     },
 };
 
@@ -202,10 +202,21 @@ fn union_log(a: &mut DailyLog, b: DailyLog) {
     }
 }
 
+/// A focus.json change that was just committed (by a mutation or by the settle-on-read recovery).
+/// Reported once per commit, so a ledger entry is seen exactly once even if settlement is retried.
+pub struct FocusChange<'a> {
+    pub before: &'a FocusData,
+    pub after: &'a FocusData,
+    pub preferences: &'a Preferences,
+}
+/// Runs while the store mutex is held: it must only enqueue work and never call back into the Store.
+pub type FocusObserver = Box<dyn Fn(&FocusChange) + Send + Sync>;
+
 pub struct Store {
     inner: Mutex<Inner>,
     sandbox: PathBuf,
     preference_file: Option<PathBuf>,
+    focus_observer: OnceLock<FocusObserver>,
 }
 struct Inner {
     prefs: Preferences,
@@ -224,6 +235,7 @@ impl Store {
             global_shortcut: "CommandOrControl+Shift+F".into(),
             theme_mode: ThemeMode::Night,
             tray_display: TrayDisplay::Auto,
+            features: Features::default(),
         };
         if let Some(path) = &preference_file {
             if let Some(raw) = bytes(path)? {
@@ -252,9 +264,23 @@ impl Store {
             }),
             sandbox,
             preference_file,
+            focus_observer: OnceLock::new(),
         };
         store.seed()?;
         Ok(store)
+    }
+    /// Registers the single observer told about every committed focus change (features::shortcuts).
+    pub fn observe_focus(&self, observer: FocusObserver) {
+        let _ = self.focus_observer.set(observer);
+    }
+    fn notify_focus(&self, state: &Inner, before: &FocusData, after: &FocusData) {
+        if let Some(observer) = self.focus_observer.get().filter(|_| !same(before, after)) {
+            observer(&FocusChange {
+                before,
+                after,
+                preferences: &state.prefs,
+            });
+        }
     }
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Inner>> {
         self.inner
@@ -585,7 +611,9 @@ impl Store {
                 encode(&snap.daily_log)?,
             );
         }
-        self.commit(state, files, updates)
+        self.commit(state, files, updates)?;
+        self.notify_focus(state, &before, &snap.focus);
+        Ok(())
     }
     pub fn inspect(&self) -> Result<Snapshot> {
         let state = self.lock()?;
@@ -783,6 +811,7 @@ impl Store {
             updates.insert(log_file, encode(&snap.daily_log)?);
         }
         self.commit(&mut state, &files, updates)?;
+        self.notify_focus(&state, &old_focus, &snap.focus);
         Ok(MutationResult {
             snapshot: snap,
             credited_minutes: credit,

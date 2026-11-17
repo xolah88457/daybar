@@ -21,6 +21,7 @@ import {
   wrap
 } from '@daybar/core';
 import type { Operation, Snapshot } from '@daybar/core/contracts';
+import { AwayBanner } from '../features/awayDetection';
 import {
   Blocks,
   clock,
@@ -40,12 +41,15 @@ export type Actions = {
   confirm: (message: string) => Promise<boolean>;
 };
 // True unless it is no-phone time and the user declines to start a focus session anyway.
+// With the Sleep module off there is no bedtime, so there is nothing to confirm.
 export async function confirmFocusStart(
   view: ReturnType<typeof getSleepView>,
   noPhoneMinutes: number,
-  confirm: Actions['confirm']
+  confirm: Actions['confirm'],
+  sleepEnabled = true
 ) {
   return !(
+    sleepEnabled &&
     !view.asleep &&
     view.leftMinutes > 0 &&
     view.leftMinutes <= noPhoneMinutes &&
@@ -304,7 +308,12 @@ export function Focus(props: Actions) {
   const start = async (timerType: 'focus' | 'break', minutes: number) => {
     if (
       timerType === 'focus' &&
-      !(await confirmFocusStart(view, s.sleep.noPhoneMinutes, confirm))
+      !(await confirmFocusStart(
+        view,
+        s.sleep.noPhoneMinutes,
+        confirm,
+        snapshot.preferences.features.sleep
+      ))
     )
       return;
     void run({
@@ -344,6 +353,7 @@ export function Focus(props: Actions) {
         </span>
       }
     >
+      <AwayBanner {...props} />
       <TimerDisplay
         state={state}
         now={now}

@@ -11,6 +11,7 @@ import {
 } from '@daybar/core';
 import {
   dateKeySchema,
+  defaultFeatures,
   defaultSettings,
   focusDataSchema,
   preferencesSchema,
@@ -50,7 +51,8 @@ function demoSnapshot(now = new Date()): Snapshot {
       hideDock: false,
       globalShortcut: 'CommandOrControl+Shift+F',
       themeMode: 'night',
-      trayDisplay: 'auto'
+      trayDisplay: 'auto',
+      features: structuredClone(defaultFeatures)
     },
     issues: [],
     conflicts: []

@@ -3,3 +3,7 @@ export { key, parseKey, startOfDay, addDays, daysBetween } from './dates';
 export * from './habits';
 export * from './focus';
 export * from './sleep';
+export * from './notify';
+export * from './features';
+export * from './radar';
+export * from './insights';
