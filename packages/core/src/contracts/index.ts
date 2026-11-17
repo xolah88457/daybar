@@ -121,7 +121,8 @@ const checkInsSchema = z.object({
 }).strict();
 const streakSaverSchema = z.object({ enabled: flag, minutesBeforeBed: z.number().int().min(0).max(720).default(90) }).strict();
 const autoCycleSchema = z.object({ enabled: flag, longBreakEvery: z.number().int().min(2).max(12).default(4) }).strict();
-const shortcutName = z.string().max(120).default('');
+// The native side refuses a NUL byte in a Shortcut name, so refuse it here too.
+const shortcutName = z.string().max(120).refine((v) => !v.includes('\u0000'), 'A Shortcut name cannot contain a NUL character').default('');
 const focusShortcutsSchema = z.object({ enabled: flag, onStart: shortcutName, onEnd: shortcutName }).strict();
 const awayDetectionSchema = z.object({ enabled: flag, idleMinutes: z.number().int().min(1).max(60).default(5) }).strict();
 const movementNudgesSchema = z.object({
