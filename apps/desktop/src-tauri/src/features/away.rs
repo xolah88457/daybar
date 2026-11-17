@@ -137,19 +137,20 @@ impl AwayState {
     }
 }
 
-/// The running focus timer to watch, if the feature is on.
-fn watched(s: &Snapshot) -> Option<&TimerState> {
+/// The running (not yet finished) focus timer to watch, if the feature is on. A timer whose `end` has
+/// passed but that has not been settled yet is no longer running, so it is not watched.
+fn watched(s: &Snapshot, now: i64) -> Option<&TimerState> {
     let f = &s.preferences.features;
     s.focus
         .state
         .as_ref()
-        .filter(|t| t.r#type == "focus" && f.focus && f.active(ID))
+        .filter(|t| t.r#type == "focus" && t.end > now && f.active(ID) && f.focus)
 }
 
 /// Called from the scheduler loop with the latest snapshot. Cheap unless a reading is due.
 pub fn poll(app: &AppHandle, s: &Snapshot, now: i64) {
     let state = app.state::<AwayState>();
-    let timer = watched(s);
+    let timer = watched(s, now);
     let threshold = f64::from(s.preferences.features.away_detection.idle_minutes) * 60.0;
     let tick = {
         let Ok(mut tracker) = state.tracker.lock() else {
@@ -303,14 +304,19 @@ mod tests {
             issues: vec![],
             conflicts: vec![],
         };
+        let now = T + 60_000;
         assert!(
-            watched(&snap(&preferences, "focus")).is_none(),
+            watched(&snap(&preferences, "focus"), now).is_none(),
             "feature off"
         );
         preferences.features.away_detection.enabled = true;
-        assert!(watched(&snap(&preferences, "focus")).is_some());
-        assert!(watched(&snap(&preferences, "break")).is_none());
+        assert!(watched(&snap(&preferences, "focus"), now).is_some());
+        assert!(watched(&snap(&preferences, "break"), now).is_none());
+        // A finished but unsettled timer is no longer running.
+        assert!(watched(&snap(&preferences, "focus"), T + 1_500_000 - 1).is_some());
+        assert!(watched(&snap(&preferences, "focus"), T + 1_500_000).is_none());
+        assert!(watched(&snap(&preferences, "focus"), T + 9_000_000).is_none());
         preferences.features.focus = false;
-        assert!(watched(&snap(&preferences, "focus")).is_none());
+        assert!(watched(&snap(&preferences, "focus"), now).is_none());
     }
 }

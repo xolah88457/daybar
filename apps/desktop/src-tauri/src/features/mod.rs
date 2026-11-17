@@ -79,6 +79,34 @@ pub fn is_current(alert: &Alert, latest: &Snapshot) -> bool {
         .any(|a| a.id == alert.id && a.at == alert.at)
 }
 
+/// How late (ms) a feature alert may still be shown. The scheduler fires every due alert in one pass,
+/// so after the Mac wakes from sleep each missed chime, nudge and check-in would otherwise appear at
+/// once; an alert later than this is dropped silently instead. Radar "due" alerts stay useful for
+/// hours (the event is still ahead), everything else is about "now" and is stale after two minutes.
+/// `None` for the Focus and Sleep kinds: they keep their existing behaviour.
+pub fn max_lateness_ms(alert: &Alert) -> Option<i64> {
+    match &alert.kind {
+        AlertKind::Feature { id, .. } if *id == radar::ID => Some(2 * 60 * 60_000),
+        AlertKind::Feature { .. } => Some(2 * 60_000),
+        AlertKind::Focus | AlertKind::Sleep => None,
+    }
+}
+
+/// Whether `alert` is too late to be worth showing at `now_ms` (epoch milliseconds).
+pub fn is_stale(alert: &Alert, now_ms: i64) -> bool {
+    max_lateness_ms(alert).is_some_and(|max| now_ms - alert.at > max)
+}
+
+/// Whether `alert` depends on the data files (settings, logs, focus, sleep) being readable. Such an
+/// alert is held back while any of those files has an issue. The chime, movement nudges and radar
+/// read none of them, so an unrelated broken or not-yet-downloaded file must not silence them.
+pub fn needs_clean_data(alert: &Alert) -> bool {
+    match &alert.kind {
+        AlertKind::Focus | AlertKind::Sleep => true,
+        AlertKind::Feature { id, .. } => *id == checkins::ID || *id == streak::ID,
+    }
+}
+
 type Contributor = fn(&Snapshot, DateTime<Local>) -> Vec<Alert>;
 /// Register an alert-producing feature here (one line each).
 fn contributors() -> [(&'static str, Contributor); 5] {
@@ -139,5 +167,50 @@ mod tests {
             ..alert
         };
         assert!(!is_current(&focus, &s));
+    }
+
+    fn alert(kind: AlertKind, at: i64) -> Alert {
+        Alert {
+            id: "x".into(),
+            at,
+            title: "t".into(),
+            body: "b".into(),
+            kind,
+        }
+    }
+    fn feature(id: &'static str) -> AlertKind {
+        AlertKind::Feature {
+            id,
+            key: String::new(),
+        }
+    }
+
+    #[test]
+    fn lateness_cutoffs_are_per_feature_and_leave_focus_and_sleep_alone() {
+        let at = 1_000_000_000_000;
+        for id in [chime::ID, nudges::ID, checkins::ID, streak::ID] {
+            let a = alert(feature(id), at);
+            assert!(!is_stale(&a, at + 120_000), "{id}: exactly 2 minutes is fine");
+            assert!(is_stale(&a, at + 120_001), "{id}");
+        }
+        let radar = alert(feature(radar::ID), at);
+        assert!(!is_stale(&radar, at + 7_200_000));
+        assert!(is_stale(&radar, at + 7_200_001));
+        for kind in [AlertKind::Focus, AlertKind::Sleep] {
+            assert!(!is_stale(&alert(kind, at), at + 100 * 3_600_000));
+        }
+    }
+
+    #[test]
+    fn only_alerts_that_read_data_files_wait_for_clean_data() {
+        for kind in [AlertKind::Focus, AlertKind::Sleep] {
+            assert!(needs_clean_data(&alert(kind, 0)));
+        }
+        for id in [checkins::ID, streak::ID] {
+            assert!(needs_clean_data(&alert(feature(id), 0)), "{id}");
+        }
+        for id in [chime::ID, nudges::ID, radar::ID] {
+            assert!(!needs_clean_data(&alert(feature(id), 0)), "{id}");
+        }
     }
 }

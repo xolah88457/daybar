@@ -302,16 +302,28 @@ pub async fn export_history(
     .map_err(|e| e.to_string())?
 }
 
+/// Refuses to export while a data file has a problem. `runtime:*` entries are the app's own
+/// transient errors (a failed notification or shortcut), not problems with the data, so they are
+/// ignored, like everywhere else issues are checked.
+fn check_data(snapshot: &Snapshot) -> Result<(), String> {
+    if snapshot
+        .issues
+        .iter()
+        .any(|i| !i.file.starts_with("runtime:"))
+    {
+        return Err(
+            "Some data files have problems. Resolve them in Daybar before exporting.".into(),
+        );
+    }
+    Ok(())
+}
+
 /// Everything after the read: gating, folder choice, writing and revealing.
 fn run(snapshot: &Snapshot, format: Format) -> Result<String, String> {
     if !snapshot.preferences.features.active(ID) {
         return Err("Export history is switched off in Settings → Features.".into());
     }
-    if !snapshot.issues.is_empty() {
-        return Err(
-            "Some data files have problems. Resolve them in Daybar before exporting.".into(),
-        );
-    }
+    check_data(snapshot)?;
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .filter(|h| !h.as_os_str().is_empty())
@@ -591,5 +603,30 @@ mod tests {
             message: "bad".into(),
         });
         assert!(run(&s, Format::Csv).unwrap_err().contains("problems"));
+    }
+
+    #[test]
+    fn runtime_issues_do_not_block_the_export_but_data_issues_still_do() {
+        let issue = |file: &str| crate::contracts::DataIssue {
+            file: file.into(),
+            message: "x".into(),
+        };
+        let mut s = snapshot();
+        assert!(check_data(&s).is_ok());
+        s.issues.push(issue("runtime:auto-cycle"));
+        s.issues.push(issue("runtime:notifications"));
+        assert!(check_data(&s).is_ok());
+        s.issues.push(issue("focus.json"));
+        assert!(check_data(&s).unwrap_err().contains("problems"));
+    }
+
+    #[test]
+    fn a_runtime_issue_from_the_store_does_not_block_the_export() {
+        let data = tempfile::tempdir().unwrap();
+        let store = Store::open(data.path().canonicalize().unwrap(), None).unwrap();
+        store.report("auto-cycle", Some("boom".into()));
+        let snap = store.inspect().unwrap();
+        assert!(snap.issues.iter().any(|i| i.file == "runtime:auto-cycle"));
+        assert!(check_data(&snap).is_ok());
     }
 }

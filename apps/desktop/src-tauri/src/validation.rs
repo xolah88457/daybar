@@ -475,4 +475,28 @@ mod tests {
         p.features.extra_countdowns.items[0].id = "x".repeat(41);
         assert!(p.validate().is_err());
     }
+    /// Zod's `.max(120)` counts UTF-16 code units: a 120-character non-ASCII name (several bytes
+    /// each) is valid, and an emoji counts as two units.
+    #[test]
+    fn feature_name_limits_count_characters_like_zod_not_bytes() {
+        let mut f = prefs().features;
+        let name = "é".repeat(120); // 240 bytes
+        f.focus_shortcuts.on_start = name.clone();
+        f.radar.calendars = vec![name.clone()];
+        f.radar.reminder_lists = vec!["日".repeat(120)];
+        f.radar.keywords = vec![name.clone()];
+        f.extra_countdowns.items = vec![ExtraCountdown {
+            id: "a".into(),
+            title: name,
+            start_date: "2026-01-01".into(),
+            end_date: "2026-02-01".into(),
+        }];
+        f.validate().unwrap();
+        f.focus_shortcuts.on_start = "é".repeat(121);
+        assert!(f.validate().is_err());
+        f.focus_shortcuts.on_start = "😀".repeat(61); // 122 UTF-16 units
+        assert!(f.validate().is_err());
+        f.focus_shortcuts.on_start = "😀".repeat(60); // 120 units
+        f.validate().unwrap();
+    }
 }
