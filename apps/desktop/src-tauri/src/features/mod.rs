@@ -21,6 +21,7 @@ use chrono::{DateTime, Local, TimeZone};
 pub mod autocycle;
 pub mod away;
 pub mod checkins;
+pub mod clock;
 pub mod chime;
 pub mod export;
 pub mod nudges;
@@ -110,15 +111,11 @@ mod tests {
     }
 
     #[test]
-    fn stubs_contribute_nothing_even_when_every_feature_is_on() {
+    fn stubs_contribute_nothing_even_when_radar_is_on() {
         let mut s = snapshot();
         let f = &mut s.preferences.features;
         f.radar.enabled = true;
         f.room_before_event.enabled = true;
-        f.hourly_chime.enabled = true;
-        f.check_ins.enabled = true;
-        f.streak_saver.enabled = true;
-        f.movement_nudges.enabled = true;
         assert!(alerts(&s, Local::now()).is_empty());
     }
 

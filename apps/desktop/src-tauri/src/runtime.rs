@@ -652,13 +652,16 @@ fn worker(
                         Err(e) => error(&app, &store, "auto-cycle", e),
                     }
                 }
-                if let Err(e) = app
+                let mut note = app
                     .notification()
                     .builder()
                     .title(alert.title.clone())
-                    .body(body)
-                    .show()
-                {
+                    .body(body);
+                // Only the hourly chime names a sound; every other alert stays as it was.
+                if let Some(sound) = features::chime::sound(alert) {
+                    note = note.sound(sound);
+                }
+                if let Err(e) = note.show() {
                     error(&app, &store, "notifications", e.to_string());
                 }
             }
