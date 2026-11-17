@@ -21,7 +21,8 @@ import type {
   FeatureDef,
   FeatureGroup,
   FeatureModule,
-  FeatureNav
+  FeatureNav,
+  FeatureOverlayProps
 } from './types';
 
 export const featureGroups: readonly FeatureGroup[] = [
@@ -48,7 +49,9 @@ function feature<K extends FeatureId>(
     isModule: (moduleFeatureIds as readonly string[]).includes(id),
     Config: module.Config as ComponentType<FeatureConfigProps> | undefined,
     View: module.View,
-    TodayCard: module.TodayCard
+    TodayCard: module.TodayCard,
+    // `in` (not a plain read) so a partial `vi.mock` of a feature file without `Overlay` still works.
+    Overlay: 'Overlay' in module ? module.Overlay : undefined
   };
 }
 
@@ -221,6 +224,17 @@ export function todayCards(
   return featureRegistry.flatMap((def) =>
     def.TodayCard && featureEnabled(features, def.id)
       ? [{ id: def.id, Card: def.TodayCard }]
+      : []
+  );
+}
+
+/** Shell-level overlays (e.g. the command palette) contributed by the features that are on. */
+export function featureOverlays(
+  features: Features
+): { id: FeatureId; Overlay: ComponentType<FeatureOverlayProps> }[] {
+  return featureRegistry.flatMap((def) =>
+    def.Overlay && featureEnabled(features, def.id)
+      ? [{ id: def.id, Overlay: def.Overlay }]
       : []
   );
 }

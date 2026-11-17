@@ -6,3 +6,4 @@ export * from './sleep';
 export * from './notify';
 export * from './features';
 export * from './radar';
+export * from './insights';

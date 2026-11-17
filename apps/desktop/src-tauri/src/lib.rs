@@ -89,7 +89,7 @@ pub fn run() {
             // Lines are kept apart by comments so parallel edits merge cleanly. A command is a
             // `#[tauri::command] pub async fn` in the feature's module under `features/`.
             //
-            // features::export::export_history,
+            features::export::export_history,
             //
             features::shortcuts::run_focus_shortcut,
             //

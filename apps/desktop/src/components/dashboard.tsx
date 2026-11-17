@@ -23,7 +23,7 @@ import {
   Habits,
   Sleep
 } from './modules';
-import { todayCards } from '../features/registry';
+import { featureOverlays, todayCards } from '../features/registry';
 import { todayView, visibleViews } from '../features/views';
 import { theme, layoutTheme, dayProjectedSettings } from './primitives';
 import { SettingsPanel } from './settings';
@@ -65,6 +65,7 @@ export function Dashboard({
   // Number keys and the sidebar follow the visible views; a hidden view falls back to Today.
   const activeView = views.find((v) => v.id === viewId) ?? views[0];
   const view = activeView.id;
+  const overlays = useMemo(() => featureOverlays(features), [features]);
   const viewsRef = useRef(views);
   viewsRef.current = views;
   const focusEnabled = useRef(features.focus);
@@ -552,6 +553,16 @@ export function Dashboard({
           </span>
         </footer>
       </main>
+      {/* Shell-level overlays contributed by enabled features (see features/registry.ts). */}
+      {actions &&
+        overlays.map(({ id, Overlay }) => (
+          <Overlay
+            key={id}
+            {...actions}
+            navigate={navigate}
+            savePreferences={savePreferences}
+          />
+        ))}
     </div>
   );
 }
