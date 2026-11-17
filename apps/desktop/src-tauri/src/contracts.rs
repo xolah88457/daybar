@@ -144,8 +144,11 @@ impl Features {
    "radar" => self.radar.enabled,
    "roomBeforeEvent" => self.radar.enabled && self.room_before_event.enabled,
    "hourlyChime" => self.hourly_chime.enabled, "checkIns" => self.check_ins.enabled,
-   "streakSaver" => self.streak_saver.enabled, "autoCycle" => self.auto_cycle.enabled,
-   "focusShortcuts" => self.focus_shortcuts.enabled, "awayDetection" => self.away_detection.enabled,
+   "streakSaver" => self.streak_saver.enabled,
+   // Focus extras need the Focus module (mirrors `featureRequires` in the frontend).
+   "autoCycle" => self.focus && self.auto_cycle.enabled,
+   "focusShortcuts" => self.focus && self.focus_shortcuts.enabled,
+   "awayDetection" => self.focus && self.away_detection.enabled,
    "movementNudges" => self.movement_nudges.enabled, "insights" => self.insights.enabled,
    "exportHistory" => self.export_history.enabled, "commandPalette" => self.command_palette.enabled,
    "extraCountdowns" => self.extra_countdowns.enabled,
@@ -182,6 +185,16 @@ pub enum Operation {
 #[cfg(test)]
 mod tests {
  use super::*;
+ #[test] fn focus_extras_need_the_focus_module() {
+  let mut f = Features::default();
+  f.auto_cycle.enabled = true; f.focus_shortcuts.enabled = true; f.away_detection.enabled = true;
+  for id in ["autoCycle", "focusShortcuts", "awayDetection"] { assert!(f.active(id), "{id}"); }
+  f.focus = false;
+  for id in ["autoCycle", "focusShortcuts", "awayDetection"] { assert!(!f.active(id), "{id}"); }
+  // Unrelated features are unaffected.
+  f.hourly_chime.enabled = true;
+  assert!(f.active("hourlyChime"));
+ }
  #[test] fn settings_defaults_and_roundtrip() { let s:Settings=serde_json::from_str("{}").unwrap(); assert_eq!(s.habits.tasks, vec!["Read a chapter", "Sketch a scene", "Take a walk", "Water the plants"]); assert_eq!(s.countdown.start_date, "2026-10-01"); assert_eq!(s.countdown.end_date, "2027-07-01"); assert_eq!(s.countdown.title, "Community Garden Opening"); assert_eq!(s.habits.start_date, "2026-11-01"); assert_eq!(s.focus.block_minutes,25); let json=serde_json::to_string(&s).unwrap(); let _:Settings=serde_json::from_str(&json).unwrap(); }
  #[test] fn preferences_theme_defaults_and_rejects_unknown_modes() {
   let prefs: Preferences = serde_json::from_str(r#"{"dataFolder":"/sandbox","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#).unwrap();

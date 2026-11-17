@@ -5,8 +5,11 @@
 //!   platforms it is a stub that reports "unsupported".
 //! * Nothing asks for permission at startup. [`radar_request_access`] does, and the frontend calls it
 //!   when Radar is switched on and access is still undetermined.
-//! * The cache refreshes when EventKit reports a change, every [`TTL_MS`] while Radar is on, when the
-//!   configuration that shapes the query changes, and on demand. A refresh that changes anything pokes
+//! * The cache refreshes every [`TTL_MS`] while Radar is on, when the configuration that shapes the
+//!   query (or the day) changes, and on demand: `radar_items` re-reads when the cache is older than
+//!   [`ON_DEMAND_TTL_MS`], so opening the Radar view or the Today card catches up quickly. (The
+//!   EventKit change notification is registered too, but the store thread runs no run loop, so do not
+//!   rely on it for instant updates.) A refresh that changes anything pokes
 //!   the scheduler (`Backend::changed`) so alerts and the tray label are rebuilt.
 //! * [`select`] mirrors `selectRadarItems` in `packages/core/src/radar.ts`; keep the two in step.
 use super::{Alert, AlertKind};
@@ -26,6 +29,9 @@ mod native;
 pub const ID: &str = "radar";
 /// Cached items older than this are re-read.
 const TTL_MS: i64 = 5 * 60_000;
+/// A `radar_items` call (the view or card mounting, or a native change event) re-reads EventKit when
+/// the cache is older than this.
+const ON_DEMAND_TTL_MS: i64 = 60_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -355,17 +361,29 @@ fn fetch_key(cfg: &RadarConfig, now: DateTime<Local>) -> String {
     .unwrap_or_default()
 }
 fn is_stale(cache: &Cache, key: &str, now_ms: i64) -> bool {
+    is_older_than(cache, key, now_ms, TTL_MS)
+}
+fn is_older_than(cache: &Cache, key: &str, now_ms: i64, max_age_ms: i64) -> bool {
     cache.key != key
         || cache
             .fetched_at
-            .is_none_or(|t| now_ms - t > TTL_MS || now_ms < t)
+            .is_none_or(|t| now_ms - t > max_age_ms || now_ms < t)
 }
 
 /// Reads EventKit if the cache is stale (or `force`). Returns whether the cached data changed.
 fn ensure_fresh(cfg: &RadarConfig, force: bool, now: DateTime<Local>) -> bool {
+    ensure_fresh_within(cfg, force, TTL_MS, now)
+}
+/// [`ensure_fresh`] with a custom maximum age for the cache.
+fn ensure_fresh_within(
+    cfg: &RadarConfig,
+    force: bool,
+    max_age_ms: i64,
+    now: DateTime<Local>,
+) -> bool {
     let key = fetch_key(cfg, now);
     let _only_one = REFRESH.lock().unwrap_or_else(|e| e.into_inner());
-    if !force && !is_stale(&cache(), &key, now.timestamp_millis()) {
+    if !force && !is_older_than(&cache(), &key, now.timestamp_millis(), max_age_ms) {
         return false;
     }
     let (events, reminders) = native::authorization();
@@ -552,7 +570,7 @@ pub async fn radar_calendars() -> CommandResult<RadarCalendars> {
 }
 
 /// The items for the current `preferences.features.radar` configuration. Reads EventKit first when the
-/// cache is stale, the configuration changed, or `refresh` is true.
+/// cache is older than [`ON_DEMAND_TTL_MS`], the configuration or day changed, or `refresh` is true.
 #[tauri::command]
 pub async fn radar_items(
     backend: State<'_, Backend>,
@@ -561,7 +579,7 @@ pub async fn radar_items(
     let cfg = backend.store.preferences()?.features.radar;
     let (changed, result) = tauri::async_runtime::spawn_blocking(move || {
         let now = Local::now();
-        let changed = ensure_fresh(&cfg, refresh.unwrap_or(false), now);
+        let changed = ensure_fresh_within(&cfg, refresh.unwrap_or(false), ON_DEMAND_TTL_MS, now);
         (changed, items_for(&cfg, now))
     })
     .await
@@ -803,6 +821,9 @@ mod tests {
         cache.fetched_at = Some(1_000);
         assert!(!is_stale(&cache, &key, 1_000 + TTL_MS));
         assert!(is_stale(&cache, &key, 1_001 + TTL_MS));
+        // On demand (a view opening) the cache counts as stale after a minute.
+        assert!(!is_older_than(&cache, &key, 1_000 + ON_DEMAND_TTL_MS, ON_DEMAND_TTL_MS));
+        assert!(is_older_than(&cache, &key, 1_001 + ON_DEMAND_TTL_MS, ON_DEMAND_TTL_MS));
         let mut other = c.clone();
         other.days_ahead = 30;
         assert!(is_stale(&cache, &fetch_key(&other, now), 1_000));
