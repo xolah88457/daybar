@@ -1,0 +1,15 @@
+.room {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.room strong {
+  color: var(--green);
+  font-weight: normal;
+}
+.detail {
+  margin: 10px 0 0;
+  font-size: 9px;
+  color: var(--muted);
+}
