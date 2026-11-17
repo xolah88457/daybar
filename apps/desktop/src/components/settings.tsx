@@ -464,8 +464,14 @@ function PreferencesPanel({
               <option value="bedtime">Time until bed</option>
               <option value="nextTask">Next task</option>
               <option value="countdown">Countdown days left</option>
-              {snapshot.preferences.features.radar.enabled && (
+              {snapshot.preferences.features.radar.enabled ? (
                 <option value="nextDeadline">Next deadline</option>
+              ) : (
+                // A saved choice whose feature is off still needs an option, or the select reads blank.
+                // The Mac app falls back to Auto for it.
+                draft.trayDisplay === 'nextDeadline' && (
+                  <option value="nextDeadline" disabled>Next deadline (Radar is off)</option>
+                )
               )}
             </select>
             <small>Mac-only display. Focus totals count credited minutes only; the browser demo cannot change the menu bar.</small>

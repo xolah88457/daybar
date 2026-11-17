@@ -80,10 +80,11 @@ function FeatureRow({
           role="switch"
           className="switch"
           checked={on}
-          disabled={busy || blocked}
+          // A blocked switch that is already on stays usable, so it can still be turned off.
+          disabled={busy || (blocked && !on)}
           aria-describedby={`${switchId}-info`}
           onChange={(e) => {
-            if (!blocked) void saveFeatures(setFeatureSwitch(features, def.id, e.target.checked));
+            if (!blocked || on) void saveFeatures(setFeatureSwitch(features, def.id, e.target.checked));
           }}
         />
         <div>

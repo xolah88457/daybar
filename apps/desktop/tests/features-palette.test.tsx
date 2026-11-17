@@ -144,6 +144,20 @@ describe('command palette', () => {
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());
     expect(c.mutate).not.toHaveBeenCalled();
   });
+  it('skips the no-phone confirmation when the Sleep module is off', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    const s = enabled((x) => {
+      x.settings.sleep.noPhoneMinutes = 1440;
+      x.sleep.wakes[new Date().toISOString().slice(0, 10)] = 0;
+      x.preferences.features.sleep = false;
+    });
+    const c = await ready(s);
+    open();
+    fireEvent.change(search(), { target: { value: 'start focus 25' } });
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    await waitFor(() => expect(c.mutate).toHaveBeenCalledWith({ kind: 'start_timer', timerType: 'focus', minutes: 25 }));
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
   it('offers Stop timer instead of Start focus while a timer runs', async () => {
     const start = Date.now() - 60000;
     const s = enabled((x) => {

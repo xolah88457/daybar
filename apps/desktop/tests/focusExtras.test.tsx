@@ -86,6 +86,22 @@ describe('Focus shortcuts config', () => {
   });
 });
 
+describe('Focus shortcuts save button', () => {
+  it('goes back to disabled once a whitespace-padded value has been saved', () => {
+    const p = configProps('focusShortcuts');
+    const { rerender } = render(<ShortcutsConfig {...p} />);
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Run when a focus session starts/), { target: { value: '  Work On ' } });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    expect(p.save).toHaveBeenCalledWith(expect.objectContaining({ onStart: 'Work On' }));
+    // The saved (trimmed) value comes back; the field still holds the padded text.
+    rerender(<ShortcutsConfig {...p} value={{ ...p.value, onStart: 'Work On' }} />);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+});
+
 describe('Away detection config', () => {
   it('saves a valid threshold and refuses out-of-range values', () => {
     const p = configProps('awayDetection');
