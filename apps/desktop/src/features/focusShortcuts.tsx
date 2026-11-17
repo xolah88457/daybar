@@ -16,7 +16,8 @@ export function Config({ value, save, busy }: FeatureConfigProps<'focusShortcuts
     null
   );
   const [testing, setTesting] = useState<Which | null>(null);
-  const changed = draft.onStart !== value.onStart || draft.onEnd !== value.onEnd;
+  // Compared trimmed, as saved, so a whitespace-padded draft is not "unsaved" once it has been saved.
+  const changed = draft.onStart.trim() !== value.onStart || draft.onEnd.trim() !== value.onEnd;
   const test = async (key: Which) => {
     const name = draft[key].trim();
     setTesting(key);

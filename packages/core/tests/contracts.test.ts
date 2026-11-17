@@ -13,6 +13,13 @@ describe('shared contracts', () => {
     expect(settingsSchema.safeParse({ countdown: { startDate: '2027-01-01', endDate: '2026-01-01' } }).success).toBe(false);
     expect(focusDataSchema.safeParse({ state: null, days: {}, sessions: { '1': { type: 'focus', minutes: 25, creditedMinutes: 26, end: 2, date: '2026-11-15' } } }).success).toBe(false);
   });
+  it('rejects a NUL byte in a Focus Shortcut name, as the native side does', () => {
+    const preferences = {dataFolder:'', realData:false, launchAtLogin:false, hideDock:false, globalShortcut:''};
+    const withShortcuts = (focusShortcuts: object) => preferencesSchema.safeParse({...preferences, features: {focusShortcuts}}).success;
+    expect(withShortcuts({ enabled: true, onStart: 'Work On', onEnd: '' })).toBe(true);
+    expect(withShortcuts({ enabled: true, onStart: 'Work\u0000On' })).toBe(false);
+    expect(withShortcuts({ enabled: true, onEnd: '\u0000' })).toBe(false);
+  });
   it('defaults theme and tray preferences and rejects unsupported enum values', () => {
     const preferences = {dataFolder:'', realData:false, launchAtLogin:false, hideDock:false, globalShortcut:''};
     expect(preferencesSchema.parse(preferences)).toMatchObject({themeMode:'night', trayDisplay:'auto'});

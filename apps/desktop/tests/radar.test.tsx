@@ -185,6 +185,12 @@ describe('Today card', () => {
     const { unmount } = render(<TodayCard {...viewProps(radarOn())} />);
     expect(await screen.findByText(/needs access to Calendar/)).toBeInTheDocument();
     unmount();
+    // Calendar denied with Reminders left out: nothing is readable, so never say "Nothing due".
+    use(createDemoRadarClient({ clock: () => now, status: status('denied', 'fullAccess') }));
+    const second = render(<TodayCard {...viewProps(radarOn({ includeReminders: false }))} />);
+    expect(await screen.findByText(/needs access to Calendar/)).toBeInTheDocument();
+    expect(screen.queryByText('Nothing due. Enjoy it.')).toBeNull();
+    second.unmount();
     use(createDemoRadarClient({ clock: () => now, items: [] }));
     render(<TodayCard {...viewProps(radarOn())} />);
     expect(await screen.findByText('Nothing due. Enjoy it.')).toBeInTheDocument();
@@ -304,6 +310,16 @@ describe('Radar settings', () => {
     fireEvent.blur(words);
     expect(lastSaved(save).keywords).toEqual(['exam', 'Due']);
   });
+  it('keeps what is being typed when a refresh hands over an equal keywords array', async () => {
+    const { rerender, props } = setup(defaultFeatures.radar);
+    const words = await screen.findByLabelText(/Only events whose title contains/);
+    fireEvent.change(words, { target: { value: 'exam, qu' } });
+    rerender(<Config {...props} value={{ ...props.value, keywords: [...props.value.keywords] }} />);
+    expect(words).toHaveValue('exam, qu');
+    // A genuinely different saved list still wins.
+    rerender(<Config {...props} value={{ ...props.value, keywords: ['final', 'quiz'] }} />);
+    expect(words).toHaveValue('final, quiz');
+  });
   it('saves the due alert switch and time, and disables the time while it is off', async () => {
     const { save, rerender, props } = setup();
     const time = await screen.findByLabelText('Due alert time');
@@ -398,6 +414,26 @@ describe('integration', () => {
     render(<SettingsPanel {...props(radarOn())} />);
     const on = screen.getByRole('combobox', { name: 'Menu-bar label' });
     expect(within(on).getByRole('option', { name: 'Next deadline' })).toHaveValue('nextDeadline');
+  });
+  it('keeps a saved "Next deadline" visible, disabled and labelled, while Radar is off', () => {
+    const s = fixture();
+    s.preferences.trayDisplay = 'nextDeadline';
+    render(
+      <SettingsPanel
+        snapshot={s}
+        now={now}
+        busy={false}
+        run={vi.fn(async () => true)}
+        confirm={vi.fn(async () => true)}
+        savePreferences={vi.fn(async () => true)}
+        updater={demoUpdater}
+      />
+    );
+    const select = screen.getByRole('combobox', { name: 'Menu-bar label' });
+    const option = within(select).getByRole('option', { name: 'Next deadline (Radar is off)' });
+    expect(option).toBeDisabled();
+    expect(select).toHaveValue('nextDeadline');
+    expect((select as HTMLSelectElement).selectedOptions[0]).toBe(option);
   });
 });
 

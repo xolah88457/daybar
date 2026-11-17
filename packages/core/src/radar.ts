@@ -62,6 +62,19 @@ export function selectRadarItems(items: readonly RadarItem[], config: RadarFilte
 export function radarDaysUntil(date: number | Date, now: Date): number {
   return daysBetween(new Date(date), now);
 }
+type DatedItem = Pick<RadarItem, 'date' | 'allDay'> & Partial<Pick<RadarItem, 'kind' | 'end'>>;
+/** An event that began on an earlier day but has not ended yet: it is happening now, not overdue. */
+function isRunningEvent(item: DatedItem, now: Date): boolean {
+  return item.kind === 'event' && item.end !== undefined && item.end > now.getTime() && item.date <= now.getTime();
+}
+/**
+ * Days to count and colour an item by. Like `radarDaysUntil`, except that a multi-day event that is
+ * still running counts as today (0), never as overdue. Reminders keep their overdue days.
+ */
+export function radarItemDays(item: DatedItem, now: Date): number {
+  const days = radarDaysUntil(item.date, now);
+  return days < 0 && isRunningEvent(item, now) ? 0 : days;
+}
 /** 0 or fewer days red, 2 or fewer orange, 7 or fewer yellow, otherwise green. */
 export function radarUrgency(days: number): Urgency {
   if (days <= 0) return 'red';
@@ -76,14 +89,15 @@ function clock12(d: Date): string {
   const h = d.getHours();
   return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
-/** "3d overdue", "Today" / "Today 2:30 PM", "Tomorrow", "5 days". */
+/** "3d overdue", "Now" (a running multi-day event), "Today" / "Today 2:30 PM", "Tomorrow", "5 days". */
 export function radarLabel(
-  item: Pick<RadarItem, 'date' | 'allDay'>,
+  item: DatedItem,
   now: Date,
   formatTime: (d: Date) => string = clock12
 ): string {
-  const days = radarDaysUntil(item.date, now);
+  const days = radarItemDays(item, now);
   if (days < 0) return `${-days}d overdue`;
+  if (days === 0 && radarDaysUntil(item.date, now) < 0) return item.allDay ? 'Today' : 'Now';
   if (days === 0) return item.allDay ? 'Today' : `Today ${formatTime(new Date(item.date))}`;
   if (days === 1) return 'Tomorrow';
   return `${days} days`;

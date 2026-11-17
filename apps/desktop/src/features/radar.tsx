@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   radarColor,
-  radarDaysUntil,
+  radarItemDays,
   radarLabel,
   selectRadarItems
 } from '@daybar/core';
@@ -91,6 +91,11 @@ function AccessNotice({
   );
 }
 
+/** Whether anything can be read: Calendar, or Reminders when they are included. One rule for the page and the Today card. */
+function radarReadable(status: RadarStatus | undefined, includeReminders: boolean): boolean {
+  return status?.events === 'fullAccess' || (includeReminders && status?.reminders === 'fullAccess');
+}
+
 function dateText(item: RadarItem): string {
   const d = new Date(item.date);
   const day = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
@@ -113,7 +118,7 @@ function Rows({
   return (
     <ol className={`${styles.list}${compact ? ` ${styles.compact}` : ''}`} aria-label="Upcoming deadlines">
       {items.map((item) => {
-        const color = radarColor(radarDaysUntil(item.date, now), appearance);
+        const color = radarColor(radarItemDays(item, now), appearance);
         return (
           <li className={styles.row} key={item.id ?? `${item.kind}:${item.title}:${item.date}`}>
             <span className={styles.bar} style={{ background: color }} aria-hidden="true" />
@@ -152,8 +157,7 @@ export function View({ snapshot, now }: FeatureViewProps) {
   const radar = useSelected(config, now);
   const status = radar.data?.status;
   useAutoRequest(status, config.includeReminders, radar.requestAccess);
-  const readable =
-    status?.events === 'fullAccess' || (config.includeReminders && status?.reminders === 'fullAccess');
+  const readable = radarReadable(status, config.includeReminders);
   return (
     <Section
       title="Deadline Radar"
@@ -196,8 +200,7 @@ export function TodayCard({ snapshot, now }: FeatureCardProps) {
   const radar = useSelected(config, now);
   const status = radar.data?.status;
   const next = radar.items.slice(0, 3);
-  const blocked =
-    status && status.supported && status.events !== 'fullAccess' && status.reminders !== 'fullAccess';
+  const blocked = status?.supported && !radarReadable(status, config.includeReminders);
   return (
     <Section title="Deadlines" aside={<span className="tag">NEXT 3</span>}>
       {!radar.data ? (
@@ -302,7 +305,10 @@ export function Config({ value, save, busy }: FeatureConfigProps<'radar'>) {
   const [words, setWords] = useState(value.keywords.join(', '));
   useEffect(() => setAhead(String(value.daysAhead)), [value.daysAhead]);
   useEffect(() => setBack(String(value.overdueDaysBack)), [value.overdueDaysBack]);
-  useEffect(() => setWords(value.keywords.join(', ')), [value.keywords]);
+  // Keyed by content, not identity: every snapshot refresh hands over a new, equal array, and that
+  // must not overwrite what is being typed.
+  const savedWords = value.keywords.join('\n');
+  useEffect(() => setWords(savedWords.split('\n').filter(Boolean).join(', ')), [savedWords]);
 
   const patch = (next: Partial<RadarConfig>) => void save({ ...value, ...next });
   const commitNumber = (

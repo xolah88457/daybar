@@ -463,6 +463,11 @@ h1 {
   align-items: center;
   gap: 10px;
 }
+.section-head .index {
+  /* `overflow-wrap: anywhere` on the heading would otherwise let a narrow card break "04" over two lines. */
+  flex: none;
+  white-space: nowrap;
+}
 .index {
   font-size: 9px;
   color: rgba(255, 255, 255, 0.22);

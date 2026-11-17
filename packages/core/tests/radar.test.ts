@@ -4,6 +4,7 @@ import {
   defaultSettings,
   radarColor,
   radarDaysUntil,
+  radarItemDays,
   radarLabel,
   radarUrgency,
   roomBeforeNextEvent,
@@ -89,6 +90,29 @@ describe('urgency and labels', () => {
     expect(radarLabel({ date: at(1, 8), allDay: false }, now)).toBe('Tomorrow');
     expect(radarLabel({ date: at(12), allDay: true }, now)).toBe('12 days');
     expect(radarLabel({ date: at(0, 14, 5), allDay: false }, now, () => '14:05')).toBe('Today 14:05');
+  });
+});
+
+describe('events that are still running', () => {
+  const trip = ev('Conference', at(-2, 9), { end: at(2, 17) });
+  it('counts a multi-day event in progress as today, not overdue', () => {
+    expect(radarItemDays(trip, now)).toBe(0);
+    expect(radarUrgency(radarItemDays(trip, now))).toBe('red');
+    expect(radarLabel(trip, now)).toBe('Now');
+    expect(radarLabel(ev('Retreat', at(-1), { allDay: true, end: at(3) }), now)).toBe('Today');
+  });
+  it('keeps overdue for reminders, for ended events and for items with no end', () => {
+    expect(radarLabel(rem('File taxes', at(-2)), now)).toBe('2d overdue');
+    expect(radarItemDays(rem('File taxes', at(-2)), now)).toBe(-2);
+    expect(radarLabel(ev('Ended', at(-2, 9), { end: at(-2, 10) }), now)).toBe('2d overdue');
+    expect(radarLabel({ date: at(-3), allDay: false, kind: 'event' }, now)).toBe('3d overdue');
+  });
+  it('leaves an event starting today or later as it was', () => {
+    expect(radarLabel(ev('Standup', at(0, 9), { end: at(0, 13) }), now)).toBe('Today 9:00 AM');
+    expect(radarItemDays(ev('Later', at(5, 9)), now)).toBe(5);
+  });
+  it('is still selected while it runs', () => {
+    expect(selectRadarItems([trip], all, now)).toEqual([trip]);
   });
 });
 

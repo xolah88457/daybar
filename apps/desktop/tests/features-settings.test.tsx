@@ -69,6 +69,33 @@ describe('Settings → Features', () => {
     rerender(<SettingsPanel {...props(on)} />);
     expect(toggle('Room before an event')).toBeEnabled();
   });
+  it('disables the Focus extras while Focus is off and explains why', async () => {
+    const off = fixture();
+    off.preferences.features.focus = false;
+    const p = props(off);
+    const { rerender } = render(<SettingsPanel {...p} />);
+    for (const name of ['Auto-cycle sessions', 'Focus shortcuts', 'Away detection']) {
+      expect(toggle(name)).toBeDisabled();
+      expect(toggle(name)).toHaveAccessibleDescription(/Turn on Focus first/);
+      fireEvent.click(toggle(name));
+    }
+    expect(p.savePreferences).not.toHaveBeenCalled();
+    rerender(<SettingsPanel {...props()} />);
+    for (const name of ['Auto-cycle sessions', 'Focus shortcuts', 'Away detection']) {
+      expect(toggle(name)).toBeEnabled();
+      expect(toggle(name)).toHaveAccessibleDescription(/Works together with Focus/);
+    }
+  });
+  it('lets a blocked switch that is already on be turned off', async () => {
+    const s = fixture();
+    s.preferences.features.focus = false;
+    s.preferences.features.awayDetection.enabled = true;
+    const p = props(s);
+    render(<SettingsPanel {...p} />);
+    expect(toggle('Away detection')).toBeEnabled();
+    fireEvent.click(toggle('Away detection'));
+    await waitFor(() => expect(p.savePreferences).toHaveBeenCalledTimes(1));
+  });
   it('disables the switches while a save is in flight', () => {
     render(<SettingsPanel {...props()} busy />);
     for (const s of within(section()).getAllByRole('switch')) expect(s).toBeDisabled();

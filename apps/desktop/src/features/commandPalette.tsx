@@ -77,7 +77,7 @@ export function buildCommands(
           run: async () => {
             // Same no-phone-time check as the Focus view and the global shortcut.
             const view = getSleepView(snapshot.sleep, now, settings);
-            if (!(await confirmFocusStart(view, settings.sleep.noPhoneMinutes, confirm))) return;
+            if (!(await confirmFocusStart(view, settings.sleep.noPhoneMinutes, confirm, features.sleep))) return;
             await run({ kind: 'start_timer', timerType: 'focus', minutes });
           }
         });

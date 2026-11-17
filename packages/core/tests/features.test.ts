@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   defaultFeatures,
   featureEnabled,
+  featureRequires,
   featureIds,
   featureSwitch,
   featuresSchema,
@@ -91,6 +92,16 @@ describe('preferences.features schema', () => {
 });
 
 describe('feature helpers', () => {
+  it('the Focus extras need the Focus module', () => {
+    for (const id of ['autoCycle', 'focusShortcuts', 'awayDetection'] as const) {
+      expect(featureRequires[id]).toBe('focus');
+      const on = setFeatureSwitch(defaultFeatures, id, true);
+      expect(featureEnabled(on, id)).toBe(true);
+      const off = setFeatureSwitch(on, 'focus', false);
+      expect(featureSwitch(off, id)).toBe(true); // the saved choice survives
+      expect(featureEnabled(off, id)).toBe(false);
+    }
+  });
   it('room before an event needs Deadline Radar; switching keeps configuration', () => {
     const on = setFeatureSwitch(setFeatureSwitch(defaultFeatures, 'roomBeforeEvent', true), 'hourlyChime', true);
     expect(featureSwitch(on, 'roomBeforeEvent')).toBe(true);

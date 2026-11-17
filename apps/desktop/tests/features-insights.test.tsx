@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DaybarClient, Snapshot } from '@daybar/core/contracts';
 import { Dashboard } from '../src/components/dashboard';
 import { createDemoClient } from '../src/lib/demo';
-import { View } from '../src/features/insights';
+import { View, clockAt } from '../src/features/insights';
 import { fixture } from './fixtures';
 
 const now = new Date(2026, 10, 15, 12);
@@ -50,6 +50,20 @@ describe('Insights view in the demo', () => {
     expect(sleep.getByText('Average wake')).toBeInTheDocument();
     expect(sleep.getByText('Average bed')).toBeInTheDocument();
     expect(sleep.getAllByText(/Consistency ±\d+ min/)).toHaveLength(2);
+  });
+  it('shows the stored clock time on a spring-forward day (02:30 stays 02:30)', () => {
+    expect(clockAt(null)).toBe('—');
+    expect(clockAt(150)).toMatch(/^0?2:30/);
+    expect(clockAt(23 * 60 + 5)).toMatch(/^11:05/);
+    const springForward = new Date(2026, 2, 8, 12); // 2026-03-08: DST starts in America/Toronto
+    const s = fixture();
+    s.preferences.features.insights.enabled = true;
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(2026, 2, 8 - i);
+      s.sleep.wakes[`2026-03-${String(d.getDate()).padStart(2, '0')}`] = 150;
+    }
+    render(<View {...props(s)} now={springForward} />);
+    expect(within(section('Sleep rhythm')).getByText('Average wake').nextElementSibling).toHaveTextContent(/^0?2:30/);
   });
   it('says there is not enough data for the sleep and focus relation', async () => {
     render(<View {...props(await demo())} />);

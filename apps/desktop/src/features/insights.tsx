@@ -5,7 +5,7 @@
 import { useMemo } from 'react';
 import { fmtDuration, formatSpread, getWeeklyInsights, parseKey } from '@daybar/core';
 import type { FocusInsights, HabitInsights, SleepInsights, SleepFocusInsight, SleepMetric } from '@daybar/core';
-import { clock, Section, Stats } from '../components/primitives';
+import { Section, Stats } from '../components/primitives';
 import styles from './insights.module.css';
 import type { FeatureViewProps } from './types';
 
@@ -13,8 +13,18 @@ const dayName = (date: string, width: 'short' | 'narrow' = 'short') =>
   parseKey(date).toLocaleDateString([], { weekday: width });
 const shortDate = (date: string) => parseKey(date).toLocaleDateString([], { day: 'numeric', month: 'short' });
 const minutesText = (m: number) => fmtDuration(Math.round(m));
-const clockAt = (now: Date, m: number | null) =>
-  m === null ? '—' : clock(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, m));
+/**
+ * A minutes-after-midnight value as a clock time. Built in UTC so a daylight-saving change on the
+ * viewer's today can never shift it: 02:30 stays 02:30 even on a spring-forward day.
+ */
+export const clockAt = (m: number | null) =>
+  m === null
+    ? '—'
+    : new Date(Date.UTC(2000, 0, 1, 0, Math.round(m))).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'UTC'
+      });
 
 function Delta({ value, text, better = 'up' }: { value: number; text: string; better?: 'up' | 'down' | 'none' }) {
   const direction = value === 0 ? 'flat' : value > 0 === (better === 'up') ? 'up' : 'down';
@@ -145,12 +155,12 @@ function HabitsSection({ habits }: { habits: HabitInsights }) {
   );
 }
 
-function Metric({ name, metric, now, later = 'later', earlier = 'earlier' }: { name: string; metric: SleepMetric; now: Date; later?: string; earlier?: string }) {
+function Metric({ name, metric, later = 'later', earlier = 'earlier' }: { name: string; metric: SleepMetric; later?: string; earlier?: string }) {
   const shift = metric.shift;
   return (
     <div className={styles.metric}>
       <span className={styles.metricName}>{name}</span>
-      <span className={styles.metricValue}>{clockAt(now, metric.mean)}</span>
+      <span className={styles.metricValue}>{clockAt(metric.mean)}</span>
       <span className={styles.metricNote}>
         Consistency {formatSpread(metric.spread)}
         {metric.samples === 1 ? ' (1 entry)' : ''}
@@ -162,7 +172,7 @@ function Metric({ name, metric, now, later = 'later', earlier = 'earlier' }: { n
   );
 }
 
-function SleepSection({ sleep, now }: { sleep: SleepInsights; now: Date }) {
+function SleepSection({ sleep }: { sleep: SleepInsights }) {
   const none = sleep.wake.samples === 0 && sleep.bed.samples === 0;
   return (
     <Section title="Sleep rhythm" aside={<span className="tag">LAST 7 DAYS</span>}>
@@ -170,8 +180,8 @@ function SleepSection({ sleep, now }: { sleep: SleepInsights; now: Date }) {
         <p className={styles.nodata}>No wake or bed times logged in the last 7 days.</p>
       ) : (
         <div className={styles.sleepGrid}>
-          <Metric name="Average wake" metric={sleep.wake} now={now} />
-          <Metric name="Average bed" metric={sleep.bed} now={now} />
+          <Metric name="Average wake" metric={sleep.wake} />
+          <Metric name="Average bed" metric={sleep.bed} />
         </div>
       )}
       <p className="caption">
@@ -181,7 +191,7 @@ function SleepSection({ sleep, now }: { sleep: SleepInsights; now: Date }) {
   );
 }
 
-function RelationSection({ relation, now }: { relation: SleepFocusInsight; now: Date }) {
+function RelationSection({ relation }: { relation: SleepFocusInsight }) {
   return (
     <Section title="Sleep and focus" aside={<span className="tag">LAST {relation.lookbackDays / 7} WEEKS</span>}>
       {relation.enough ? (
@@ -199,7 +209,7 @@ function RelationSection({ relation, now }: { relation: SleepFocusInsight; now: 
             </div>
           </div>
           <p className={styles.sentence}>
-            Your usual bedtime is {clockAt(now, relation.usualBed)}.{' '}
+            Your usual bedtime is {clockAt(relation.usualBed)}.{' '}
             {relation.difference === 0
               ? 'You focus about the same either way.'
               : `On the day after going to bed earlier, you focused ${minutesText(Math.abs(relation.difference ?? 0))} ${(relation.difference ?? 0) > 0 ? 'more' : 'less'} on average.`}
@@ -240,8 +250,8 @@ export function View({ snapshot, now }: FeatureViewProps) {
       </p>
       {features.focus && <FocusSection focus={insights.focus} />}
       {features.habits && <HabitsSection habits={insights.habits} />}
-      {features.sleep && <SleepSection sleep={insights.sleep} now={now} />}
-      {features.focus && features.sleep && <RelationSection relation={insights.sleepFocus} now={now} />}
+      {features.sleep && <SleepSection sleep={insights.sleep} />}
+      {features.focus && features.sleep && <RelationSection relation={insights.sleepFocus} />}
       {!anything && (
         <p className="muted">
           Every module is switched off, so there is nothing to review. Turn some back on in Settings → Features; your data is

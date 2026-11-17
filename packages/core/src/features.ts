@@ -13,7 +13,13 @@ export const moduleFeatureIds = ['countdown', 'habits', 'focus', 'sleep'] as con
 export type ModuleFeatureId = (typeof moduleFeatureIds)[number];
 
 /** Features that only work while another feature is on. */
-export const featureRequires: Partial<Record<FeatureId, FeatureId>> = { roomBeforeEvent: 'radar' };
+export const featureRequires: Partial<Record<FeatureId, FeatureId>> = {
+  roomBeforeEvent: 'radar',
+  // The Focus extras only act on a running Focus session, so they do nothing while Focus is off.
+  autoCycle: 'focus',
+  focusShortcuts: 'focus',
+  awayDetection: 'focus'
+};
 
 /** The switch itself, ignoring dependencies. */
 export function featureSwitch(features: Features, id: FeatureId): boolean {
