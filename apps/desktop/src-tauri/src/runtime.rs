@@ -196,9 +196,15 @@ pub fn toggle_focus(app: &AppHandle) {
         let backend = app.state::<Backend>();
         match backend.store.snapshot() {
             Ok(s) => match toggle_focus_operation(&s) {
-                Some(op) => native_mutate(&app, op),
+                Some(op) => {
+                    backend.store.report("shortcut", None);
+                    native_mutate(&app, op)
+                }
                 // Focus is switched off: the shortcut only brings the window forward.
-                None => open(&app),
+                None => {
+                    backend.store.report("shortcut", None);
+                    open(&app)
+                }
             },
             Err(e) => error(&app, &backend.store, "shortcut", e),
         }
@@ -378,10 +384,12 @@ fn alert_current(
     scheduled: &Snapshot,
     now: DateTime<Local>,
 ) -> bool {
-    if latest
-        .issues
-        .iter()
-        .any(|i| !i.file.starts_with("runtime:"))
+    // Alerts that read the data files wait for them to be sound; the chime, nudges and radar do not.
+    if features::needs_clean_data(alert)
+        && latest
+            .issues
+            .iter()
+            .any(|i| !i.file.starts_with("runtime:"))
     {
         return false;
     }
@@ -419,6 +427,11 @@ fn alert_current(
             .id
             .ends_with(&format!(":{}", v.bed.timestamp_millis()))
     })
+}
+/// Whether a due alert is shown now. Always marks it fired (so it never comes back), but a feature
+/// alert that is too late, for example after the Mac slept through it, is dropped silently.
+fn should_show(alert: &Alert, current: bool, fired: &mut BTreeSet<String>, now_ms: i64) -> bool {
+    current && fired.insert(alert.id.clone()) && !features::is_stale(alert, now_ms)
 }
 fn countdown_label(timer: &TimerState, now: DateTime<Local>) -> String {
     let secs = ((timer.end - now.timestamp_millis() + 999) / 1000).max(0);
@@ -640,7 +653,7 @@ fn worker(
                 .zip(snapshot.as_ref())
                 .is_some_and(|(latest, scheduled)| alert_current(alert, latest, scheduled, now));
             expired = true;
-            if current && fired.insert(alert.id.clone()) {
+            if should_show(alert, current, &mut fired, now.timestamp_millis()) {
                 // Auto-cycle: settle the finished timer and start the break first, so this
                 // notification can say so. Idempotent: the refresh below finds it already started.
                 let mut body = alert.body.clone();
@@ -650,8 +663,12 @@ fn worker(
                         .is_some_and(|l| l.preferences.features.active("autoCycle"))
                 {
                     match features::autocycle::settle_and_run(&store, now.timestamp_millis()) {
-                        Ok(Some(minutes)) => body = features::autocycle::started_body(minutes),
-                        Ok(None) => (),
+                        Ok(started) => {
+                            store.report("auto-cycle", None);
+                            if let Some(minutes) = started {
+                                body = features::autocycle::started_body(minutes);
+                            }
+                        }
                         Err(e) => error(&app, &store, "auto-cycle", e),
                     }
                 }
@@ -664,8 +681,9 @@ fn worker(
                 if let Some(sound) = features::chime::sound(alert) {
                     note = note.sound(sound);
                 }
-                if let Err(e) = note.show() {
-                    error(&app, &store, "notifications", e.to_string());
+                match note.show() {
+                    Ok(()) => store.report("notifications", None),
+                    Err(e) => error(&app, &store, "notifications", e.to_string()),
                 }
             }
         }
@@ -714,7 +732,10 @@ fn worker(
                         .collect();
                     // Auto-cycle: right after settlement, start the break the saved state calls for.
                     match features::autocycle::run(&store, &s, now.timestamp_millis()) {
-                        Ok(started) => cycled = started.is_some(),
+                        Ok(started) => {
+                            store.report("auto-cycle", None);
+                            cycled = started.is_some();
+                        }
                         Err(e) => error(&app, &store, "auto-cycle", e),
                     }
                     snapshot = Some(s);
@@ -1017,6 +1038,125 @@ mod tests {
         assert!(!alert_current(sleep_alert, &off, &s, later));
         off.preferences.features.focus = false;
         assert!(deadlines(&off, now).is_empty());
+    }
+    /// The worker's due-alert pass, minus the notification itself: what would be shown at `now`.
+    fn due_pass<'a>(
+        pending: &'a [Alert],
+        fired: &mut BTreeSet<String>,
+        now: DateTime<Local>,
+    ) -> (usize, Vec<&'a Alert>) {
+        let due: Vec<_> = pending
+            .iter()
+            .filter(|a| a.at <= now.timestamp_millis())
+            .collect();
+        let shown = due
+            .iter()
+            .copied()
+            .filter(|a| should_show(a, true, fired, now.timestamp_millis()))
+            .collect();
+        (due.len(), shown)
+    }
+    #[test]
+    fn waking_from_sleep_shows_only_alerts_within_the_lateness_cutoff() {
+        use chrono::TimeZone;
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 12, 0, 0)
+            .single()
+            .unwrap();
+        let mut s = snapshot(TrayDisplay::Auto);
+        s.preferences.features.hourly_chime.enabled = true;
+        s.preferences.features.movement_nudges.enabled = true;
+        // Focus and Sleep alerts keep their behaviour (covered below); only feature alerts here.
+        let pending: Vec<_> = deadlines(&s, now)
+            .into_iter()
+            .filter(|a| matches!(a.kind, AlertKind::Feature { .. }))
+            .collect();
+        // The Mac sleeps from 12:00 and wakes at 16:00:30: the 16:00 chime is 30 s late.
+        let wake = now + chrono::Duration::minutes(4 * 60 + 1) - chrono::Duration::seconds(30);
+        let mut fired = BTreeSet::new();
+        let (due, shown) = due_pass(&pending, &mut fired, wake);
+        assert!(due >= 5, "chimes and nudges piled up: {due}");
+        assert!(!shown.is_empty() && shown.len() < due);
+        for a in &shown {
+            assert!(wake.timestamp_millis() - a.at <= 120_000, "{}", a.id);
+        }
+        assert!(
+            shown.iter().any(|a| a.id.starts_with("hourlyChime:")),
+            "the fresh chime still shows"
+        );
+        // Skipped alerts count as fired: nothing comes back on a later pass.
+        assert_eq!(fired.len(), shown.len() + (due - shown.len()));
+        let (_, again) = due_pass(&pending, &mut fired, wake + chrono::Duration::seconds(1));
+        assert!(again.is_empty());
+        // Long after the last alert everything is dropped, not shown.
+        let mut fired = BTreeSet::new();
+        let (due, shown) = due_pass(&pending, &mut fired, now + chrono::Duration::hours(10));
+        assert!(due > 0 && shown.is_empty());
+        assert_eq!(fired.len(), due);
+    }
+    #[test]
+    fn focus_and_sleep_alerts_are_shown_however_late() {
+        let alert = |id: &str, kind| Alert {
+            id: id.into(),
+            at: 1_000,
+            title: String::new(),
+            body: String::new(),
+            kind,
+        };
+        let mut fired = BTreeSet::new();
+        let day = 24 * 3_600_000;
+        assert!(should_show(&alert("timer:1", AlertKind::Focus), true, &mut fired, day));
+        assert!(should_show(&alert("bed:1", AlertKind::Sleep), true, &mut fired, day));
+        // Not current: never shown and (as before) not marked fired.
+        assert!(!should_show(&alert("timer:2", AlertKind::Focus), false, &mut fired, 1_000));
+        assert!(!fired.contains("timer:2"));
+        // Each id fires once.
+        assert!(!should_show(&alert("timer:1", AlertKind::Focus), true, &mut fired, day));
+    }
+    #[test]
+    fn unrelated_data_issues_do_not_silence_alerts_that_read_no_data_files() {
+        use chrono::TimeZone;
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 12, 0, 0)
+            .single()
+            .unwrap();
+        let mut s = snapshot(TrayDisplay::Auto);
+        s.preferences.features.hourly_chime.enabled = true;
+        s.preferences.features.movement_nudges.enabled = true;
+        s.preferences.features.focus = true;
+        s.focus.state = Some(timer(now, "focus", 25));
+        let all = deadlines(&s, now);
+        let chime = all
+            .iter()
+            .find(|a| a.id.starts_with("hourlyChime:"))
+            .unwrap();
+        let nudge = all
+            .iter()
+            .find(|a| a.id.starts_with("movementNudges:"))
+            .unwrap();
+        let focus = all.iter().find(|a| a.kind == AlertKind::Focus).unwrap();
+        let sleep = all.iter().find(|a| a.kind == AlertKind::Sleep).unwrap();
+        let mut broken = s.clone();
+        broken.issues.push(DataIssue {
+            file: "daily-log.json".into(),
+            message: "not downloaded".into(),
+        });
+        for a in [chime, nudge] {
+            assert!(alert_current(a, &broken, &s, a_at(a)), "{}", a.id);
+        }
+        assert!(!alert_current(focus, &broken, &s, a_at(focus)));
+        assert!(!alert_current(sleep, &broken, &s, a_at(sleep)));
+        // Runtime issues never silence anything.
+        let mut runtime = s.clone();
+        runtime.issues.push(DataIssue {
+            file: "runtime:auto-cycle".into(),
+            message: "x".into(),
+        });
+        assert!(alert_current(focus, &runtime, &s, a_at(focus)));
+    }
+    fn a_at(a: &Alert) -> DateTime<Local> {
+        use chrono::TimeZone;
+        Local.timestamp_millis_opt(a.at).single().unwrap()
     }
     #[test]
     fn tray_title_falls_back_to_auto_when_a_modules_display_is_off() {

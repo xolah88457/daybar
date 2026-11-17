@@ -3,7 +3,10 @@
 //! One alert, at `bedtime - minutesBeforeBed`, when Habits is on, the day is not yet complete under
 //! `dayCompleteMin` and the current streak is at least 1. Bedtime comes from the same computation as
 //! the bedtime alerts (`sleep::view`), even with the Sleep module off: the settings still exist. With
-//! no usable bedtime there is no alert. "Today" is the local date of the alert instant.
+//! no usable bedtime there is no alert. "Today" is the habit day the user is still in: the local date the
+//! current waking period started (the `wake` of that same view), not the date of the alert instant,
+//! which falls after midnight when bed is late (wake 10:00 and 16 awake hours put the alert on the
+//! next calendar day).
 //! `K tasks left` is how many more tasks finish the day under the rule (all of them when
 //! `dayCompleteMin` equals the task count). Finishing the day cancels the alert on revalidation.
 use super::{
@@ -51,14 +54,15 @@ pub fn current_streak(h: &HabitSettings, log: &DailyLog, today: NaiveDate) -> u3
     run
 }
 
-/// The alert instant for tonight's bedtime, if one can be determined and is still ahead.
-fn alert_time(s: &Snapshot, now: DateTime<Local>) -> Option<DateTime<Local>> {
-    let bed = sleep::view(&s.sleep, &s.settings.sleep, now).ok()?.bed;
-    let at = bed
+/// The alert instant for tonight's bedtime, if one can be determined and is still ahead, with the
+/// habit day it is about: the date the current waking period started.
+fn alert_time(s: &Snapshot, now: DateTime<Local>) -> Option<(DateTime<Local>, NaiveDate)> {
+    let view = sleep::view(&s.sleep, &s.settings.sleep, now).ok()?;
+    let at = view.bed
         - Duration::minutes(i64::from(
             s.preferences.features.streak_saver.minutes_before_bed,
         ));
-    (at > now).then_some(at)
+    (at > now).then_some((at, view.wake.date_naive()))
 }
 
 /// Alerts wanted from `now` onwards. Called only while the feature is active.
@@ -67,10 +71,9 @@ pub fn alerts(s: &Snapshot, now: DateTime<Local>) -> Vec<Alert> {
     if !s.preferences.features.habits || h.tasks.is_empty() {
         return Vec::new();
     }
-    let Some(at) = alert_time(s, now) else {
+    let Some((at, day)) = alert_time(s, now) else {
         return Vec::new();
     };
-    let day = at.date_naive();
     let key = day.format("%Y-%m-%d").to_string();
     if key < h.start_date || (!h.end_date.is_empty() && key > h.end_date) {
         return Vec::new();
@@ -228,6 +231,47 @@ mod tests {
         s.preferences.features.streak_saver.enabled = false;
         assert!(!is_current(&alert, &s));
     }
+    /// Wake 10:00 on the 15th with 16 awake hours: bed 02:00 on the 16th, so the default 90-minute
+    /// alert lands at 00:30 on the 16th but is still about the 15th.
+    fn late_bed() -> Snapshot {
+        let mut s = snapshot();
+        s.sleep.wakes.clear();
+        s.sleep.wakes.insert("2026-11-15".into(), 10 * 60);
+        s
+    }
+
+    #[test]
+    fn an_alert_after_midnight_is_about_the_day_the_user_is_still_in() {
+        let s = late_bed();
+        let all = alerts(&s, now());
+        assert_eq!(all.len(), 1, "the 15th is unfinished");
+        assert_eq!(all[0].at, local(2026, 11, 16, 0, 30).timestamp_millis());
+        assert_eq!(all[0].body, "Your 3-day streak ends tonight · 3 tasks left");
+        assert!(matches!(&all[0].kind, AlertKind::Feature { key, .. } if key == "2026-11-15"));
+        assert!(is_current(&all[0], &s));
+        // Still the same alert from 23:00 on the 15th.
+        assert_eq!(alerts(&s, local(2026, 11, 15, 23, 0)).len(), 1);
+    }
+
+    #[test]
+    fn an_after_midnight_alert_is_silent_when_the_wake_day_is_done() {
+        let mut s = late_bed();
+        s.daily_log.insert(
+            "2026-11-15".into(),
+            vec!["A".into(), "B".into(), "C".into()],
+        );
+        // The empty 16th must not produce a false alarm.
+        assert!(alerts(&s, now()).is_empty());
+        // And a stale alert for the finished day is dropped on revalidation.
+        let mut open = late_bed();
+        let alert = alerts(&open, now()).remove(0);
+        open.daily_log.insert(
+            "2026-11-15".into(),
+            vec!["A".into(), "B".into(), "C".into()],
+        );
+        assert!(!is_current(&alert, &open));
+    }
+
     #[test]
     fn id_is_per_occurrence() {
         let a = alerts(&snapshot(), now()).remove(0);
