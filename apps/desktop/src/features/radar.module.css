@@ -1,0 +1,145 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.row:first-child {
+  border-top: 0;
+}
+.compact .row {
+  padding: 6px 0;
+}
+.bar {
+  width: 4px;
+  align-self: stretch;
+  min-height: 30px;
+  border-radius: 2px;
+}
+.title {
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.source {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.when {
+  text-align: right;
+  white-space: nowrap;
+}
+.label {
+  display: block;
+  font-size: 11px;
+  font-weight: bold;
+}
+.date {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+}
+.empty {
+  margin: 0;
+  color: var(--green);
+  font-weight: bold;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.access {
+  display: grid;
+  gap: 8px;
+}
+.access p {
+  margin: 0;
+}
+.access button {
+  justify-self: start;
+}
+.config {
+  display: grid;
+  gap: 18px;
+}
+.group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.group legend {
+  padding: 0;
+  font-size: 10px;
+}
+.hint {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 10px;
+  min-width: 0;
+}
+.field input {
+  width: 100%;
+}
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+.check small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (max-width: 520px) {
+  .row {
+    grid-template-columns: 4px minmax(0, 1fr);
+  }
+  .when {
+    grid-column: 2;
+    text-align: left;
+  }
+}

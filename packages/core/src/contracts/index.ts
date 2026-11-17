@@ -162,7 +162,7 @@ export type ExtraCountdown = ExtraCountdownsConfig['items'][number];
 export const preferencesSchema = z.object({
   dataFolder: z.string(), realData: z.boolean(), launchAtLogin: z.boolean(), hideDock: z.boolean(), globalShortcut: z.string(),
   themeMode: z.enum(['day', 'night', 'auto']).default('night'),
-  trayDisplay: z.enum(['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown']).default('auto'),
+  trayDisplay: z.enum(['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown', 'nextDeadline']).default('auto'),
   features: featuresSchema.default(() => featuresSchema.parse({}))
 }).strict();
 export type Preferences = z.infer<typeof preferencesSchema>;

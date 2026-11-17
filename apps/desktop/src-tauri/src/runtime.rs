@@ -458,6 +458,7 @@ fn effective_display(s: &Snapshot) -> TrayDisplay {
         Bedtime => features.sleep,
         NextTask => features.habits,
         Countdown => features.countdown,
+        NextDeadline => features.radar.enabled,
     };
     if available {
         wanted
@@ -505,6 +506,7 @@ fn tray_title(s: &Snapshot, now: DateTime<Local>) -> String {
                 "All tasks done".into()
             }
         }
+        NextDeadline => features::radar::tray_label(s, now),
         Countdown => {
             let parse = |value: &str| NaiveDate::parse_from_str(value, "%Y-%m-%d");
             let (Ok(start), Ok(end)) = (
@@ -573,6 +575,7 @@ pub fn start(app: AppHandle, store: Store) -> Result<Backend> {
         })
     }));
     app.manage(features::away::AwayState::default());
+    features::radar::init(app.clone());
     let (tx, rx) = mpsc::channel();
     let tray = TrayIconBuilder::with_id("daybar")
         .title("Daybar")
@@ -1060,6 +1063,43 @@ mod tests {
             assert_ne!(shown, hidden, "{hide}");
             assert_eq!(hidden, tray_title(&s, now), "{hide} behaves as auto");
         }
+    }
+    #[test]
+    fn tray_next_deadline_shows_the_first_item_and_needs_radar() {
+        use crate::features::radar::{testing, ItemKind, RadarItem};
+        use chrono::TimeZone;
+        let _guard = testing::lock();
+        let now = Local
+            .with_ymd_and_hms(2026, 11, 15, 12, 0, 0)
+            .single()
+            .unwrap();
+        let mut s = snapshot(TrayDisplay::NextDeadline);
+        // Radar is off: the mode behaves as Auto.
+        let off = tray_title(&s, now);
+        s.preferences.tray_display = TrayDisplay::Auto;
+        assert_eq!(off, tray_title(&s, now));
+        s.preferences.tray_display = TrayDisplay::NextDeadline;
+        s.preferences.features.radar.enabled = true;
+        let due = Local
+            .with_ymd_and_hms(2026, 11, 17, 9, 0, 0)
+            .single()
+            .unwrap()
+            .timestamp_millis();
+        testing::set_items(
+            vec![RadarItem {
+                id: "e1".into(),
+                title: "Essay".into(),
+                date: due,
+                end: Some(due + 3_600_000),
+                all_day: false,
+                source: "School".into(),
+                kind: ItemKind::Event,
+            }],
+            &s.preferences.features.radar,
+            now,
+        );
+        assert_eq!(tray_title(&s, now), "Essay · 2d");
+        testing::clear();
     }
     #[test]
     fn focus_shortcut_only_opens_the_window_when_focus_is_off() {

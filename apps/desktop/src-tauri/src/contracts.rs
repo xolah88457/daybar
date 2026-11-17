@@ -66,7 +66,7 @@ impl Default for Settings { fn default() -> Self { Self {schema_version:1,countd
 pub enum ThemeMode { Day, #[default] Night, Auto }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
-pub enum TrayDisplay { #[default] Auto, FocusMinutes, FocusHours, FocusBlocks, ActiveTimer, Bedtime, NextTask, Countdown }
+pub enum TrayDisplay { #[default] Auto, FocusMinutes, FocusHours, FocusBlocks, ActiveTimer, Bedtime, NextTask, Countdown, NextDeadline }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 pub struct Preferences {

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Daybar shows your upcoming deadlines from Calendar on this Mac. Nothing leaves your Mac.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Daybar shows your upcoming deadlines from Calendar on this Mac. Nothing leaves your Mac.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Daybar shows your due Reminders next to your calendar deadlines on this Mac. Nothing leaves your Mac.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Daybar shows your due Reminders next to your calendar deadlines on this Mac. Nothing leaves your Mac.</string>
+</dict>
+</plist>

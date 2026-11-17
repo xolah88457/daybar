@@ -5,3 +5,4 @@ export * from './focus';
 export * from './sleep';
 export * from './notify';
 export * from './features';
+export * from './radar';

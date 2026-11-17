@@ -106,10 +106,11 @@ describe('view and registry seams', () => {
     expect(featureRegistry.filter((f) => f.isModule).map((f) => f.id)).toEqual(['countdown', 'habits', 'focus', 'sleep']);
     expect(featureRegistry.find((f) => f.id === 'radar')?.permission).toBe('Calendars & Reminders');
     expect(featureRegistry.find((f) => f.id === 'roomBeforeEvent')?.requires).toBe('radar');
-    // Radar and Insights are registered but own no view yet, so nothing is added to the sidebar.
+    // Deadline Radar owns a view, shown before Settings once it is on.
     const all = fixture().preferences.features;
     all.radar.enabled = true;
-    all.insights.enabled = true;
-    expect(visibleViews(all)).toHaveLength(6);
+    expect(visibleViews(all).map((v) => v.id)).toEqual([
+      'Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'radar', 'Settings'
+    ]);
   });
 });

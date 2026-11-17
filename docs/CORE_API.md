@@ -8,6 +8,7 @@
 | `habits.ts` | Day colors, daily-log normalization, habit stats, habit and countdown grids |
 | `focus.ts` | Focus ledger: normalize, settle, start, stop, countdown text, room before bed, tagged-task thresholds, block cells |
 | `sleep.ts` | Circular time math, `parseWhen`/`resolveDates`/`findSleepSessions` parsing, averages, plan shifting, current state and view, plan nights, wake/bed logging |
+| `radar.ts` | Deadline Radar rules: `selectRadarItems`, sorting, `radarDaysUntil`/`radarUrgency`/`radarColor`/`radarLabel`, and `roomBeforeNextEvent` (focus blocks before the next timed event today); local-day, DST-safe |
 
 ## Conventions
 - Pass an explicit `now: Date` everywhere. `parseWhen` keeps an optional `now` default for compatibility; always pass it in application code and tests.

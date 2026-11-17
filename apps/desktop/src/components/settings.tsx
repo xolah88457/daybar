@@ -464,6 +464,9 @@ function PreferencesPanel({
               <option value="bedtime">Time until bed</option>
               <option value="nextTask">Next task</option>
               <option value="countdown">Countdown days left</option>
+              {snapshot.preferences.features.radar.enabled && (
+                <option value="nextDeadline">Next deadline</option>
+              )}
             </select>
             <small>Mac-only display. Focus totals count credited minutes only; the browser demo cannot change the menu bar.</small>
           </label>
