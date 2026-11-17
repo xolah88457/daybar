@@ -4,3 +4,4 @@ export * from './habits';
 export * from './focus';
 export * from './sleep';
 export * from './features';
+export * from './insights';
