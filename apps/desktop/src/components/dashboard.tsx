@@ -68,8 +68,6 @@ export function Dashboard({
   const overlays = useMemo(() => featureOverlays(features), [features]);
   const viewsRef = useRef(views);
   viewsRef.current = views;
-  const focusEnabled = useRef(features.focus);
-  focusEnabled.current = features.focus;
   useEffect(() => {
     if (activeView.id !== viewId) setViewId(activeView.id);
   }, [activeView.id, viewId]);
@@ -250,8 +248,9 @@ export function Dashboard({
       ) {
         const data = current.current;
         if (!data || working.current || data.issues.length) return;
-        // Focus is switched off: the shortcut does nothing.
-        if (!focusEnabled.current) return;
+        // Focus is switched off: the shortcut does nothing. Read the switch from the same snapshot
+        // as the rest of this handler; a render-time ref can still hold the default (on) right after load.
+        if (!data.preferences.features.focus) return;
         event.preventDefault();
         if (data.focus.state) void run({ kind: 'stop_timer' });
         else {
