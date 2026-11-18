@@ -636,15 +636,17 @@ mod tests {
     static NOW: std::sync::LazyLock<DateTime<Local>> =
         std::sync::LazyLock::new(|| local(2026, 11, 16, 12, 0));
     fn testing_snapshot() -> Snapshot {
+        let mut preferences: crate::contracts::Preferences = serde_json::from_str(
+            r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#,
+        )
+        .unwrap();
+        preferences.features = crate::contracts::Features::all_optional_off();
         Snapshot {
             settings: Default::default(),
             daily_log: Default::default(),
             focus: Default::default(),
             sleep: Default::default(),
-            preferences: serde_json::from_str(
-                r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#,
-            )
-            .unwrap(),
+            preferences,
             issues: vec![],
             conflicts: vec![],
         }

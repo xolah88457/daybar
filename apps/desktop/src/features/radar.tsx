@@ -283,8 +283,9 @@ const keywordList = (text: string) =>
 
 export function Config({ value, save, busy }: FeatureConfigProps<'radar'>) {
   const client = getRadarClient();
+  // No automatic prompt here: Radar starts on, so opening Settings is not a request for access.
+  // The notice below offers the button; the Radar page itself still asks on first visit.
   const { status, requestAccess } = useRadarStatus(client);
-  useAutoRequest(status, value.includeReminders, requestAccess);
   const [calendars, setCalendars] = useState<RadarCalendars>({ events: [], reminders: [] });
   const events = status?.events;
   const reminders = status?.reminders;

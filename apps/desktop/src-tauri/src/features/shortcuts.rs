@@ -282,12 +282,13 @@ mod tests {
     }
 
     #[test]
-    fn disabled_module_off_or_empty_names_are_skipped() {
+    fn focus_off_or_empty_names_are_skipped() {
         let idle = data(None, &[]);
         let running = data(Some(timer("focus", T)), &[]);
         let stopped = data(None, &[(T, "focus")]);
-        let off = prefs(false, "A", "B");
-        assert!(ran(&off, &idle, &running).is_empty() && ran(&off, &running, &stopped).is_empty());
+        // Built in: the stored flag no longer turns it off; a blank name is how you opt out.
+        let stale_flag = prefs(false, "A", "B");
+        assert_eq!(ran(&stale_flag, &idle, &running).len(), 1);
         let mut no_focus = prefs(true, "A", "B");
         no_focus.features.focus = false;
         assert!(ran(&no_focus, &idle, &running).is_empty());

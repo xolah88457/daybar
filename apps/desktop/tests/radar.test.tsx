@@ -321,7 +321,7 @@ describe('Radar settings', () => {
     expect(words).toHaveValue('final, quiz');
   });
   it('saves the due alert switch and time, and disables the time while it is off', async () => {
-    const { save, rerender, props } = setup();
+    const { save, rerender, props } = setup({ ...defaultFeatures.radar, dueAlerts: false });
     const time = await screen.findByLabelText('Due alert time');
     expect(time).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox', { name: /Notify me about what is due tomorrow/ }));
@@ -332,10 +332,14 @@ describe('Radar settings', () => {
     fireEvent.change(screen.getByLabelText('Due alert time'), { target: { value: '18:30' } });
     expect(lastSaved(save).alertTime).toBe('18:30');
   });
-  it('shows the permission and a Grant access button, asking once when it was undetermined', async () => {
+  it('shows the permission and a Grant access button, and asks only when it is pressed', async () => {
     const client = createDemoRadarClient({ clock: () => now, status: status('notDetermined') });
     const request = vi.spyOn(client, 'requestAccess');
     setup(defaultFeatures.radar, client);
+    // Radar starts on, so opening Settings is not a request for access.
+    const grant = await screen.findByRole('button', { name: 'Grant access' });
+    expect(request).not.toHaveBeenCalled();
+    fireEvent.click(grant);
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     // The demo grants on request, so the notice goes away and the lists fill in.
     expect(await screen.findByText(/Calendar access is on, and so is Reminders\./)).toBeInTheDocument();

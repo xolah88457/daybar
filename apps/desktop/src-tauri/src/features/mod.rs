@@ -124,22 +124,24 @@ mod tests {
     use super::*;
 
     fn snapshot() -> Snapshot {
+        let mut preferences: crate::contracts::Preferences = serde_json::from_str(
+            r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#,
+        )
+        .unwrap();
+        preferences.features = crate::contracts::Features::all_optional_off();
         Snapshot {
             settings: Default::default(),
             daily_log: Default::default(),
             focus: Default::default(),
             sleep: Default::default(),
-            preferences: serde_json::from_str(
-                r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#,
-            )
-            .unwrap(),
+            preferences,
             issues: vec![],
             conflicts: vec![],
         }
     }
 
     #[test]
-    fn stubs_contribute_nothing_even_when_radar_is_on() {
+    fn radar_adds_no_alerts_without_items() {
         let mut s = snapshot();
         let f = &mut s.preferences.features;
         f.radar.enabled = true;

@@ -48,18 +48,18 @@
         "focus": true,
         "sleep": true,
         "radar": {
-          "enabled": false,
+          "enabled": true,
           "calendars": [],
           "reminderLists": [],
           "includeReminders": true,
           "daysAhead": 60,
           "overdueDaysBack": 14,
           "keywords": [],
-          "dueAlerts": false,
+          "dueAlerts": true,
           "alertTime": "09:00"
         },
         "roomBeforeEvent": {
-          "enabled": false
+          "enabled": true
         },
         "hourlyChime": {
           "enabled": false,
@@ -68,12 +68,12 @@
           "sound": true
         },
         "checkIns": {
-          "enabled": false,
+          "enabled": true,
           "morningTime": "08:00",
           "eveningTime": "20:00"
         },
         "streakSaver": {
-          "enabled": false,
+          "enabled": true,
           "minutesBeforeBed": 90
         },
         "autoCycle": {
@@ -81,12 +81,12 @@
           "longBreakEvery": 4
         },
         "focusShortcuts": {
-          "enabled": false,
+          "enabled": true,
           "onStart": "",
           "onEnd": ""
         },
         "awayDetection": {
-          "enabled": false,
+          "enabled": true,
           "idleMinutes": 5
         },
         "movementNudges": {
@@ -96,16 +96,16 @@
           "activeEnd": "18:00"
         },
         "insights": {
-          "enabled": false
+          "enabled": true
         },
         "exportHistory": {
-          "enabled": false
+          "enabled": true
         },
         "commandPalette": {
-          "enabled": false
+          "enabled": true
         },
         "extraCountdowns": {
-          "enabled": false,
+          "enabled": true,
           "items": []
         }
       },
@@ -129,20 +129,20 @@
         },
         "radar": {
           "default": {
-            "enabled": false,
+            "enabled": true,
             "calendars": [],
             "reminderLists": [],
             "includeReminders": true,
             "daysAhead": 60,
             "overdueDaysBack": 14,
             "keywords": [],
-            "dueAlerts": false,
+            "dueAlerts": true,
             "alertTime": "09:00"
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "calendars": {
@@ -192,7 +192,7 @@
               }
             },
             "dueAlerts": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "alertTime": {
@@ -216,12 +216,12 @@
         },
         "roomBeforeEvent": {
           "default": {
-            "enabled": false
+            "enabled": true
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             }
           },
@@ -268,14 +268,14 @@
         },
         "checkIns": {
           "default": {
-            "enabled": false,
+            "enabled": true,
             "morningTime": "08:00",
             "eveningTime": "20:00"
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "morningTime": {
@@ -314,13 +314,13 @@
         },
         "streakSaver": {
           "default": {
-            "enabled": false,
+            "enabled": true,
             "minutesBeforeBed": 90
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "minutesBeforeBed": {
@@ -362,14 +362,14 @@
         },
         "focusShortcuts": {
           "default": {
-            "enabled": false,
+            "enabled": true,
             "onStart": "",
             "onEnd": ""
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "onStart": {
@@ -392,13 +392,13 @@
         },
         "awayDetection": {
           "default": {
-            "enabled": false,
+            "enabled": true,
             "idleMinutes": 5
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "idleMinutes": {
@@ -454,12 +454,12 @@
         },
         "insights": {
           "default": {
-            "enabled": false
+            "enabled": true
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             }
           },
@@ -470,12 +470,12 @@
         },
         "exportHistory": {
           "default": {
-            "enabled": false
+            "enabled": true
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             }
           },
@@ -486,12 +486,12 @@
         },
         "commandPalette": {
           "default": {
-            "enabled": false
+            "enabled": true
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             }
           },
@@ -502,13 +502,13 @@
         },
         "extraCountdowns": {
           "default": {
-            "enabled": false,
+            "enabled": true,
             "items": []
           },
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "items": {
@@ -573,6 +573,12 @@
         "extraCountdowns"
       ],
       "additionalProperties": false
+    },
+    "featuresVersion": {
+      "default": 2,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
     }
   },
   "required": [
@@ -583,7 +589,8 @@
     "globalShortcut",
     "themeMode",
     "trayDisplay",
-    "features"
+    "features",
+    "featuresVersion"
   ],
   "additionalProperties": false
 }

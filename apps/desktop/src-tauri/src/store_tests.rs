@@ -330,6 +330,7 @@ fn debug_restart_revokes_persisted_real_folder_without_probing_it() {
         theme_mode: ThemeMode::Night,
         tray_display: TrayDisplay::Auto,
         features: Features::default(),
+        features_version: FEATURES_VERSION,
     };
     atomic(&prefs, &encode(&p).unwrap()).unwrap();
     let store = Store::open(root.clone(), Some(prefs)).unwrap();
@@ -461,4 +462,28 @@ fn feature_toggles_persist_and_legacy_preferences_files_still_load() {
     assert!(store.check_preferences(&prefs).is_err());
     assert!(store.set_preferences(prefs).is_err());
     assert_eq!(store.preferences().unwrap().features.radar.days_ahead, 30);
+}
+#[test]
+fn a_0_3_0_preferences_file_picks_up_the_new_defaults_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let root = base.join("sandbox");
+    let file = base.join("preferences.json");
+    let folder = root.to_string_lossy();
+    // 0.3.0 wrote every new feature as off and had no featuresVersion.
+    let old = format!(
+        r#"{{"dataFolder":{folder:?},"realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":"","features":{{"sleep":false,"radar":{{"enabled":false}},"checkIns":{{"enabled":false}},"insights":{{"enabled":false}},"hourlyChime":{{"enabled":false}}}}}}"#
+    );
+    fs::create_dir_all(&root).unwrap();
+    fs::write(&file, old).unwrap();
+    let store = Store::open(root.clone(), Some(file.clone())).unwrap();
+    let mut prefs = store.preferences().unwrap();
+    assert_eq!(prefs.features_version, FEATURES_VERSION);
+    assert!(prefs.features.radar.enabled && prefs.features.check_ins.enabled && prefs.features.insights.enabled);
+    assert!(!prefs.features.sleep && !prefs.features.hourly_chime.enabled);
+    // Switched off after the upgrade: stays off across a restart.
+    prefs.features.radar.enabled = false;
+    store.set_preferences(prefs).unwrap();
+    let reopened = Store::open(root, Some(file)).unwrap();
+    assert!(!reopened.preferences().unwrap().features.radar.enabled);
 }

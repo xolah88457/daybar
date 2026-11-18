@@ -73,7 +73,29 @@ pub struct Preferences {
  pub data_folder: String, pub real_data: bool, pub launch_at_login: bool, pub hide_dock: bool, pub global_shortcut: String,
  #[serde(default)] pub theme_mode: ThemeMode,
  #[serde(default)] pub tray_display: TrayDisplay,
- #[serde(default)] pub features: Features
+ #[serde(default)] pub features: Features,
+ /// Which feature defaults this file has been brought up to. Missing (0) means a file written before
+ /// 0.3.1, which `upgrade_features` brings up to date on load.
+ #[serde(default)] pub features_version: u32
+}
+/// Bumped when feature defaults change. Mirrors `currentFeaturesVersion` in the core contracts.
+/// 2: the useful features start on (0.3.1); see docs/DECISIONS.md 012.
+pub const FEATURES_VERSION: u32 = 2;
+impl Preferences {
+ /// Brings an older file's feature switches up to the current defaults, once. 0.3.0 shipped every
+ /// new feature off and wrote those `false`s into the file, so they reflect the old default rather
+ /// than a choice. The four modules and the features that still start off are left alone.
+ pub fn upgrade_features(&mut self) {
+  if self.features_version >= FEATURES_VERSION { return; }
+  let f = &mut self.features;
+  f.radar.enabled = true; f.radar.due_alerts = true;
+  f.check_ins.enabled = true; f.streak_saver.enabled = true;
+  f.away_detection.enabled = true; f.insights.enabled = true;
+  // Built in (always on in `active`); the stored flags are set too so the file reads the same.
+  f.room_before_event.enabled = true; f.focus_shortcuts.enabled = true; f.export_history.enabled = true;
+  f.command_palette.enabled = true; f.extra_countdowns.enabled = true;
+  self.features_version = FEATURES_VERSION;
+ }
 }
 // App-local feature toggles and configuration (Mac only; never part of the shared settings.json).
 // Mirrors `featuresSchema` in packages/core/src/contracts/index.ts; limits live in validation.rs.
@@ -86,7 +108,7 @@ pub struct Features {
  pub away_detection: AwayDetectionConfig, pub movement_nudges: MovementNudgesConfig, pub insights: Toggle,
  pub export_history: Toggle, pub command_palette: Toggle, pub extra_countdowns: ExtraCountdownsConfig
 }
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Toggle { pub enabled: bool }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,7 +129,7 @@ pub struct StreakSaverConfig { pub enabled: bool, pub minutes_before_bed: u32 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all="camelCase", deny_unknown_fields)]
 pub struct AutoCycleConfig { pub enabled: bool, pub long_break_every: u32 }
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all="camelCase", deny_unknown_fields)]
 pub struct FocusShortcutsConfig { pub enabled: bool, pub on_start: String, pub on_end: String }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,7 +141,7 @@ pub struct MovementNudgesConfig { pub enabled: bool, pub interval_minutes: u32, 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 pub struct ExtraCountdown { pub id: String, pub title: String, pub start_date: String, pub end_date: String }
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all="camelCase", deny_unknown_fields)]
 pub struct ExtraCountdownsConfig { pub enabled: bool, pub items: Vec<ExtraCountdown> }
 impl Default for Features { fn default() -> Self { Self {
@@ -128,30 +150,46 @@ impl Default for Features { fn default() -> Self { Self {
  streak_saver:StreakSaverConfig::default(), auto_cycle:AutoCycleConfig::default(), focus_shortcuts:FocusShortcutsConfig::default(),
  away_detection:AwayDetectionConfig::default(), movement_nudges:MovementNudgesConfig::default(), insights:Toggle::default(),
  export_history:Toggle::default(), command_palette:Toggle::default(), extra_countdowns:ExtraCountdownsConfig::default() } } }
-impl Default for RadarConfig { fn default() -> Self { Self { enabled:false, calendars:vec![], reminder_lists:vec![], include_reminders:true, days_ahead:60, overdue_days_back:14, keywords:vec![], due_alerts:false, alert_time:"09:00".into() } } }
+// Defaults mirror the core contracts: the useful features start on; hourly chime, movement nudges
+// and auto-cycle start off.
+impl Default for Toggle { fn default() -> Self { Self { enabled:true } } }
+impl Default for FocusShortcutsConfig { fn default() -> Self { Self { enabled:true, on_start:String::new(), on_end:String::new() } } }
+impl Default for ExtraCountdownsConfig { fn default() -> Self { Self { enabled:true, items:vec![] } } }
+impl Default for RadarConfig { fn default() -> Self { Self { enabled:true, calendars:vec![], reminder_lists:vec![], include_reminders:true, days_ahead:60, overdue_days_back:14, keywords:vec![], due_alerts:true, alert_time:"09:00".into() } } }
 impl Default for HourlyChimeConfig { fn default() -> Self { Self { enabled:false, quiet_start:"22:00".into(), quiet_end:"08:00".into(), sound:true } } }
-impl Default for CheckInsConfig { fn default() -> Self { Self { enabled:false, morning_time:"08:00".into(), evening_time:"20:00".into() } } }
-impl Default for StreakSaverConfig { fn default() -> Self { Self { enabled:false, minutes_before_bed:90 } } }
+impl Default for CheckInsConfig { fn default() -> Self { Self { enabled:true, morning_time:"08:00".into(), evening_time:"20:00".into() } } }
+impl Default for StreakSaverConfig { fn default() -> Self { Self { enabled:true, minutes_before_bed:90 } } }
 impl Default for AutoCycleConfig { fn default() -> Self { Self { enabled:false, long_break_every:4 } } }
-impl Default for AwayDetectionConfig { fn default() -> Self { Self { enabled:false, idle_minutes:5 } } }
+impl Default for AwayDetectionConfig { fn default() -> Self { Self { enabled:true, idle_minutes:5 } } }
 impl Default for MovementNudgesConfig { fn default() -> Self { Self { enabled:false, interval_minutes:50, active_start:"09:00".into(), active_end:"18:00".into() } } }
 impl Features {
+ /// The 0.3.0 defaults: modules on, every other switch off. Tests start here so each one turns on
+ /// only the features it is about.
+ #[cfg(test)]
+ pub fn all_optional_off() -> Self {
+  let mut f = Self::default();
+  f.radar.enabled = false; f.radar.due_alerts = false; f.room_before_event.enabled = false;
+  f.check_ins.enabled = false; f.streak_saver.enabled = false; f.focus_shortcuts.enabled = false;
+  f.away_detection.enabled = false; f.insights.enabled = false; f.export_history.enabled = false;
+  f.command_palette.enabled = false; f.extra_countdowns.enabled = false;
+  f
+ }
  /// Whether a feature is on AND everything it depends on is on. `id` is the camelCase key used in
  /// preferences.json (`focus`, `radar`, `hourlyChime`, ...); unknown ids are off.
  pub fn active(&self, id: &str) -> bool {
   match id {
    "countdown" => self.countdown, "habits" => self.habits, "focus" => self.focus, "sleep" => self.sleep,
    "radar" => self.radar.enabled,
-   "roomBeforeEvent" => self.radar.enabled && self.room_before_event.enabled,
+   // Built-in features have no switch: on whenever what they need is on (mirrors `builtInFeatureIds`).
+   "roomBeforeEvent" => self.radar.enabled,
    "hourlyChime" => self.hourly_chime.enabled, "checkIns" => self.check_ins.enabled,
    "streakSaver" => self.streak_saver.enabled,
    // Focus extras need the Focus module (mirrors `featureRequires` in the frontend).
    "autoCycle" => self.focus && self.auto_cycle.enabled,
-   "focusShortcuts" => self.focus && self.focus_shortcuts.enabled,
+   "focusShortcuts" => self.focus,
    "awayDetection" => self.focus && self.away_detection.enabled,
    "movementNudges" => self.movement_nudges.enabled, "insights" => self.insights.enabled,
-   "exportHistory" => self.export_history.enabled, "commandPalette" => self.command_palette.enabled,
-   "extraCountdowns" => self.extra_countdowns.enabled,
+   "exportHistory" | "commandPalette" | "extraCountdowns" => true,
    _ => false
   }
  }
@@ -214,7 +252,9 @@ mod tests {
   let prefs: Preferences = serde_json::from_str(r#"{"dataFolder":"/sandbox","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#).unwrap();
   assert_eq!(prefs.features, Features::default());
   assert!(prefs.features.countdown && prefs.features.habits && prefs.features.focus && prefs.features.sleep);
-  assert!(!prefs.features.radar.enabled && !prefs.features.insights.enabled);
+  assert!(prefs.features.radar.enabled && prefs.features.insights.enabled && prefs.features.check_ins.enabled);
+  assert!(!prefs.features.hourly_chime.enabled && !prefs.features.movement_nudges.enabled && !prefs.features.auto_cycle.enabled);
+  assert_eq!(prefs.features_version, 0, "a file without the field is an old one");
   let json = serde_json::to_value(&prefs).unwrap();
   assert_eq!(json["features"]["radar"]["daysAhead"], 60);
   assert_eq!(json["features"]["radar"]["alertTime"], "09:00");
@@ -228,11 +268,36 @@ mod tests {
   let prefs: Preferences = serde_json::from_str(r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":"","features":{"focus":false,"radar":{"enabled":true,"daysAhead":30}}}"#).unwrap();
   assert!(!prefs.features.focus && prefs.features.sleep);
   assert!(prefs.features.radar.enabled && prefs.features.radar.days_ahead == 30 && prefs.features.radar.overdue_days_back == 14);
-  assert!(prefs.features.active("radar") && !prefs.features.active("roomBeforeEvent") && !prefs.features.active("focus"));
+  assert!(prefs.features.active("radar") && prefs.features.active("roomBeforeEvent") && !prefs.features.active("focus"));
   for bad in [r#"{"nope":true}"#, r#"{"radar":{"nope":1}}"#] {
    let raw = format!(r#"{{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":"","features":{bad}}}"#);
    assert!(serde_json::from_str::<Preferences>(&raw).is_err());
   }
+ }
+ #[test] fn built_in_features_ignore_their_stored_flag_but_not_what_they_need() {
+  let mut f = Features::default();
+  f.room_before_event.enabled = false; f.focus_shortcuts.enabled = false; f.export_history.enabled = false;
+  f.command_palette.enabled = false; f.extra_countdowns.enabled = false;
+  for id in ["roomBeforeEvent", "focusShortcuts", "exportHistory", "commandPalette", "extraCountdowns"] { assert!(f.active(id), "{id}"); }
+  f.radar.enabled = false; f.focus = false;
+  assert!(!f.active("roomBeforeEvent") && !f.active("focusShortcuts"));
+ }
+ #[test] fn upgrade_turns_on_the_new_defaults_once_and_leaves_choices_alone() {
+  // A 0.3.0 file: every new feature written as off, Focus turned off by the person, chime turned on.
+  let mut prefs: Preferences = serde_json::from_str(r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":"","features":{"focus":false,"radar":{"enabled":false,"daysAhead":30},"checkIns":{"enabled":false},"streakSaver":{"enabled":false},"awayDetection":{"enabled":false},"insights":{"enabled":false},"hourlyChime":{"enabled":true},"movementNudges":{"enabled":false},"autoCycle":{"enabled":false}}}"#).unwrap();
+  prefs.upgrade_features();
+  let f = &prefs.features;
+  assert!(f.radar.enabled && f.radar.due_alerts && f.radar.days_ahead == 30);
+  assert!(f.check_ins.enabled && f.streak_saver.enabled && f.away_detection.enabled && f.insights.enabled);
+  assert!(!f.focus, "modules are the person's choice");
+  assert!(f.hourly_chime.enabled && !f.movement_nudges.enabled && !f.auto_cycle.enabled, "start-off features keep their value");
+  assert_eq!(prefs.features_version, FEATURES_VERSION);
+  assert_eq!(serde_json::to_value(&prefs).unwrap()["featuresVersion"], FEATURES_VERSION);
+  // Once upgraded, a feature switched off stays off.
+  prefs.features.radar.enabled = false;
+  let mut again: Preferences = serde_json::from_value(serde_json::to_value(&prefs).unwrap()).unwrap();
+  again.upgrade_features();
+  assert!(!again.features.radar.enabled);
  }
  #[test] fn rejects_unknown_fields() { assert!(serde_json::from_str::<Settings>("{\"schemaVersion\":1,\"future\":true}").is_err()); }
 }
