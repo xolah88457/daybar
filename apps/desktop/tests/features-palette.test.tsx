@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DaybarClient, Snapshot } from '@daybar/core/contracts';
 import { Dashboard } from '../src/components/dashboard';
 import { buildCommands, filterCommands } from '../src/features/commandPalette';
@@ -38,6 +38,17 @@ async function ready(snapshot: Snapshot) {
 beforeEach(() => {
   vi.stubGlobal('confirm', vi.fn(() => true));
 });
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+// The no-phone window depends on the clock: wake at 00:00 with 16 awake hours puts bed at 16:00,
+// so these tests pin local noon instead of relying on when CI happens to run.
+function atLocalNoon() {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 17, 12, 0));
+  return '2026-11-17';
+}
 
 describe('command palette', () => {
   it('opens on Ctrl+K or Cmd+K, focuses the search box and toggles closed', async () => {
@@ -133,9 +144,10 @@ describe('command palette', () => {
   });
   it('does not start focus when the no-phone confirmation is declined', async () => {
     vi.stubGlobal('confirm', vi.fn(() => false));
+    const today = atLocalNoon();
     const s = enabled((x) => {
       x.settings.sleep.noPhoneMinutes = 1440; // always inside no-phone time while awake
-      x.sleep.wakes[new Date().toISOString().slice(0, 10)] = 0;
+      x.sleep.wakes[today] = 0;
     });
     const c = await ready(s);
     open();
@@ -146,9 +158,10 @@ describe('command palette', () => {
   });
   it('skips the no-phone confirmation when the Sleep module is off', async () => {
     vi.stubGlobal('confirm', vi.fn(() => false));
+    const today = atLocalNoon();
     const s = enabled((x) => {
       x.settings.sleep.noPhoneMinutes = 1440;
-      x.sleep.wakes[new Date().toISOString().slice(0, 10)] = 0;
+      x.sleep.wakes[today] = 0;
       x.preferences.features.sleep = false;
     });
     const c = await ready(s);

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Features } from '@daybar/core/contracts';
 import { SettingsPanel } from '../src/components/settings';
 import { Config as CheckIns } from '../src/features/checkIns';
@@ -36,10 +36,23 @@ describe('Hourly chime config', () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({ enabled: true, quietStart: '23:30', quietEnd: '07:00', sound: false });
   });
-  it('previews the next chime on the hour and follows unsaved quiet hours', () => {
+  // The preview depends on the clock, so pin it rather than relying on when the suite runs.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  it('previews the next chime on the hour', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 17, 10, 20));
     const { props } = setup('hourlyChime', { quietStart: '00:00', quietEnd: '00:00' });
     render(<HourlyChime {...props} />);
-    expect(preview()).toMatch(/^Next: \d{1,2}:00 (am|pm)$/);
+    expect(preview()).toBe('Next: 11:00 am');
+  });
+  it('previews midnight as tomorrow late in the evening', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 17, 23, 30));
+    const { props } = setup('hourlyChime', { quietStart: '00:00', quietEnd: '00:00' });
+    render(<HourlyChime {...props} />);
+    expect(preview()).toBe('Next: tomorrow 12:00 am');
   });
   it('rejects an empty quiet time without saving', () => {
     const { props, save } = setup('hourlyChime');
