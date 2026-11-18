@@ -33,23 +33,26 @@ These downloads need no Node/Rust installation. macOS will not recognise the dev
 
 ## Optional features
 
-**Settings → Features** has a switch for each module and feature. The switches are stored only on this Mac (`preferences.json`); the settings file shared with the phone is never changed. Countdown, Habits, Focus and Sleep start on; turning one off hides its screen, Today card, menu-bar label and alerts, and keeps its data. Everything below starts **off**, so updating changes nothing until you opt in.
+**Settings → Features** groups everything into five sections that stay closed until you open one; each shows how many of its switches are on, and a feature's own settings sit behind its **Options** toggle. The choices are stored only on this Mac (`preferences.json`); the settings file shared with the phone is never changed. Turning a page off hides its screen, Today card, menu-bar label and alerts, and keeps its data.
 
-| Group | Feature | What it does |
-| --- | --- | --- |
-| Deadline Radar | Deadline Radar | Calendar events and reminders with due dates, colored by urgency like the phone widget. Own screen, Today card, optional "next deadline" menu-bar label and a daily "Due tomorrow" alert. Asks for Calendars/Reminders access only when you turn it on. |
-| | Room before next event | "Room for ~N focus blocks before Design review at 12:15", from your next timed event today. Needs Deadline Radar. |
-| Time awareness | Hourly chime | A notification on the hour, outside quiet hours. |
-| | Check-ins | "Plan your day" in the morning; "N tasks left" in the evening (skipped when you're done). |
-| | Streak saver | One alert before bed if today's habits would break your streak. |
-| | Movement nudges | "Stand up and stretch" every N minutes in your active hours, skipped during focus. |
-| Focus | Auto-cycle | When a focus session runs to the end, the break starts by itself; a long break every Nth session. |
-| | Run a Shortcut | Runs a macOS Shortcut you name when focus starts and ends, e.g. to turn on Do Not Disturb. |
-| | Away detection | If the Mac sits idle during focus, asks "Still focusing?" and offers to stop the timer. |
-| Review & extras | Weekly insights | Focus, habits and sleep this week vs last week, built from data you already have. |
-| | Export history | Saves focus, habit and sleep history as CSV or JSON to Downloads. Never changes your data. |
-| | Command palette | ⌘K to jump to a screen, start or stop focus, tick off a task or log wake/bed. |
-| | Extra countdowns | More countdowns on Today. Mac only; the phone keeps the main countdown. |
+Almost everything starts **on**. Only the three that interrupt you often or change how sessions run start off: hourly chime, movement nudges and auto-cycle. Features marked *built in* have no switch: they do nothing until you use them, or come with the feature they belong to. Updating from 0.3.0 switches on the features that now start on, once; after that your choices stay as you set them.
+
+| Section | Feature | Starts | What it does |
+| --- | --- | --- | --- |
+| Pages | Countdown, Habits, Focus, Sleep | On | The four main pages. |
+| | Insights | On | Focus, habits and sleep this week vs last week, built from data you already have. |
+| Deadline Radar | Deadline Radar | On | Calendar events and reminders with due dates, colored by urgency like the phone widget. Own screen, Today card, optional "next deadline" menu-bar label and a daily "Due tomorrow" alert. Asks for Calendars/Reminders access the first time you open the Deadline Radar page, or when you press **Grant access**. |
+| | Room before next event | Built in | "Room for ~N focus blocks before Design review at 12:15", from your next timed event today. Shown once Calendar access is granted. |
+| Reminders | Check-ins | On | "Plan your day" in the morning; "N tasks left" in the evening (skipped when you're done). |
+| | Streak saver | On | One alert before bed if today's habits would break your streak. |
+| | Hourly chime | Off | A notification on the hour, outside quiet hours. |
+| | Movement nudges | Off | "Stand up and stretch" every N minutes in your active hours, skipped during focus. |
+| Focus sessions | Away detection | On | If the Mac sits idle during focus, asks "Still focusing?" and offers to stop the timer. |
+| | Auto-cycle | Off | When a focus session runs to the end, the break starts by itself; a long break every Nth session. |
+| | Run a Shortcut | Built in | Runs a macOS Shortcut you name when focus starts and ends, e.g. to turn on Do Not Disturb. Leave the names blank to run nothing. |
+| Tools | Export history | Built in | Saves focus, habit and sleep history as CSV or JSON to Downloads. Never changes your data. |
+| | Command palette | Built in | ⌘K to jump to a screen, start or stop focus, tick off a task or log wake/bed. |
+| | Extra countdowns | Built in | More countdowns on Today once you add one. Mac only; the phone keeps the main countdown. |
 
 Alerts only fire while Daybar is running, like every other Daybar notification. None of these features use the network.
 

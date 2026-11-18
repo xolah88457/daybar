@@ -5,12 +5,7 @@ import type { Actions } from '../components/modules';
 
 /** Features that carry a configuration object (everything except the four built-in modules). */
 export type ConfigFeatureId = Exclude<FeatureId, ModuleFeatureId>;
-export type FeatureGroup =
-  | 'Modules'
-  | 'Deadline Radar'
-  | 'Time awareness'
-  | 'Focus'
-  | 'Review & extras';
+export type FeatureGroup = 'Pages' | 'Deadline Radar' | 'Reminders' | 'Focus sessions' | 'Tools';
 
 /** Props for a feature's `Config` panel, rendered under its switch while the feature is on. */
 export interface FeatureConfigProps<K extends ConfigFeatureId = ConfigFeatureId> {
@@ -70,9 +65,13 @@ export interface FeatureDef {
   requires?: FeatureId;
   /** Built-in modules hide (and keep their data) instead of adding something new. */
   isModule: boolean;
+  /** No switch: always on once `requires` is on (see `builtInFeatureIds` in core). */
+  builtIn: boolean;
   nav?: FeatureNav;
   Config?: ComponentType<FeatureConfigProps>;
   View?: ComponentType<FeatureViewProps>;
   TodayCard?: ComponentType<FeatureCardProps>;
+  /** When set, the Today card shows only while this returns true (e.g. once there is content). */
+  cardWhen?: (features: Features) => boolean;
   Overlay?: ComponentType<FeatureOverlayProps>;
 }

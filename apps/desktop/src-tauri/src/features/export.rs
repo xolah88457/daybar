@@ -15,8 +15,6 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use tauri::State;
 
-pub const ID: &str = "exportHistory";
-
 /// Highest ` (N)` suffix tried before giving up on finding a free folder name.
 const MAX_FOLDER_SUFFIX: u32 = 999;
 
@@ -320,9 +318,6 @@ fn check_data(snapshot: &Snapshot) -> Result<(), String> {
 
 /// Everything after the read: gating, folder choice, writing and revealing.
 fn run(snapshot: &Snapshot, format: Format) -> Result<String, String> {
-    if !snapshot.preferences.features.active(ID) {
-        return Err("Export history is switched off in Settings → Features.".into());
-    }
     check_data(snapshot)?;
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
@@ -594,10 +589,10 @@ mod tests {
     }
 
     #[test]
-    fn export_is_refused_while_the_feature_is_off_or_data_has_issues() {
+    fn export_is_refused_while_data_has_issues() {
+        // Built in: a stored `false` from an older file does not block it.
         let mut s = snapshot();
-        assert!(run(&s, Format::Csv).unwrap_err().contains("switched off"));
-        s.preferences.features.export_history.enabled = true;
+        s.preferences.features.export_history.enabled = false;
         s.issues.push(crate::contracts::DataIssue {
             file: "focus.json".into(),
             message: "bad".into(),

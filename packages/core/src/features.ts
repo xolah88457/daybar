@@ -21,8 +21,22 @@ export const featureRequires: Partial<Record<FeatureId, FeatureId>> = {
   awayDetection: 'focus'
 };
 
-/** The switch itself, ignoring dependencies. */
+/**
+ * Built-in features have no switch in Settings: each is inert until you use it (a blank Shortcut name,
+ * no extra countdowns, a key you never press) or is part of the feature it requires. They are always
+ * on once that requirement is on. Their stored `enabled` flag is ignored; it stays in the file format
+ * so older preference files still load. Mirrors `Features::active` in the Mac app.
+ */
+export const builtInFeatureIds = [
+  'roomBeforeEvent', 'focusShortcuts', 'exportHistory', 'commandPalette', 'extraCountdowns'
+] as const satisfies readonly FeatureId[];
+export function isBuiltInFeature(id: FeatureId): boolean {
+  return (builtInFeatureIds as readonly FeatureId[]).includes(id);
+}
+
+/** The switch itself, ignoring dependencies. Built-in features are always switched on. */
 export function featureSwitch(features: Features, id: FeatureId): boolean {
+  if (isBuiltInFeature(id)) return true;
   const value = features[id];
   return typeof value === 'boolean' ? value : value.enabled;
 }

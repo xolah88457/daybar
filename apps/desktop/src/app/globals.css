@@ -1595,17 +1595,59 @@ details[open] summary > span {
   grid-column: 1 / -1;
   margin: 0;
 }
-.feature-group {
-  padding: 18px 0 4px;
-  border-top: 1px solid var(--line);
-  margin-top: 18px;
+/* Settings → Features: each group is a closed-by-default <details> (base styles above). */
+.feature-groups {
+  margin-top: 14px;
 }
-.feature-group h3 {
+.feature-group summary {
+  gap: 14px;
+}
+.feature-group-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.feature-group-title strong {
+  font-weight: inherit;
+}
+.feature-group-title small,
+.feature-group-count {
   font-size: 9px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 8px;
+}
+.feature-group-count {
+  flex: none;
+  white-space: nowrap;
+}
+.feature-group[open] > summary {
+  margin-bottom: 6px;
+}
+.feature-label {
+  font-size: 11px;
+}
+.feature-included {
+  flex: none;
+  width: 36px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--green);
+}
+/* A feature's own options: a small inline disclosure, not a full-width section. */
+details.feature-options,
+details.feature-options:first-child {
+  border: 0;
+  padding: 6px 0 0 50px;
+}
+details.feature-options > summary {
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 9px;
+  color: var(--muted);
+}
+details.feature-options > .feature-config {
+  margin-left: 0;
 }
 .feature {
   padding: 10px 0;
@@ -1681,5 +1723,9 @@ input.switch:disabled {
 @media (max-width: 800px) {
   .feature-config {
     margin-left: 0;
+  }
+  details.feature-options,
+  details.feature-options:first-child {
+    padding-left: 0;
   }
 }

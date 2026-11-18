@@ -106,25 +106,27 @@ export type SleepData = z.infer<typeof sleepDataSchema>;
 // App-local feature toggles and configuration. Mac-only: never part of the shared settings.json.
 const clockOrOff = z.union([clock, z.literal('')]);
 const flag = z.boolean().default(false);
+// A feature that starts on (see docs/DECISIONS.md 012); `flag` features start off.
+const on = z.boolean().default(true);
 const nameList = z.array(name).max(100).default([]);
-const toggleOnly = z.object({ enabled: flag }).strict();
+const toggleOnly = z.object({ enabled: on }).strict();
 const radarSchema = z.object({
-  enabled: flag, calendars: nameList, reminderLists: nameList, includeReminders: z.boolean().default(true),
+  enabled: on, calendars: nameList, reminderLists: nameList, includeReminders: z.boolean().default(true),
   daysAhead: z.number().int().min(1).max(365).default(60), overdueDaysBack: z.number().int().min(0).max(90).default(14),
-  keywords: nameList, dueAlerts: flag, alertTime: clock.default('09:00')
+  keywords: nameList, dueAlerts: on, alertTime: clock.default('09:00')
 }).strict();
 const hourlyChimeSchema = z.object({
   enabled: flag, quietStart: clock.default('22:00'), quietEnd: clock.default('08:00'), sound: z.boolean().default(true)
 }).strict();
 const checkInsSchema = z.object({
-  enabled: flag, morningTime: clockOrOff.default('08:00'), eveningTime: clockOrOff.default('20:00')
+  enabled: on, morningTime: clockOrOff.default('08:00'), eveningTime: clockOrOff.default('20:00')
 }).strict();
-const streakSaverSchema = z.object({ enabled: flag, minutesBeforeBed: z.number().int().min(0).max(720).default(90) }).strict();
+const streakSaverSchema = z.object({ enabled: on, minutesBeforeBed: z.number().int().min(0).max(720).default(90) }).strict();
 const autoCycleSchema = z.object({ enabled: flag, longBreakEvery: z.number().int().min(2).max(12).default(4) }).strict();
 // The native side refuses a NUL byte in a Shortcut name, so refuse it here too.
 const shortcutName = z.string().max(120).refine((v) => !v.includes('\u0000'), 'A Shortcut name cannot contain a NUL character').default('');
-const focusShortcutsSchema = z.object({ enabled: flag, onStart: shortcutName, onEnd: shortcutName }).strict();
-const awayDetectionSchema = z.object({ enabled: flag, idleMinutes: z.number().int().min(1).max(60).default(5) }).strict();
+const focusShortcutsSchema = z.object({ enabled: on, onStart: shortcutName, onEnd: shortcutName }).strict();
+const awayDetectionSchema = z.object({ enabled: on, idleMinutes: z.number().int().min(1).max(60).default(5) }).strict();
 const movementNudgesSchema = z.object({
   enabled: flag, intervalMinutes: z.number().int().min(10).max(240).default(50),
   activeStart: clock.default('09:00'), activeEnd: clock.default('18:00')
@@ -133,7 +135,7 @@ const extraCountdownSchema = z.object({
   id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/), title: name, startDate: dateKeySchema, endDate: dateKeySchema
 }).strict().refine(c => c.endDate >= c.startDate, 'End date precedes start date');
 const extraCountdownsSchema = z.object({
-  enabled: flag,
+  enabled: on,
   items: z.array(extraCountdownSchema).max(12).refine(xs => new Set(xs.map(x => x.id)).size === xs.length, 'Duplicate countdown IDs').default([])
 }).strict();
 export const featuresSchema = z.object({
@@ -160,11 +162,15 @@ export type CommandPaletteConfig = Features['commandPalette'];
 export type ExtraCountdownsConfig = Features['extraCountdowns'];
 export type ExtraCountdown = ExtraCountdownsConfig['items'][number];
 
+/** Bumped when feature defaults change; 2 = the useful features start on (0.3.1). */
+export const currentFeaturesVersion = 2;
 export const preferencesSchema = z.object({
   dataFolder: z.string(), realData: z.boolean(), launchAtLogin: z.boolean(), hideDock: z.boolean(), globalShortcut: z.string(),
   themeMode: z.enum(['day', 'night', 'auto']).default('night'),
   trayDisplay: z.enum(['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown', 'nextDeadline']).default('auto'),
-  features: featuresSchema.default(() => featuresSchema.parse({}))
+  features: featuresSchema.default(() => featuresSchema.parse({})),
+  // Which feature defaults this file has been brought up to. The Mac app upgrades older files once.
+  featuresVersion: z.number().int().min(0).default(currentFeaturesVersion)
 }).strict();
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type Operation =

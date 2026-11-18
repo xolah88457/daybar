@@ -83,7 +83,11 @@ export function Config({ snapshot, busy }: FeatureConfigProps<'exportHistory'>) 
           </p>
         )}
       </div>
-      <div role="alert">{result?.kind === 'error' && <p className={styles.error}>{result.text}</p>}</div>
+      {result?.kind === 'error' && (
+        <p className={styles.error} role="alert">
+          {result.text}
+        </p>
+      )}
     </div>
   );
 }

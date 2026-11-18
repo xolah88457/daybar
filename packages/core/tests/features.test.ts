@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  builtInFeatureIds,
+  currentFeaturesVersion,
   defaultFeatures,
   featureEnabled,
   featureRequires,
@@ -16,25 +18,32 @@ const base = { dataFolder: '', realData: false, launchAtLogin: false, hideDock: 
 const item = { id: 'trip', title: 'Trip', startDate: '2026-01-01', endDate: '2026-02-01' };
 
 describe('preferences.features schema', () => {
-  it('defaults: modules on, everything else off, with the documented values', () => {
+  it('defaults: the useful features on; frequent alerts and auto-cycle off', () => {
     expect(defaultFeatures).toMatchObject({ countdown: true, habits: true, focus: true, sleep: true });
-    for (const id of featureIds.slice(4)) expect(featureSwitch(defaultFeatures, id)).toBe(false);
+    const off = ['hourlyChime', 'movementNudges', 'autoCycle'];
+    for (const id of featureIds) {
+      expect(featureSwitch(defaultFeatures, id)).toBe(!off.includes(id));
+      // The stored flag agrees with the switch, so older apps reading the file see the same thing.
+      const value = defaultFeatures[id];
+      expect(typeof value === 'boolean' ? value : value.enabled).toBe(!off.includes(id));
+    }
     expect(defaultFeatures.radar).toEqual({
-      enabled: false, calendars: [], reminderLists: [], includeReminders: true, daysAhead: 60,
-      overdueDaysBack: 14, keywords: [], dueAlerts: false, alertTime: '09:00'
+      enabled: true, calendars: [], reminderLists: [], includeReminders: true, daysAhead: 60,
+      overdueDaysBack: 14, keywords: [], dueAlerts: true, alertTime: '09:00'
     });
     expect(defaultFeatures.hourlyChime).toEqual({ enabled: false, quietStart: '22:00', quietEnd: '08:00', sound: true });
-    expect(defaultFeatures.checkIns).toEqual({ enabled: false, morningTime: '08:00', eveningTime: '20:00' });
+    expect(defaultFeatures.checkIns).toEqual({ enabled: true, morningTime: '08:00', eveningTime: '20:00' });
     expect(defaultFeatures.streakSaver.minutesBeforeBed).toBe(90);
     expect(defaultFeatures.autoCycle.longBreakEvery).toBe(4);
-    expect(defaultFeatures.focusShortcuts).toEqual({ enabled: false, onStart: '', onEnd: '' });
+    expect(defaultFeatures.focusShortcuts).toEqual({ enabled: true, onStart: '', onEnd: '' });
     expect(defaultFeatures.awayDetection.idleMinutes).toBe(5);
     expect(defaultFeatures.movementNudges).toEqual({ enabled: false, intervalMinutes: 50, activeStart: '09:00', activeEnd: '18:00' });
-    expect(defaultFeatures.extraCountdowns).toEqual({ enabled: false, items: [] });
+    expect(defaultFeatures.extraCountdowns).toEqual({ enabled: true, items: [] });
     expect(Object.keys(defaultFeatures).sort()).toEqual([...featureIds].sort());
   });
   it('parses old preferences without a features key and fills partial objects from defaults', () => {
     expect(preferencesSchema.parse(base).features).toEqual(defaultFeatures);
+    expect(preferencesSchema.parse(base).featuresVersion).toBe(currentFeaturesVersion);
     const parsed = preferencesSchema.parse({ ...base, features: { focus: false, radar: { enabled: true, daysAhead: 30 } } });
     expect(parsed.features.focus).toBe(false);
     expect(parsed.features.sleep).toBe(true);
@@ -92,6 +101,19 @@ describe('preferences.features schema', () => {
 });
 
 describe('feature helpers', () => {
+  it('built-in features are always switched on, whatever their stored flag says', () => {
+    const allOff = Object.fromEntries(
+      featureIds.map((id) => [id, typeof defaultFeatures[id] === 'boolean' ? false : { ...(defaultFeatures[id] as object), enabled: false }])
+    );
+    const parsed = featuresSchema.parse(allOff);
+    for (const id of featureIds) {
+      expect(featureSwitch(parsed, id)).toBe((builtInFeatureIds as readonly string[]).includes(id));
+    }
+    // Still subject to what they require.
+    expect(featureEnabled(parsed, 'roomBeforeEvent')).toBe(false);
+    expect(featureEnabled(parsed, 'focusShortcuts')).toBe(false);
+    expect(featureEnabled(parsed, 'commandPalette')).toBe(true);
+  });
   it('the Focus extras need the Focus module', () => {
     for (const id of ['autoCycle', 'focusShortcuts', 'awayDetection'] as const) {
       expect(featureRequires[id]).toBe('focus');
@@ -103,7 +125,7 @@ describe('feature helpers', () => {
     }
   });
   it('room before an event needs Deadline Radar; switching keeps configuration', () => {
-    const on = setFeatureSwitch(setFeatureSwitch(defaultFeatures, 'roomBeforeEvent', true), 'hourlyChime', true);
+    const on = setFeatureSwitch(setFeatureSwitch(defaultFeatures, 'radar', false), 'hourlyChime', true);
     expect(featureSwitch(on, 'roomBeforeEvent')).toBe(true);
     expect(featureEnabled(on, 'roomBeforeEvent')).toBe(false);
     const withRadar = setFeatureSwitch(on, 'radar', true);

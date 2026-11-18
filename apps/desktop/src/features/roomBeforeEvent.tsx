@@ -20,6 +20,9 @@ export function TodayCard({ snapshot, now }: FeatureCardProps) {
     // The clock ticks every second; the minute is the resolution that matters here.
     [radar.data, config, blockMinutes, Math.floor(now.getTime() / 60000)]
   );
+  // Comes with Radar and starts on, so stay out of the way until Calendar can be read: the
+  // Deadlines card already explains how to grant access.
+  if (radar.data && radar.data.status.events !== 'fullAccess') return null;
   const time = room
     ? new Date(room.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
     : '';

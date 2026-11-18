@@ -62,10 +62,12 @@ describe('command palette', () => {
     fireEvent.keyDown(window, { key: 'K', metaKey: true });
     expect(palette()).toBeInTheDocument();
   });
-  it('does nothing while the feature is off', async () => {
-    await ready(fixture());
+  it('is built in: opens even when an older preferences file stored it as off', async () => {
+    const s = fixture();
+    s.preferences.features.commandPalette.enabled = false;
+    await ready(s);
     open();
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
   it('ignores a plain k, Shift+Ctrl+K and a key held down', async () => {
     await ready(enabled());

@@ -285,6 +285,7 @@ mod tests {
             r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#,
         )
         .unwrap();
+        preferences.features = crate::contracts::Features::all_optional_off();
         let timer = |kind: &str| TimerState {
             r#type: kind.into(),
             minutes: 25,

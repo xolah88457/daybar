@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { featureEnabled, featureRequires, moduleFeatureIds } from '@daybar/core';
+import { featureEnabled, featureRequires, isBuiltInFeature, moduleFeatureIds } from '@daybar/core';
 import type { FeatureId } from '@daybar/core';
 import type { Features } from '@daybar/core/contracts';
 import * as autoCycle from './autoCycle';
@@ -25,15 +25,16 @@ import type {
   FeatureOverlayProps
 } from './types';
 
-export const featureGroups: readonly FeatureGroup[] = [
-  'Modules',
-  'Deadline Radar',
-  'Time awareness',
-  'Focus',
-  'Review & extras'
+/** Settings → Features lists these as collapsible sections, in this order, with a one-line hint. */
+export const featureGroups: readonly { group: FeatureGroup; hint: string }[] = [
+  { group: 'Pages', hint: 'Which pages appear in the sidebar.' },
+  { group: 'Deadline Radar', hint: 'Upcoming events and due reminders from your calendar.' },
+  { group: 'Reminders', hint: 'Notifications that keep your day on track.' },
+  { group: 'Focus sessions', hint: 'Extras for timed focus sessions.' },
+  { group: 'Tools', hint: 'Always available; nothing to switch on.' }
 ];
 
-type Meta = Pick<FeatureDef, 'label' | 'description' | 'group' | 'permission'> & {
+type Meta = Pick<FeatureDef, 'label' | 'description' | 'group' | 'permission' | 'cardWhen'> & {
   nav?: FeatureNav;
 };
 // The one place that widens a feature's typed Config to the registry's generic shape.
@@ -47,6 +48,7 @@ function feature<K extends FeatureId>(
     ...meta,
     requires: featureRequires[id],
     isModule: (moduleFeatureIds as readonly string[]).includes(id),
+    builtIn: isBuiltInFeature(id),
     Config: module.Config as ComponentType<FeatureConfigProps> | undefined,
     View: module.View,
     TodayCard: module.TodayCard,
@@ -56,7 +58,7 @@ function feature<K extends FeatureId>(
 }
 
 /**
- * Every toggleable feature, in the order Settings lists them. To add a view or a Today card, export
+ * Every feature, in the order Settings lists them within their group. To add a view or a Today card, export
  * `View` / `TodayCard` from the feature's own file (and give the entry `nav` metadata for a view);
  * this list is the only shared place that imports those files.
  */
@@ -64,22 +66,22 @@ export const featureRegistry: readonly FeatureDef[] = [
   feature('countdown', {
     label: 'Countdown',
     description: 'The countdown to your big date, shown as a grid of days.',
-    group: 'Modules'
+    group: 'Pages'
   }),
   feature('habits', {
     label: 'Habits',
     description: 'Daily tasks, streaks and the long-run heatmap.',
-    group: 'Modules'
+    group: 'Pages'
   }),
   feature('focus', {
     label: 'Focus',
     description: 'Timed focus sessions and breaks, counted in whole blocks.',
-    group: 'Modules'
+    group: 'Pages'
   }),
   feature('sleep', {
     label: 'Sleep',
     description: 'Your wake and bedtime rhythm, with bedtime alerts.',
-    group: 'Modules'
+    group: 'Pages'
   }),
   feature(
     'radar',
@@ -106,20 +108,11 @@ export const featureRegistry: readonly FeatureDef[] = [
     roomBeforeEvent
   ),
   feature(
-    'hourlyChime',
-    {
-      label: 'Hourly chime',
-      description: 'A gentle notification on the hour, outside your quiet hours.',
-      group: 'Time awareness'
-    },
-    hourlyChime
-  ),
-  feature(
     'checkIns',
     {
       label: 'Morning and evening check-ins',
       description: 'A nudge to plan your day and to review it.',
-      group: 'Time awareness'
+      group: 'Reminders'
     },
     checkIns
   ),
@@ -128,25 +121,43 @@ export const featureRegistry: readonly FeatureDef[] = [
     {
       label: 'Streak saver',
       description: 'A reminder before bed if today’s habits are unfinished.',
-      group: 'Time awareness'
+      group: 'Reminders'
     },
     streakSaver
+  ),
+  feature(
+    'hourlyChime',
+    {
+      label: 'Hourly chime',
+      description: 'A gentle notification on the hour, outside your quiet hours.',
+      group: 'Reminders'
+    },
+    hourlyChime
   ),
   feature(
     'movementNudges',
     {
       label: 'Movement nudges',
       description: 'Reminds you to stand up and move during your active hours.',
-      group: 'Time awareness'
+      group: 'Reminders'
     },
     movementNudges
+  ),
+  feature(
+    'awayDetection',
+    {
+      label: 'Away detection',
+      description: 'Notices when you step away from the Mac during a session.',
+      group: 'Focus sessions'
+    },
+    awayDetection
   ),
   feature(
     'autoCycle',
     {
       label: 'Auto-cycle sessions',
       description: 'Starts the next break or focus session for you, with a long break every few rounds.',
-      group: 'Focus'
+      group: 'Focus sessions'
     },
     autoCycle
   ),
@@ -155,25 +166,16 @@ export const featureRegistry: readonly FeatureDef[] = [
     {
       label: 'Focus shortcuts',
       description: 'Runs a macOS Shortcut when a focus session starts or ends.',
-      group: 'Focus'
+      group: 'Focus sessions'
     },
     focusShortcuts
-  ),
-  feature(
-    'awayDetection',
-    {
-      label: 'Away detection',
-      description: 'Notices when you step away from the Mac during a session.',
-      group: 'Focus'
-    },
-    awayDetection
   ),
   feature(
     'insights',
     {
       label: 'Insights',
       description: 'A page of patterns across your focus, habits and sleep.',
-      group: 'Review & extras',
+      group: 'Pages',
       nav: {
         label: 'Insights',
         symbol: '≋',
@@ -187,7 +189,7 @@ export const featureRegistry: readonly FeatureDef[] = [
     {
       label: 'Export history',
       description: 'Save your history as a file you can keep.',
-      group: 'Review & extras'
+      group: 'Tools'
     },
     exportHistory
   ),
@@ -196,7 +198,7 @@ export const featureRegistry: readonly FeatureDef[] = [
     {
       label: 'Command palette',
       description: 'Jump anywhere or start a session from the keyboard.',
-      group: 'Review & extras'
+      group: 'Tools'
     },
     commandPalette
   ),
@@ -205,7 +207,9 @@ export const featureRegistry: readonly FeatureDef[] = [
     {
       label: 'Extra countdowns',
       description: 'More countdown grids for other dates.',
-      group: 'Review & extras'
+      group: 'Tools',
+      // Built in, so only take room on Today once there is something to count down to.
+      cardWhen: (features) => features.extraCountdowns.items.length > 0
     },
     extraCountdowns
   )
@@ -222,7 +226,7 @@ export function todayCards(
   features: Features
 ): { id: FeatureId; Card: ComponentType<FeatureCardProps> }[] {
   return featureRegistry.flatMap((def) =>
-    def.TodayCard && featureEnabled(features, def.id)
+    def.TodayCard && featureEnabled(features, def.id) && (def.cardWhen?.(features) ?? true)
       ? [{ id: def.id, Card: def.TodayCard }]
       : []
   );

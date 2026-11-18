@@ -236,10 +236,13 @@ impl Store {
             theme_mode: ThemeMode::Night,
             tray_display: TrayDisplay::Auto,
             features: Features::default(),
+            features_version: FEATURES_VERSION,
         };
         if let Some(path) = &preference_file {
             if let Some(raw) = bytes(path)? {
                 prefs = decode(&raw)?;
+                // In memory only: the next save writes the upgraded switches and version.
+                prefs.upgrade_features();
             }
         }
         // A debug restart always revokes folder consent BEFORE any selected-folder metadata/read.

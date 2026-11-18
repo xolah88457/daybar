@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { defaultFeatures } from '@daybar/core/contracts';
 import { SettingsPanel } from '../src/components/settings';
 import { demoUpdater } from '../src/lib/updates';
 import { fixture } from './fixtures';
@@ -17,18 +18,46 @@ function props(snapshot = fixture()) {
 }
 const section = () => screen.getByRole('heading', { name: 'Features' }).closest('section') as HTMLElement;
 const toggle = (name: string | RegExp) => within(section()).getByRole('switch', { name });
+const group = (name: string) => within(section()).getByRole('group', { name });
+const row = (id: string) => section().querySelector(`[data-feature="${id}"]`) as HTMLElement;
 
 describe('Settings → Features', () => {
-  it('lists every feature with an accessible switch and its description', () => {
+  it('lists the features in five closed sections, with switches only where there is a choice', () => {
     render(<SettingsPanel {...props()} />);
     const switches = within(section()).getAllByRole('switch');
-    expect(switches).toHaveLength(17);
-    for (const group of ['Modules', 'Deadline Radar', 'Time awareness', 'Focus', 'Review & extras'])
-      expect(within(section()).getByRole('group', { name: group })).toBeInTheDocument();
+    expect(switches).toHaveLength(12);
+    for (const name of ['Pages', 'Deadline Radar', 'Reminders', 'Focus sessions', 'Tools']) {
+      expect(group(name).tagName).toBe('DETAILS');
+      expect(group(name)).not.toHaveAttribute('open');
+    }
+    // Built in: listed, with no switch.
+    expect(within(group('Tools')).queryAllByRole('switch')).toHaveLength(0);
+    for (const name of ['Export history', 'Command palette', 'Extra countdowns'])
+      expect(within(group('Tools')).getByText(name)).toBeInTheDocument();
+    expect(within(group('Pages')).getAllByRole('switch')).toHaveLength(5);
+    expect(toggle('Insights')).toHaveAccessibleDescription(/patterns/);
     expect(toggle('Focus')).toBeChecked();
     expect(toggle('Hourly chime')).not.toBeChecked();
     expect(toggle('Hourly chime')).toHaveAccessibleDescription(/gentle notification on the hour/);
     expect(toggle('Deadline Radar')).toHaveAccessibleDescription(/Calendars & Reminders/);
+  });
+  it('starts with the useful features on and counts them in each section', () => {
+    const s = fixture();
+    s.preferences.features = structuredClone(defaultFeatures);
+    render(<SettingsPanel {...props(s)} />);
+    const count = (name: string) => group(name).querySelector('.feature-group-count')?.textContent;
+    expect(count('Pages')).toBe('5 of 5 on');
+    expect(count('Deadline Radar')).toBe('1 of 1 on');
+    expect(count('Reminders')).toBe('2 of 4 on');
+    expect(count('Focus sessions')).toBe('1 of 2 on');
+    expect(count('Tools')).toBeUndefined();
+    expect(toggle('Hourly chime')).not.toBeChecked();
+    expect(toggle('Movement nudges')).not.toBeChecked();
+    expect(toggle('Auto-cycle sessions')).not.toBeChecked();
+    // A feature's options sit behind their own closed disclosure.
+    const options = within(row('checkIns')).getByText('Options').closest('details')!;
+    expect(options).not.toHaveAttribute('open');
+    expect(within(options).getAllByLabelText(/Morning/).length).toBeGreaterThan(0);
   });
   it('says a module switch hides it and keeps its data', () => {
     render(<SettingsPanel {...props()} />);
@@ -57,34 +86,35 @@ describe('Settings → Features', () => {
     expect(saved.features.hourlyChime).toEqual({ ...s.preferences.features.hourlyChime, enabled: true });
     expect(saved.features.hourlyChime.quietStart).toBe('23:00');
   });
-  it('disables Room before an event while Deadline Radar is off and explains why', async () => {
-    const p = props();
-    const { rerender } = render(<SettingsPanel {...p} />);
-    expect(toggle('Room before an event')).toBeDisabled();
-    expect(toggle('Room before an event')).toHaveAccessibleDescription(/Turn on Deadline Radar first/);
-    fireEvent.click(toggle('Room before an event'));
-    expect(p.savePreferences).not.toHaveBeenCalled();
+  it('shows Room before an event as part of Deadline Radar, with no switch of its own', async () => {
+    const { rerender } = render(<SettingsPanel {...props()} />);
+    expect(within(row('roomBeforeEvent')).queryByRole('switch')).toBeNull();
+    expect(row('roomBeforeEvent')).toHaveTextContent(/Comes with Deadline Radar, which is off/);
     const on = fixture();
     on.preferences.features.radar.enabled = true;
     rerender(<SettingsPanel {...props(on)} />);
-    expect(toggle('Room before an event')).toBeEnabled();
+    expect(row('roomBeforeEvent')).toHaveTextContent(/Comes with Deadline Radar\./);
   });
   it('disables the Focus extras while Focus is off and explains why', async () => {
     const off = fixture();
     off.preferences.features.focus = false;
     const p = props(off);
     const { rerender } = render(<SettingsPanel {...p} />);
-    for (const name of ['Auto-cycle sessions', 'Focus shortcuts', 'Away detection']) {
+    for (const name of ['Auto-cycle sessions', 'Away detection']) {
       expect(toggle(name)).toBeDisabled();
       expect(toggle(name)).toHaveAccessibleDescription(/Turn on Focus first/);
       fireEvent.click(toggle(name));
     }
     expect(p.savePreferences).not.toHaveBeenCalled();
+    // Focus shortcuts is built in: no switch, and no Shortcut fields while Focus is off.
+    expect(row('focusShortcuts')).toHaveTextContent(/Comes with Focus, which is off/);
+    expect(within(row('focusShortcuts')).queryByRole('textbox')).toBeNull();
     rerender(<SettingsPanel {...props()} />);
-    for (const name of ['Auto-cycle sessions', 'Focus shortcuts', 'Away detection']) {
+    for (const name of ['Auto-cycle sessions', 'Away detection']) {
       expect(toggle(name)).toBeEnabled();
       expect(toggle(name)).toHaveAccessibleDescription(/Works together with Focus/);
     }
+    expect(within(row('focusShortcuts')).getAllByRole('textbox').length).toBeGreaterThan(0);
   });
   it('lets a blocked switch that is already on be turned off', async () => {
     const s = fixture();
