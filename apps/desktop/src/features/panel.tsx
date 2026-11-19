@@ -24,6 +24,7 @@ export function FeaturesPanel({
   return (
     <Section
       title="Features"
+      collapsible
       aside={<span className="tag">APP-LOCAL · THIS MAC ONLY</span>}
     >
       <p className="muted">

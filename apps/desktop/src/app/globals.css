@@ -426,7 +426,21 @@ h1 {
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 20px;
+  --today-gap: 20px;
+  gap: var(--today-gap);
+}
+/* Cards in the same row share its height, so a short card never leaves a ragged gap below it. */
+.dashboard-grid > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dashboard-grid > div > .section {
+  flex: 1;
+}
+/* Feature cards on Today: a second grid with the same columns, under the four modules. */
+.today-extras {
+  margin-top: var(--today-gap);
 }
 .today-progress {
   grid-column: 1;
@@ -1191,7 +1205,7 @@ details[open] summary > span {
     padding-right: 65px;
   }
   .dashboard-grid {
-    gap: 24px;
+    --today-gap: 24px;
   }
   .section {
     padding: 28px;
@@ -1232,7 +1246,7 @@ details[open] summary > span {
     letter-spacing: 0.3px;
   }
   .dashboard-grid {
-    gap: 15px;
+    --today-gap: 15px;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   .presets {
@@ -1331,7 +1345,7 @@ details[open] summary > span {
     font-size: 36px;
   }
   .dashboard-grid {
-    gap: 16px;
+    --today-gap: 16px;
   }
   .section {
     padding: 21px;
@@ -1485,7 +1499,7 @@ details[open] summary > span {
 }
 @media (orientation: landscape) and (min-width: 801px) {
   .dashboard-grid {
-    gap: 14px;
+    --today-gap: 14px;
   }
   .dashboard-grid .section {
     padding: 19px;
@@ -1528,7 +1542,7 @@ details[open] summary > span {
   }
   .dashboard-grid {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(290px, 1.1fr);
-    gap: 12px;
+    --today-gap: 12px;
   }
   .today-habits {
     grid-column: 2;
@@ -1728,4 +1742,33 @@ input.switch:disabled {
   details.feature-options:first-child {
     padding-left: 0;
   }
+}
+/* Settings sections that open and close from their header (Section with `collapsible`). */
+.section-collapsible > details,
+.section-collapsible > details:first-child {
+  border: 0;
+  padding: 0;
+}
+.section-collapsible > details > summary.section-head {
+  font-size: inherit;
+}
+.section-collapsible > details:not([open]) > summary.section-head {
+  margin-bottom: 0;
+}
+.section-head-aside {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.section-chevron {
+  font-style: normal;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.section-collapsible > details[open] > summary .section-chevron {
+  transform: rotate(180deg);
+}
+.section-collapsible > details > summary:focus-visible {
+  outline: 1px solid var(--green);
+  outline-offset: 4px;
 }

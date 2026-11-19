@@ -567,6 +567,9 @@ export function Dashboard({
 }
 
 // Today's cards: the built-in modules that are on, then cards contributed by enabled features.
+// With all four modules on they keep their designed positions, and feature cards go in a second
+// grid underneath with the same columns, so an extra card never reshuffles the main layout. With
+// a module off, everything reflows into one grid.
 function Today(actions: Actions) {
   const features = actions.snapshot.preferences.features;
   const extra = todayCards(features);
@@ -574,39 +577,45 @@ function Today(actions: Actions) {
     features.sleep || features.focus || features.habits || features.countdown;
   const allModules =
     features.sleep && features.focus && features.habits && features.countdown;
-  return (
-    <div className={`dashboard-grid${!allModules || extra.length ? ' flow' : ''}`}>
-      {features.sleep && (
-        <div className="today-progress">
-          <DayProgress {...actions} />
-        </div>
-      )}
-      {features.focus && (
-        <div className="today-focus">
-          <Focus {...actions} />
-        </div>
-      )}
-      {features.habits && (
-        <div className="today-habits">
-          <Habits {...actions} compact />
-        </div>
-      )}
-      {features.countdown && (
-        <div className="today-countdown">
-          <Countdown {...actions} />
-        </div>
-      )}
-      {extra.map(({ id, Card }) => (
-        <div className="today-card" data-feature={id} key={id}>
-          <Card {...actions} />
-        </div>
-      ))}
-      {!anyModule && extra.length === 0 && (
-        <p className="muted today-empty">
-          Every module is switched off. Turn some back on in Settings → Features;
-          your data is kept.
-        </p>
-      )}
+  const cards = extra.map(({ id, Card }) => (
+    <div className="today-card" data-feature={id} key={id}>
+      <Card {...actions} />
     </div>
+  ));
+  return (
+    <>
+      <div className={`dashboard-grid${allModules ? '' : ' flow'}`}>
+        {features.sleep && (
+          <div className="today-progress">
+            <DayProgress {...actions} />
+          </div>
+        )}
+        {features.focus && (
+          <div className="today-focus">
+            <Focus {...actions} />
+          </div>
+        )}
+        {features.habits && (
+          <div className="today-habits">
+            <Habits {...actions} compact />
+          </div>
+        )}
+        {features.countdown && (
+          <div className="today-countdown">
+            <Countdown {...actions} />
+          </div>
+        )}
+        {!allModules && cards}
+        {!anyModule && extra.length === 0 && (
+          <p className="muted today-empty">
+            Every module is switched off. Turn some back on in Settings → Features;
+            your data is kept.
+          </p>
+        )}
+      </div>
+      {allModules && cards.length > 0 && (
+        <div className="dashboard-grid flow today-extras">{cards}</div>
+      )}
+    </>
   );
 }
