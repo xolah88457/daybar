@@ -22,23 +22,85 @@ export function Section({
   title,
   index,
   aside,
+  collapsible,
   children
 }: {
   title: string;
   index?: string;
   aside?: ReactNode;
+  /** Settings sections: the header opens and closes the section (closed until opened, remembered). */
+  collapsible?: boolean;
   children: ReactNode;
 }) {
+  const heading = (
+    <h2>
+      {index && <span className="index">{index}</span>}
+      {title}
+    </h2>
+  );
+  if (collapsible)
+    return (
+      <CollapsibleSection title={title} heading={heading} aside={aside}>
+        {children}
+      </CollapsibleSection>
+    );
   return (
     <section className="section">
       <header className="section-head">
-        <h2>
-          {index && <span className="index">{index}</span>}
-          {title}
-        </h2>
+        {heading}
         {aside}
       </header>
       {children}
+    </section>
+  );
+}
+
+const openKey = (title: string) => `daybar.section-open.${title}`;
+function CollapsibleSection({
+  title,
+  heading,
+  aside,
+  children
+}: {
+  title: string;
+  heading: ReactNode;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  // Read after mount: storage can be missing or blocked, and the page must render without it.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(openKey(title)) === '1') setOpen(true);
+    } catch {
+      /* closed */
+    }
+  }, [title]);
+  return (
+    <section className="section section-collapsible">
+      <details
+        open={open}
+        onToggle={(e) => {
+          const next = e.currentTarget.open;
+          setOpen(next);
+          try {
+            localStorage.setItem(openKey(title), next ? '1' : '0');
+          } catch {
+            /* not remembered */
+          }
+        }}
+      >
+        <summary className="section-head">
+          {heading}
+          <div className="section-head-aside">
+            {aside}
+            <i className="section-chevron" aria-hidden="true">
+              ↙
+            </i>
+          </div>
+        </summary>
+        {children}
+      </details>
     </section>
   );
 }

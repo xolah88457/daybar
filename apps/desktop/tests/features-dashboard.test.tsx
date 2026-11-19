@@ -45,6 +45,19 @@ describe('module toggles in the dashboard', () => {
     // Zero change: the Today grid keeps its explicit card positions.
     expect(container.querySelector('.dashboard-grid')).not.toHaveClass('flow');
   });
+  it('keeps the four modules in place and puts feature cards in a grid of their own below', async () => {
+    const s = fixture();
+    s.preferences.features.extraCountdowns.items = [
+      { id: 'trip', title: 'Trip', startDate: '2026-11-01', endDate: '2026-12-01' }
+    ];
+    const { container } = render(<Dashboard client={mockClient(s).client} />);
+    await screen.findByRole('checkbox', { name: /Read a chapter/ });
+    const [main, extras] = container.querySelectorAll('.dashboard-grid');
+    expect(main).not.toHaveClass('flow');
+    expect(main.querySelector('[data-feature]')).toBeNull();
+    expect(extras).toHaveClass('flow', 'today-extras');
+    expect(extras.querySelector('[data-feature="extraCountdowns"]')).not.toBeNull();
+  });
   it('removes the sidebar items of modules that are off and numbers the rest in order', async () => {
     render(<Dashboard client={mockClient(withOff('habits', 'sleep')).client} />);
     await screen.findByRole('heading', { level: 1, name: 'Here & now.' });

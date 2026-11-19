@@ -67,6 +67,7 @@ export function UpdatesPanel({
   return (
     <Section
       title="Updates"
+      collapsible
       aside={<span className="tag">ONLY WHEN YOU ASK</span>}
     >
       <div className="updates">

@@ -90,6 +90,7 @@ export function SettingsPanel({
     <>
       <Section
         title="Make it your day"
+        collapsible
         aside={<span className="tag">SHARED SETTINGS · v1</span>}
       >
         <p className="muted">
@@ -235,6 +236,7 @@ export function SettingsPanel({
       />
       <Section
         title="Tasks, with their history"
+        collapsible
         aside={<span className="tag">ARCHIVE, NEVER ERASE</span>}
       >
         <p className="caption">
@@ -345,7 +347,7 @@ export function SettingsPanel({
         hasUnsavedChanges={hasUnsavedChanges}
         confirm={confirm}
       />
-      <Section title="Keyboard, not mouse">
+      <Section title="Keyboard, not mouse" collapsible>
         <div className="shortcut-list">
           <p>
             <kbd>1–{views.length}</kbd>
@@ -423,6 +425,7 @@ function PreferencesPanel({
   return (
     <Section
       title="On this Mac"
+      collapsible
       aside={<span className="tag">APP-LOCAL PREFERENCES</span>}
     >
       <form

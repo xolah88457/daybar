@@ -4,6 +4,7 @@ import { getCountdown, getHabitGrid, key } from '@daybar/core';
 import {
   Blocks,
   Heatmap,
+  Section,
   Progress,
   TimerDisplay,
   dayProjectedSettings,
@@ -157,5 +158,33 @@ describe('appearance tokens', () => {
     });
     expect(raw.appearance.green).toBe('#39d353');
     expect(raw.appearance.background).toBe('#0d1117');
+  });
+});
+
+describe('collapsible sections', () => {
+  it('start closed, open from the header and remember it', () => {
+    localStorage.clear();
+    const { container, unmount } = render(
+      <Section title="Updates" collapsible aside={<span className="tag">MAC</span>}>
+        <p>Body</p>
+      </Section>
+    );
+    const details = container.querySelector('details')!;
+    expect(details).not.toHaveAttribute('open');
+    expect(screen.getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(localStorage.getItem('daybar.section-open.Updates')).toBe('1');
+    unmount();
+    const again = render(
+      <Section title="Updates" collapsible>
+        <p>Body</p>
+      </Section>
+    );
+    expect(again.container.querySelector('details')).toHaveAttribute('open');
+  });
+  it('render as a plain section without the prop', () => {
+    const { container } = render(<Section title="Focus">x</Section>);
+    expect(container.querySelector('details')).toBeNull();
   });
 });
