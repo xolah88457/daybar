@@ -547,7 +547,7 @@ export function Dashboard({
                 ? 'MEMORY ONLY / NO SYNC'
                 : snapshot?.preferences.realData
                   ? 'REAL SHARED FOLDER'
-                  : 'SANDBOX DATA'}{' '}
+                  : 'THIS MAC ONLY / NOT SYNCED'}{' '}
             <i />
           </span>
         </footer>

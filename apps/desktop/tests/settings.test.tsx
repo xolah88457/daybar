@@ -5,6 +5,11 @@ import { DayProgress, Focus } from '../src/components/modules';
 import { demoUpdater } from '../src/lib/updates';
 import { fixture } from './fixtures';
 
+vi.mock('@tauri-apps/api/path', () => ({
+  homeDir: async () => '/Users/me',
+  join: async (...parts: string[]) => parts.join('/')
+}));
+
 const now = new Date(2026, 10, 15, 12);
 function props() {
   return {
@@ -114,6 +119,28 @@ describe('settings and safety controls', () => {
         })
       )
     );
+  });
+  it('fills in the iPhone Scriptable folder in the desktop app, still behind consent', async () => {
+    const p = props();
+    expect(
+      render(<SettingsPanel {...p} />).queryByRole('button', { name: /iPhone’s Scriptable folder/ })
+    ).toBeNull();
+    document.body.innerHTML = '';
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    try {
+      render(<SettingsPanel {...p} />);
+      expect(screen.getByText(/Not synced/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /iPhone’s Scriptable folder/ }));
+      await waitFor(() =>
+        expect(screen.getByRole('textbox', { name: 'Data folder path' })).toHaveValue(
+          '/Users/me/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents'
+        )
+      );
+      expect(screen.getByRole('checkbox', { name: /This is my real shared data/ })).toBeChecked();
+      expect(screen.getByRole('button', { name: 'Save Mac preferences ↗' })).toBeDisabled();
+    } finally {
+      delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    }
   });
   it('shows logId as read-only with stable identifier hint', () => {
     const p = props();

@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { URL } from 'node:url';
 const source = new URL('../packages/core/tests/fixtures/', import.meta.url);
@@ -9,4 +9,6 @@ for (const file of await readdir(source)) {
   try { await copyFile(new URL(file, source), new URL(file, target), constants.COPYFILE_EXCL); }
   catch (error) { if (error.code !== 'EEXIST') throw error; }
 }
+// Tells the app these are the fixtures on purpose, so it does not move them aside as old sample data.
+await writeFile(new URL('.daybar-starter', target), 'fixtures\n', { flag: 'a' });
 console.log('Sandbox seeded; existing files preserved.');

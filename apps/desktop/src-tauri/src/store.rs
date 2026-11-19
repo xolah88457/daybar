@@ -121,6 +121,68 @@ fn decode_current<T: DeserializeOwned + Validate>(
 ) -> Result<Option<T>> {
     files.get(name).map(|b| decode(b)).transpose()
 }
+/// Present in a sandbox that holds the blank starter, not the pre-0.3.3 fictional sample data.
+pub(crate) const STARTER_MARKER: &str = ".daybar-starter";
+
+/// The sandbox's first files: one placeholder habit and a year-long countdown from today, no history.
+fn starter_files(today: chrono::NaiveDate) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut settings = Settings::default();
+    let day = |d: chrono::NaiveDate| d.format("%Y-%m-%d").to_string();
+    settings.countdown.title = "Countdown".into();
+    settings.countdown.start_date = day(today);
+    settings.countdown.end_date = day(today + chrono::Duration::days(365));
+    settings.habits.start_date = day(today);
+    settings.habits.tasks = vec!["First habit".into()];
+    let log = format!("daily-log-{}.json", settings.habits.log_id);
+    Ok(vec![
+        (SETTINGS.into(), encode(&settings)?),
+        (FOCUS.into(), br#"{"state":null,"days":{},"sessions":{}}"#.to_vec()),
+        (SLEEP.into(), br#"{"wakes":{},"beds":{},"plan":null}"#.to_vec()),
+        (log, b"{}".to_vec()),
+    ])
+}
+
+/// Tests that exercise the store against the fictional fixtures write them before opening it.
+#[cfg(test)]
+pub(crate) fn write_fixtures(root: &Path) {
+    for (name, content) in [
+        (SETTINGS, include_str!("../../../../packages/core/tests/fixtures/daybar-settings.json")),
+        (FOCUS, include_str!("../../../../packages/core/tests/fixtures/focus-timer.json")),
+        (SLEEP, include_str!("../../../../packages/core/tests/fixtures/sleep-data.json")),
+        (
+            "daily-log-Daily_Tasks.json",
+            include_str!("../../../../packages/core/tests/fixtures/daily-log-Daily_Tasks.json"),
+        ),
+        (STARTER_MARKER, "fixtures\n"),
+    ] {
+        fs::write(root.join(name), content).unwrap();
+    }
+}
+
+/// Moves every managed file in the sandbox into `sample-data-<stamp>/`. Run once, before the starter.
+fn retire_sample_data(sandbox: &Path, stamp: &str) -> Result<()> {
+    let mut found = Vec::new();
+    for entry in fs::read_dir(sandbox).map_err(io)? {
+        let entry = entry.map_err(io)?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if (managed(&name) || canonical(&name).is_some()) && entry.file_type().map_err(io)?.is_file() {
+            found.push(name);
+        }
+    }
+    if found.is_empty() {
+        return Ok(());
+    }
+    let folder = sandbox.join(format!("sample-data-{stamp}"));
+    no_symlinks(&folder)?;
+    fs::create_dir_all(&folder).map_err(io)?;
+    for name in found {
+        fs::rename(sandbox.join(&name), folder.join(&name)).map_err(io)?;
+    }
+    fs::File::open(sandbox)
+        .and_then(|d| d.sync_all())
+        .map_err(io)
+}
+
 fn managed(name: &str) -> bool {
     matches!(name, SETTINGS | FOCUS | SLEEP)
         || name.starts_with("daily-log-") && name.ends_with(".json")
@@ -290,36 +352,30 @@ impl Store {
             .lock()
             .map_err(|_| "DataStore mutex poisoned".into())
     }
+    /// Fills the private sandbox with a blank starting point; a connected real folder is never touched.
+    /// Builds before 0.3.3 seeded fictional sample data instead. The first launch of a newer build
+    /// moves those files into a `sample-data-*` folder beside them (nothing is deleted), once.
     fn seed(&self) -> Result<()> {
         let state = self.lock()?;
         if state.prefs.real_data {
             return Ok(());
         }
-        for (name, content) in [
-            (
-                SETTINGS,
-                include_str!("../../../../packages/core/tests/fixtures/daybar-settings.json"),
-            ),
-            (
-                FOCUS,
-                include_str!("../../../../packages/core/tests/fixtures/focus-timer.json"),
-            ),
-            (
-                SLEEP,
-                include_str!("../../../../packages/core/tests/fixtures/sleep-data.json"),
-            ),
-            (
-                "daily-log-Daily_Tasks.json",
-                include_str!("../../../../packages/core/tests/fixtures/daily-log-Daily_Tasks.json"),
-            ),
-        ] {
-            let path = self.sandbox.join(name);
+        let marker = self.sandbox.join(STARTER_MARKER);
+        let fresh = bytes(&marker)?.is_none();
+        if fresh {
+            retire_sample_data(&self.sandbox, &Local::now().format("%Y%m%d-%H%M%S").to_string())?;
+        }
+        for (name, content) in starter_files(Local::now().date_naive())? {
+            let path = self.sandbox.join(&name);
             if bytes(&path)?.is_none()
                 && bytes(&self.sandbox.join(format!(".{name}.icloud")))?.is_none()
             {
-                validate_file(name, content.as_bytes())?;
-                atomic(&path, content.as_bytes())?;
+                validate_file(&name, &content)?;
+                atomic(&path, &content)?;
             }
+        }
+        if fresh {
+            atomic(&marker, b"blank start\n")?;
         }
         Ok(())
     }

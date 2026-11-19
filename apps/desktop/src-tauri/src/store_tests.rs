@@ -4,6 +4,7 @@ use tempfile::TempDir;
 fn sandbox() -> (TempDir, Store, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
+    write_fixtures(&root);
     let store = Store::open(root.clone(), None).unwrap();
     (dir, store, root)
 }
@@ -486,4 +487,60 @@ fn a_0_3_0_preferences_file_picks_up_the_new_defaults_once() {
     store.set_preferences(prefs).unwrap();
     let reopened = Store::open(root, Some(file)).unwrap();
     assert!(!reopened.preferences().unwrap().features.radar.enabled);
+}
+#[test]
+fn a_new_sandbox_starts_blank() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let store = Store::open(root.clone(), None).unwrap();
+    let s = store.snapshot().unwrap();
+    assert!(s.issues.is_empty(), "{:?}", s.issues);
+    assert_eq!(s.settings.habits.tasks, vec!["First habit"]);
+    assert_eq!(s.settings.countdown.title, "Countdown");
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    assert_eq!(s.settings.countdown.start_date, today);
+    assert_eq!(s.settings.habits.start_date, today);
+    assert!(s.daily_log.is_empty());
+    assert!(s.focus.days.is_empty());
+    assert!(s.sleep.wakes.is_empty() && s.sleep.beds.is_empty());
+    assert!(root.join(STARTER_MARKER).is_file());
+    assert!(!fs::read_dir(&root)
+        .unwrap()
+        .any(|e| e.unwrap().file_name().to_string_lossy().starts_with("sample-data-")));
+}
+#[test]
+fn old_sample_data_is_moved_aside_once_and_never_deleted() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    write_fixtures(&root);
+    fs::remove_file(root.join(STARTER_MARKER)).unwrap();
+    write(&root, "daily-log-Daily_Tasks 2.json", "{}");
+    let sample = bytes(&root.join(SETTINGS)).unwrap().unwrap();
+    let store = Store::open(root.clone(), None).unwrap();
+    let s = store.snapshot().unwrap();
+    assert_eq!(s.settings.habits.tasks, vec!["First habit"]);
+    assert!(s.daily_log.is_empty() && s.conflicts.is_empty());
+    let folders: Vec<PathBuf> = fs::read_dir(&root)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.file_name().unwrap().to_string_lossy().starts_with("sample-data-"))
+        .collect();
+    assert_eq!(folders.len(), 1);
+    let kept = &folders[0];
+    assert_eq!(fs::read(kept.join(SETTINGS)).unwrap(), sample);
+    for name in [FOCUS, SLEEP, "daily-log-Daily_Tasks.json", "daily-log-Daily_Tasks 2.json"] {
+        assert!(kept.join(name).is_file(), "{name}");
+    }
+    // The user's own edits after the move survive every later launch.
+    store.mutate(task(&Local::now().format("%Y-%m-%d").to_string(), "First habit")).unwrap();
+    drop(store);
+    let again = Store::open(root.clone(), None).unwrap();
+    assert_eq!(again.snapshot().unwrap().daily_log.len(), 1);
+    assert_eq!(
+        fs::read_dir(&root)
+            .unwrap()
+            .filter(|e| e.as_ref().unwrap().file_name().to_string_lossy().starts_with("sample-data-"))
+            .count(),
+        1
+    );
 }
