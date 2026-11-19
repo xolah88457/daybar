@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import { preferencesSchema, settingsSchema } from '@daybar/core/contracts';
 import type { Preferences, Settings, Snapshot } from '@daybar/core/contracts';
 import type { Actions } from './modules';
@@ -373,6 +374,11 @@ export function SettingsPanel({
 
 const withoutFeatures = (p: Preferences) => ({ ...p, features: null });
 
+// Where Scriptable keeps its iCloud Drive files on a Mac signed in to the same Apple ID as the phone.
+const scriptableFolder = ['Library', 'Mobile Documents', 'iCloud~dk~simonbs~Scriptable', 'Documents'];
+const inDesktopApp = () =>
+  typeof window !== 'undefined' && (isTauri() || '__TAURI_INTERNALS__' in window);
+
 function PreferencesPanel({
   snapshot,
   busy,
@@ -482,6 +488,7 @@ function PreferencesPanel({
           <label className="field">
             Data folder path
             <input
+              aria-label="Data folder path"
               value={draft.dataFolder}
               onChange={(e) => {
                 set('dataFolder', e.target.value);
@@ -489,7 +496,27 @@ function PreferencesPanel({
               }}
               spellCheck={false}
             />
+            <small>
+              {snapshot.preferences.realData
+                ? 'Connected: the iPhone widgets and this Mac share these files.'
+                : 'Not synced: Daybar keeps its data in a private folder on this Mac until you connect your iPhone’s Scriptable folder.'}
+            </small>
           </label>
+          {inDesktopApp() && !snapshot.preferences.realData && (
+            <button
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  const { homeDir, join } = await import('@tauri-apps/api/path');
+                  set('dataFolder', await join(await homeDir(), ...scriptableFolder));
+                  set('realData', true);
+                  setConsent(false);
+                })().catch(() => setError('Could not find your home folder.'));
+              }}
+            >
+              Use my iPhone’s Scriptable folder (iCloud Drive)
+            </button>
+          )}
           <label className="toggle">
             <input
               type="checkbox"
@@ -504,11 +531,11 @@ function PreferencesPanel({
           <div className="notice warning">
             <strong>Your iCloud data stays yours.</strong>
             <p>
-              Development uses a sandbox. Do not point it at Scriptable’s real
-              folder until you want live reads and writes. Real-folder mode
-              creates a timestamped backup before the first write. Invalid files
-              are never silently replaced. Keep this folder downloaded in
-              Finder.
+              Back up iCloud Drive → Scriptable before you connect it. Once
+              connected, Daybar reads and writes the same files as the iPhone
+              widgets and makes a timestamped backup before its first write.
+              Invalid files are never silently replaced. In Finder, choose Keep
+              Downloaded for the Scriptable folder.
             </p>
             {draft.realData && changedFolder && (
               <label className="toggle">

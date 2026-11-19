@@ -16,7 +16,7 @@ Both window images and every GIF source frame were visually inspected. They cont
 ## Safe recapture
 
 1. Use only known synthetic sandbox files. `pnpm seed` does **not** overwrite existing data; back up and deliberately reset a sandbox if old examples remain.
-2. Confirm **SANDBOX DATA**, the app-local folder and `realData=false`. Stop if isolation cannot be established; never point a test at a real iCloud folder.
+2. Confirm **THIS MAC ONLY / NOT SYNCED** (formerly SANDBOX DATA), the app-local folder and `realData=false`. Stop if isolation cannot be established; never point a test at a real iCloud folder.
 3. Capture only the Daybar window or its own status-item rectangle. Never capture the desktop, other apps, adjacent status items, or a Settings page containing a personal folder path.
 4. Inspect every frame, remove unnecessary metadata, and record source commit, setup and capture date. Do not turn an image into an unsupported sync, notification or timing claim.
 

@@ -89,7 +89,7 @@ Typing, composition and dialog guards for bare navigation keys were checked in a
 - For the 0.3.0 optional features, everything that needs a real Mac: the Calendars/Reminders permission prompts (macOS 14+ and 12.3–13) and whether macOS asks again after an update; real calendar data in Deadline Radar; notification delivery and the chime sound; running a named Shortcut; idle detection; Finder reveal after export; ⌘K inside the native window. These are covered by unit tests and a macOS type-check only.
 - For 0.3.1, the one-time upgrade of a real 0.3.0 `preferences.json` to the new defaults, and that Settings no longer prompts for Calendar access while the Radar page still does on first visit.
 
-To check any of these yourself, do it in a disposable sandbox (`pnpm seed`, then `pnpm tauri dev`): confirm the **SANDBOX DATA** badge, exercise one case at a time, and compare the managed JSON files before and after.
+To check any of these yourself, do it in a disposable sandbox (`pnpm seed`, then `pnpm tauri dev`): confirm the **THIS MAC ONLY / NOT SYNCED** badge, exercise one case at a time, and compare the managed JSON files before and after.
 
 ## Switching to real Scriptable data (owner opt-in only)
 
