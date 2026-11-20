@@ -1,23 +1,52 @@
 # Portfolio media
 
-Captured on 2026-11-15 from the unsigned native build of product source **`f6fd53084bc5e3912f312a3a9291cd700cc71fe0`**, using only fictional app-local sandbox fixtures. No real iCloud folder was selected, read or written. Images are observations, not proof of phone sync.
+The Daybar ad replaced the earlier screenshots (`today.png`, `today-day.png` and `menu-bar.gif`, captured 2026-11-15 from the native build). They are still in git history if you need them.
 
 | Asset | Actual content |
 | --- | --- |
-| `today.png` | Native Night dashboard; 1200×840-point owned window, resized to 1800×1306 pixels including its shadow |
-| `today-day.png` | The same native dashboard in Day mode; same dimensions and fictional data |
-| `menu-bar.gif` | Eight actual Daybar-owned status-item crops: Auto, focus minutes, hours, blocks, timer idle, bedtime, next task, countdown; centered on a 500×80 canvas, two seconds each |
+| `daybar-ad.mp4` | 48-second 1920×1080, 30 fps ad with a synthesized soundtrack, made 2026-11-20 from the browser build's fictional in-memory demo data. No real iCloud folder, calendar or personal data is involved. |
+| `daybar-ad-poster.jpg` | A frame from the ad at 7.6 s, used in the main README as a link to the video. |
+| `ad/` | The source that renders the ad (see below). |
 | iPhone image | **OWNER-SUPPLIED PLACEHOLDER:** unavailable; not fabricated |
 
-The GIF is a sampled sequence of saved modes, **not continuous video or a live timer demonstration**. The zero focus totals and idle timer reflect the sandbox at capture time. Crops include only Daybar's own status-item bounds, not neighboring menu-bar items. Each native selection and the actual status text were checked; countdown mode displayed `228d` and survived normal Quit/relaunch.
+## What the ad shows, and what it doesn't
 
-Both window images and every GIF source frame were visually inspected. They contain fictional tasks and the “Community Garden Opening” example, no other app content or personal paths. Text/EXIF/time metadata was removed from the PNGs. The original private sample labels are no longer in these published images.
+- The window content is the real app UI (the static browser build), driven by real clicks: ticking habits, starting a focus block, opening Deadline Radar, switching Day and Night.
+- The app font is DejaVu Sans Mono, which Menlo (the font Daybar uses on macOS) is based on.
+- The backdrop, window frame, headlines, camera moves and cursor are added by the stage page.
+- The "Menu bar" chip mirrors the app's live timer as an illustration. It is not a capture of the macOS menu bar.
+- The iPhone widgets are described, not shown. Sync between devices is not demonstrated.
 
-## Safe recapture
+## How it is made
 
-1. Use only known synthetic sandbox files. `pnpm seed` does **not** overwrite existing data; back up and deliberately reset a sandbox if old examples remain.
-2. Confirm **THIS MAC ONLY / NOT SYNCED** (formerly SANDBOX DATA), the app-local folder and `realData=false`. Stop if isolation cannot be established; never point a test at a real iCloud folder.
-3. Capture only the Daybar window or its own status-item rectangle. Never capture the desktop, other apps, adjacent status items, or a Settings page containing a personal folder path.
-4. Inspect every frame, remove unnecessary metadata, and record source commit, setup and capture date. Do not turn an image into an unsupported sync, notification or timing claim.
+- `ad/stage.html` holds the live app in an iframe inside the designed stage, and describes the scenes: camera keyframes, cursor path, click times and text timing.
+- `ad/render.js` renders the stage frame by frame on Playwright's fake clock, so the app's timers advance exactly 1/30 s per frame and the focus timer counts at real speed.
+- `ad/music.py` synthesizes the soundtrack: pad chords that change with each scene, a quiet arpeggio, UI clicks on the on-screen clicks, and a chime on the logo.
 
-The owner should supply iPhone media from a disposable fictional-data setup, cropped/redacted before publishing. Never overwrite real phone history to stage an image.
+To re-render after UI changes:
+
+```bash
+pnpm build
+```
+```bash
+(cd apps/desktop/out && python3 -m http.server 4173) &
+```
+```bash
+node docs/screenshots/ad/render.js frames
+```
+```bash
+python3 docs/screenshots/ad/music.py music.wav
+```
+```bash
+ffmpeg -framerate 30 -i frames/%05d.jpg -i music.wav -c:v libx264 -preset slow -crf 19 -tune animation -pix_fmt yuv420p -af loudnorm=I=-16:TP=-1.5:LRA=11 -c:a aac -b:a 192k -shortest -movflags +faststart docs/screenshots/daybar-ad.mp4
+```
+
+If the layout changes, check the scene timing in `stage.html` and the click times in `render.js`, which must match. Inspect a contact sheet of the frames before publishing.
+
+## Safe capture rules
+
+1. Use only the browser build's in-memory demo data or known synthetic sandbox files. Never point a capture at a real iCloud folder.
+2. Show only Daybar. Never capture the desktop, other apps, or a Settings page with a personal folder path.
+3. Don't turn an image or video into an unsupported sync, notification or timing claim.
+
+The owner should supply iPhone media from a disposable fictional-data setup, cropped and redacted before publishing. Never overwrite real phone history to stage an image.

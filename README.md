@@ -2,6 +2,10 @@
 
 **Your day, at a glance.** Daybar brings a countdown, daily habits, a focus timer and a sleep-shift plan into one quiet macOS window and menu bar. Built from everyday iPhone Scriptable widgets, it keeps the original dark, monospace, tiny-square visual language while using shared JSON in iCloud Drive rather than a server, account or database. No telemetry.
 
+[![Daybar ad: "Everything for today. One quiet window." above the Daybar window. Click to play the 48-second video.](docs/screenshots/daybar-ad-poster.jpg)](docs/screenshots/daybar-ad.mp4)
+
+*48-second ad (click to play, with sound): habits, focus, countdown, Deadline Radar, Day and Night, and iPhone sync. Rendered from the browser build's demo data; the installed app starts blank. How it's made: [media notes](docs/screenshots/README.md).*
+
 > **Preview:** Apple Silicon, macOS 12.3+. Ad-hoc signed, not notarized. Real iPhone/iCloud acceptance is not claimed. See the [release, verification and safe-switch guide](docs/RELEASE.md).
 
 ## Download the Mac app
@@ -15,14 +19,6 @@ Get the newest version from the [latest release](https://github.com/xolah88457/d
 These downloads need no Node/Rust installation. macOS will not recognise the developer on first open; see [opening the app](docs/RELEASE.md#opening-the-app-on-a-mac) for the steps.
 
 **Updates:** from v0.2.0, **Settings → Check for updates** looks for a newer release on GitHub, installs it after verifying its updater signature, and offers a restart. It runs only when you click; Daybar never checks in the background. v0.1.0 has no updater, so install v0.2.0 manually once. How releases and the signing key work: [release guide](docs/RELEASE.md#publishing-a-release-and-in-app-updates).
-
-![Daybar Today dashboard showing synthetic countdown, tasks, focus and sleep data](docs/screenshots/today.png)
-
-*Native app window, 2026-11-15, fictional sandbox data. Not evidence of iCloud sync.*
-
-![Sampled Daybar-owned menu-bar labels across eight saved modes](docs/screenshots/menu-bar.gif)
-
-*Eight Daybar-owned status-item mode crops, two seconds each, synthetic data. A sampled sequence, not a continuous recording or proof of a live countdown. Capture details: [media notes](docs/screenshots/README.md).*
 
 ## Everyday controls
 
