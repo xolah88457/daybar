@@ -57,7 +57,9 @@ export function stopFocus(data: FocusData, now: Date, blockMinutes: number): {da
 }
 export function formatCountdown(state: TimerState | null, now: Date): string {
   validDate(now);
-  const seconds = state ? Math.max(0, Math.ceil((state.end - now.getTime()) / 1000)) : 0;
+  // Clamped to the planned length: a display clock that ticks once a second can lag the start by up to
+  // a second, which would otherwise show 25:01 right after starting a 25-minute timer.
+  const seconds = state ? Math.min(state.minutes * 60, Math.max(0, Math.ceil((state.end - now.getTime()) / 1000))) : 0;
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 export function roomForBlocks(leftMinutes: number, blockMinutes: number): number {

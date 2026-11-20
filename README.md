@@ -2,6 +2,10 @@
 
 **Your day, at a glance.** Daybar brings a countdown, daily habits, a focus timer and a sleep-shift plan into one quiet macOS window and menu bar. Built from everyday iPhone Scriptable widgets, it keeps the original dark, monospace, tiny-square visual language while using shared JSON in iCloud Drive rather than a server, account or database. No telemetry.
 
+[![Daybar ad: "Everything for today. One quiet window." above the Daybar window. Click to play the 48-second video.](docs/screenshots/daybar-ad-poster.jpg)](docs/screenshots/daybar-ad.mp4)
+
+*48-second ad (click to play, with sound): habits, focus, countdown, Deadline Radar, Day and Night, and iPhone sync. Rendered from the browser build's demo data; the installed app starts blank.*
+
 > **Preview:** Apple Silicon, macOS 12.3+. Ad-hoc signed, not notarized. Real iPhone/iCloud acceptance is not claimed. See the [release, verification and safe-switch guide](docs/RELEASE.md).
 
 ## Download the Mac app

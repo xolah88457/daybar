@@ -97,7 +97,7 @@ describe('focus golden parity and ledger', () => {
       expect(blocks.cellSize).toBe(row.children[0].size?.width);
     }
     const state = startFocus(empty(), 'focus', 25, start, 25).state;
-    for (const [offset, expected] of [[0, '25:00'], [1, '25:00'], [1000, '24:59'], [1500000, '0:00'], [9999999, '0:00']] as const) expect(formatCountdown(state, new Date(+start + offset))).toBe(expected);
+    for (const [offset, expected] of [[-900, '25:00'], [-1, '25:00'], [0, '25:00'], [1, '25:00'], [1000, '24:59'], [1500000, '0:00'], [9999999, '0:00']] as const) expect(formatCountdown(state, new Date(+start + offset))).toBe(expected);
     expect(formatCountdown(null, start)).toBe('0:00');
     expect([-1, 0, 24, 25, 99].map(n => roomForBlocks(n, 25))).toEqual([0, 0, 0, 1, 3]);
     const settings = structuredClone(defaultSettings);
