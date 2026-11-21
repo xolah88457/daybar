@@ -735,7 +735,7 @@ dependencies = [
 
 [[package]]
 name = "daybar"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "base64 0.23.1",
  "block2",
