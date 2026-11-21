@@ -352,6 +352,8 @@ mod tests {
             daily_log: Default::default(),
             focus: Default::default(),
             sleep: Default::default(),
+            spaces: Default::default(),
+            space_logs: Default::default(),
             preferences: serde_json::from_str(
                 r#"{"dataFolder":"/s","realData":false,"launchAtLogin":false,"hideDock":false,"globalShortcut":""}"#,
             )

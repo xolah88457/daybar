@@ -134,7 +134,7 @@ describe('Settings → Features', () => {
     const s = fixture();
     s.preferences.features.habits = false;
     render(<SettingsPanel {...props(s)} />);
-    expect(screen.getByText('Today / Countdown / Focus / Sleep / Settings')).toBeInTheDocument();
+    expect(screen.getByText('Today / Countdown / Focus / Sleep / Overview / Settings')).toBeInTheDocument();
   });
   it('keeps unsaved Mac-preference edits when a feature is switched', async () => {
     const { rerender } = render(<SettingsPanel {...props()} />);

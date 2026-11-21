@@ -169,6 +169,21 @@ describe('Deadline Radar view', () => {
   });
 });
 
+describe('Google Calendar on the radar', () => {
+  it('shows Google events even without macOS Calendar access', async () => {
+    use(createDemoRadarClient({ clock: () => now, status: status('denied'), google: true }));
+    render(<View {...viewProps(radarOn())} />);
+    expect(await screen.findByText('Team offsite planning')).toBeInTheDocument();
+    expect(screen.getByText('CALENDAR + REMINDERS + GOOGLE')).toBeInTheDocument();
+  });
+  it('fills the Today card from Google alone', async () => {
+    use(createDemoRadarClient({ clock: () => now, status: status('denied'), google: true }));
+    render(<TodayCard {...viewProps(radarOn())} />);
+    expect(await screen.findByText('Team offsite planning')).toBeInTheDocument();
+    expect(screen.queryByText(/needs access to Calendar/)).toBeNull();
+  });
+});
+
 describe('Today card', () => {
   it('shows the next three items', async () => {
     use(createDemoRadarClient({ clock: () => now }));
@@ -350,6 +365,48 @@ describe('Radar settings', () => {
     setup(defaultFeatures.radar, createDemoRadarClient({ clock: () => now, status: status('denied') }));
     expect(await screen.findByText(/System Settings → Privacy & Security → Calendars/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Grant access' })).toBeNull();
+  });
+  it('connects Google Calendar with a client ID and secret, lists its calendars and disconnects', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const client = createDemoRadarClient({ clock: () => now });
+    const connect = vi.spyOn(client, 'googleConnect');
+    setup(defaultFeatures.radar, client);
+    const google = within(await screen.findByRole('group', { name: 'Google Calendar' }));
+    const submit = google.getByRole('button', { name: 'Connect Google Calendar' });
+    expect(submit).toBeDisabled();
+    fireEvent.change(google.getByLabelText('Client ID'), { target: { value: 'not-an-id' } });
+    fireEvent.change(google.getByLabelText('Client secret'), { target: { value: 'shh' } });
+    expect(google.getByText(/ends in \.apps\.googleusercontent\.com/)).toBeInTheDocument();
+    expect(submit).toBeDisabled();
+    fireEvent.change(google.getByLabelText('Client ID'), { target: { value: ' 12-ab.apps.googleusercontent.com ' } });
+    fireEvent.click(submit);
+    await waitFor(() => expect(connect).toHaveBeenCalledWith('12-ab.apps.googleusercontent.com', 'shh'));
+    expect(await google.findByText('you@gmail.com')).toBeInTheDocument();
+    // Its calendars join the picker, next to the iCloud ones.
+    const calendars = within(screen.getByRole('group', { name: 'Calendars' }));
+    expect(await calendars.findByRole('checkbox', { name: /Team/ })).toBeInTheDocument();
+    expect(calendars.getByRole('checkbox', { name: /Home/ })).toBeInTheDocument();
+
+    fireEvent.click(google.getByRole('button', { name: 'Disconnect' }));
+    expect(await google.findByRole('button', { name: 'Connect Google Calendar' })).toBeInTheDocument();
+    await waitFor(() => expect(calendars.queryByRole('checkbox', { name: /Team/ })).toBeNull());
+  });
+  it('shows why a Google sign-in failed', async () => {
+    const client = createDemoRadarClient({ clock: () => now });
+    vi.spyOn(client, 'googleConnect').mockRejectedValue('Google Calendar was not connected: access was declined.');
+    setup(defaultFeatures.radar, client);
+    const google = within(await screen.findByRole('group', { name: 'Google Calendar' }));
+    fireEvent.change(google.getByLabelText('Client ID'), { target: { value: '12-ab.apps.googleusercontent.com' } });
+    fireEvent.change(google.getByLabelText('Client secret'), { target: { value: 'shh' } });
+    fireEvent.click(google.getByRole('button', { name: 'Connect Google Calendar' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('access was declined');
+  });
+  it('hides the Google section outside the Mac app', async () => {
+    const client = createDemoRadarClient({ clock: () => now });
+    vi.spyOn(client, 'googleStatus').mockResolvedValue({ supported: false, connected: false, account: null });
+    setup(defaultFeatures.radar, client);
+    await screen.findByRole('group', { name: 'Calendars' });
+    expect(screen.queryByRole('group', { name: 'Google Calendar' })).toBeNull();
   });
   it('disables every control while a save is in flight', async () => {
     const client = createDemoRadarClient({ clock: () => now });

@@ -10,8 +10,15 @@ import {
 import type { RadarItem } from '@daybar/core';
 import type { RadarConfig } from '@daybar/core/contracts';
 import { Section } from '../components/primitives';
-import { getRadarClient } from './radarClient';
-import type { Access, RadarCalendar, RadarCalendars, RadarStatus } from './radarClient';
+import { getRadarClient, googleClientIdPattern } from './radarClient';
+import type {
+  Access,
+  GoogleStatus,
+  RadarCalendar,
+  RadarCalendars,
+  RadarClient,
+  RadarStatus
+} from './radarClient';
 import { useAutoRequest, useRadarItems, useRadarStatus } from './radarState';
 import styles from './radar.module.css';
 import type { FeatureCardProps, FeatureConfigProps, FeatureViewProps } from './types';
@@ -91,9 +98,13 @@ function AccessNotice({
   );
 }
 
-/** Whether anything can be read: Calendar, or Reminders when they are included. One rule for the page and the Today card. */
+/** Whether anything can be read: Calendar, Google, or Reminders when they are included. One rule for the page and the Today card. */
 function radarReadable(status: RadarStatus | undefined, includeReminders: boolean): boolean {
-  return status?.events === 'fullAccess' || (includeReminders && status?.reminders === 'fullAccess');
+  return (
+    status?.events === 'fullAccess' ||
+    !!status?.google ||
+    (includeReminders && status?.reminders === 'fullAccess')
+  );
 }
 
 function dateText(item: RadarItem): string {
@@ -161,7 +172,11 @@ export function View({ snapshot, now }: FeatureViewProps) {
   return (
     <Section
       title="Deadline Radar"
-      aside={<span className="tag">CALENDAR + REMINDERS · THIS MAC</span>}
+      aside={
+        <span className="tag">
+          {status?.google ? 'CALENDAR + REMINDERS + GOOGLE' : 'CALENDAR + REMINDERS · THIS MAC'}
+        </span>
+      }
     >
       <div className={styles.toolbar}>
         <span aria-live="polite">
@@ -278,6 +293,132 @@ function CalendarChecklist({
   );
 }
 
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : typeof e === 'string' ? e : 'Something went wrong.';
+}
+
+/** Direct sign-in to Google Calendar, read alongside whatever macOS Calendar has (iCloud and others). */
+function GoogleCalendar({ client, disabled }: { client: RadarClient; disabled?: boolean }) {
+  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [clientId, setClientId] = useState('');
+  const [secret, setSecret] = useState('');
+  const [working, setWorking] = useState<'' | 'connect' | 'disconnect'>('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let alive = true;
+    client
+      .googleStatus()
+      .then((g) => alive && setGoogle(g))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [client]);
+  if (!google?.supported) return null;
+
+  const act = async (kind: 'connect' | 'disconnect') => {
+    setError('');
+    setWorking(kind);
+    try {
+      const next =
+        kind === 'connect'
+          ? await client.googleConnect(clientId.trim(), secret.trim())
+          : await client.googleDisconnect();
+      setGoogle(next);
+      if (next.connected) setSecret('');
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setWorking('');
+    }
+  };
+  const idProblem =
+    clientId.trim() && !googleClientIdPattern.test(clientId.trim())
+      ? 'A client ID ends in .apps.googleusercontent.com.'
+      : '';
+
+  return (
+    <fieldset className={styles.google}>
+      <legend>Google Calendar</legend>
+      {google.connected ? (
+        <div className={styles.googleRow}>
+          <p>
+            Connected as <strong>{google.account}</strong>. Its calendars are in the list below, next to
+            iCloud and the rest of macOS Calendar.
+          </p>
+          <button
+            type="button"
+            disabled={disabled || !!working}
+            onClick={() => {
+              if (window.confirm('Disconnect Google Calendar? Its events leave the radar.'))
+                void act('disconnect');
+            }}
+          >
+            {working === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        </div>
+      ) : (
+        <form
+          className={styles.googleForm}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act('connect');
+          }}
+        >
+          <p className={styles.hint}>
+            Read Google Calendar directly, alongside iCloud. Daybar asks for read-only access, keeps the
+            sign-in in your Keychain and talks only to Google.
+          </p>
+          <details className={styles.howto}>
+            <summary>Where do I get a client ID?</summary>
+            <ol>
+              <li>In console.cloud.google.com, create a project and enable the Google Calendar API.</li>
+              <li>Under Google Auth Platform, set up the consent screen (External) and add yourself as a test user.</li>
+              <li>Under Clients, create an OAuth client of type Desktop app.</li>
+              <li>Copy its client ID and client secret here.</li>
+            </ol>
+          </details>
+          <label className={styles.field}>
+            Client ID
+            <input
+              type="text"
+              value={clientId}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder="1234-abc.apps.googleusercontent.com"
+              disabled={disabled || !!working}
+              aria-invalid={!!idProblem}
+              onChange={(e) => setClientId(e.target.value)}
+            />
+          </label>
+          <label className={styles.field}>
+            Client secret
+            <input
+              type="password"
+              value={secret}
+              autoComplete="off"
+              disabled={disabled || !!working}
+              onChange={(e) => setSecret(e.target.value)}
+            />
+          </label>
+          {idProblem && <p className={styles.hint}>{idProblem}</p>}
+          <button
+            type="submit"
+            disabled={disabled || !!working || !clientId.trim() || !secret.trim() || !!idProblem}
+          >
+            {working === 'connect' ? 'Waiting for Google in your browser…' : 'Connect Google Calendar'}
+          </button>
+        </form>
+      )}
+      {error && (
+        <p className={styles.problem} role="alert">
+          {error}
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
 const keywordList = (text: string) =>
   [...new Set(text.split(',').map((k) => k.trim()).filter(Boolean))].slice(0, 100);
 
@@ -289,9 +430,10 @@ export function Config({ value, save, busy }: FeatureConfigProps<'radar'>) {
   const [calendars, setCalendars] = useState<RadarCalendars>({ events: [], reminders: [] });
   const events = status?.events;
   const reminders = status?.reminders;
+  const google = !!status?.google;
   useEffect(() => {
     let alive = true;
-    if (events === 'fullAccess' || reminders === 'fullAccess')
+    if (events === 'fullAccess' || reminders === 'fullAccess' || google)
       client
         .calendars()
         .then((c) => alive && setCalendars(c))
@@ -299,7 +441,7 @@ export function Config({ value, save, busy }: FeatureConfigProps<'radar'>) {
     return () => {
       alive = false;
     };
-  }, [client, events, reminders]);
+  }, [client, events, reminders, google]);
 
   const [ahead, setAhead] = useState(String(value.daysAhead));
   const [back, setBack] = useState(String(value.overdueDaysBack));
@@ -345,6 +487,7 @@ export function Config({ value, save, busy }: FeatureConfigProps<'radar'>) {
             : '.'}
         </p>
       )}
+      <GoogleCalendar client={client} disabled={busy} />
       <CalendarChecklist
         legend="Calendars"
         all={calendars.events}

@@ -33,10 +33,13 @@ export function SettingsPanel({
   run,
   confirm,
   savePreferences,
-  updater
+  updater,
+  openSetup
 }: Actions & {
   savePreferences: (p: Preferences) => Promise<boolean>;
   updater: UpdaterClient;
+  /** Opens the guided setup window. */
+  openSetup?: () => void;
 }) {
   const [draft, setDraft] = useState<Settings>(() =>
     structuredClone(snapshot.settings)
@@ -86,7 +89,7 @@ export function SettingsPanel({
       setPresetText({});
     }
   };
-  const views = visibleViews(snapshot.preferences.features);
+  const views = visibleViews(snapshot.preferences.features, snapshot.spaces);
   return (
     <>
       <Section
@@ -348,6 +351,39 @@ export function SettingsPanel({
         hasUnsavedChanges={hasUnsavedChanges}
         confirm={confirm}
       />
+      <Section title="Start fresh" collapsible aside={<span className="tag">SETUP</span>}>
+        <p className="caption">
+          Walk through tasks, a countdown, spaces and modules again
+          {snapshot.preferences.realData
+            ? '. Your connected folder is never cleared from here.'
+            : ', or clear the sample data first. Clearing moves the old files into a sample-data folder; nothing is deleted.'}
+        </p>
+        <div className="button-row">
+          {openSetup && (
+            <button type="button" disabled={busy} onClick={openSetup}>
+              Run setup again
+            </button>
+          )}
+          {!snapshot.preferences.realData && (
+            <button
+              type="button"
+              className="subtle-danger"
+              disabled={busy || snapshot.issues.length > 0}
+              onClick={async () => {
+                if (
+                  await confirm(
+                    'Remove the sample data and start from a blank day? Tasks, history, focus, sleep and spaces in this private folder are moved aside into a sample-data folder.'
+                  ) &&
+                  (await run({ kind: 'reset_starter' }))
+                )
+                  openSetup?.();
+              }}
+            >
+              Remove sample data…
+            </button>
+          )}
+        </div>
+      </Section>
       <Section title="Keyboard, not mouse" collapsible>
         <div className="shortcut-list">
           <p>

@@ -45,7 +45,7 @@ export function buildCommands(
   const features = preferences.features;
   const out: PaletteCommand[] = [];
 
-  for (const v of visibleViews(features))
+  for (const v of visibleViews(features, snapshot.spaces))
     out.push({
       id: `go:${v.id}`,
       title: `Go to ${v.label}`,

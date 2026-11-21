@@ -134,6 +134,8 @@ mod tests {
             daily_log: Default::default(),
             focus: Default::default(),
             sleep: Default::default(),
+            spaces: Default::default(),
+            space_logs: Default::default(),
             preferences,
             issues: vec![],
             conflicts: vec![],

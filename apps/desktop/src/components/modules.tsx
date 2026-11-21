@@ -17,11 +17,14 @@ import {
   recentAvg,
   roomForBlocks,
   signedDiff,
+  spaceLog,
+  spaceSettings,
   toMin,
   wrap
 } from '@daybar/core';
 import type { Operation, Snapshot } from '@daybar/core/contracts';
 import { AwayBanner } from '../features/awayDetection';
+import { Checklist } from './checklist';
 import {
   Blocks,
   clock,
@@ -95,53 +98,30 @@ export function Countdown({ snapshot, now }: Actions) {
     </Section>
   );
 }
-function Checklist({
-  snapshot,
-  now,
-  busy,
-  run,
-  date = key(now)
-}: Actions & { date?: string }) {
-  const done = doneOn(snapshot.dailyLog, date, snapshot.settings.habits.tasks);
-  return (
-    <div className="checklist">
-      {snapshot.settings.habits.tasks.map((task, i) => (
-        <label
-          className={`check-row ${done.includes(task) ? 'checked' : ''}`}
-          key={task}
-        >
-          <input
-            type="checkbox"
-            checked={done.includes(task)}
-            disabled={busy}
-            onChange={(e) =>
-              void run({ kind: 'set_task', date, task, done: e.target.checked })
-            }
-          />
-          <span>{task}</span>
-          <small>{String(i + 1).padStart(2, '0')}</small>
-        </label>
-      ))}
-    </div>
-  );
-}
-export function Habits(props: Actions & { compact?: boolean }) {
-  const { snapshot, now, compact } = props;
+export function Habits(
+  props: Actions & {
+    compact?: boolean;
+    /** A space id other than the main space: its own tasks and log. */
+    space?: string;
+  }
+) {
+  const { snapshot, now, compact, space } = props;
   const today = key(now);
   const [selected, setSelected] = useState(today);
   const { ref, width } = useWidth();
-  const s = snapshot.settings;
+  const own = space ? snapshot.spaces.spaces.find((x) => x.id === space) : undefined;
+  const s = useMemo(
+    () => (own ? spaceSettings(snapshot.settings, own) : snapshot.settings),
+    [own, snapshot.settings]
+  );
+  const log = own ? spaceLog(snapshot, own.id) : snapshot.dailyLog;
   const stats = useMemo(
-    () =>
-      compact ? null : getHabitStats(snapshot.dailyLog, s, parseKey(today)),
-    [compact, snapshot.dailyLog, s, today]
+    () => (compact ? null : getHabitStats(log, s, parseKey(today))),
+    [compact, log, s, today]
   );
   const grid = useMemo(
-    () =>
-      compact
-        ? null
-        : getHabitGrid(snapshot.dailyLog, s, parseKey(today), width),
-    [compact, snapshot.dailyLog, s, today, width]
+    () => (compact ? null : getHabitGrid(log, s, parseKey(today), width)),
+    [compact, log, s, today, width]
   );
   const date = compact ? today : selected;
   return (
@@ -150,7 +130,7 @@ export function Habits(props: Actions & { compact?: boolean }) {
       index="02"
       aside={
         <span className="tag">
-          {doneOn(snapshot.dailyLog, date, s.habits.tasks).length} /{' '}
+          {doneOn(log, date, s.habits.tasks).length} /{' '}
           {s.habits.tasks.length} DONE
         </span>
       }
@@ -213,7 +193,15 @@ export function Habits(props: Actions & { compact?: boolean }) {
           </div>
         </>
       )}
-      <Checklist {...props} date={date} />
+      <Checklist
+        snapshot={snapshot}
+        busy={props.busy}
+        run={props.run}
+        date={date}
+        tasks={s.habits.tasks}
+        log={log}
+        space={own?.id}
+      />
       {stats && (
         <div className="task-rates">
           <h3>Per-task completion</h3>

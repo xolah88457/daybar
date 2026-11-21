@@ -80,7 +80,7 @@ describe('command palette', () => {
   });
   it('opens from inside a text field and puts focus back there on Escape', async () => {
     await ready(enabled());
-    fireEvent.keyDown(window, { key: '6' }); // Settings
+    fireEvent.keyDown(window, { key: '7' }); // Settings
     const field = await screen.findByPlaceholderText('CommandOrControl+Shift+F');
     field.focus();
     fireEvent.keyDown(field, { key: 'k', ctrlKey: true });

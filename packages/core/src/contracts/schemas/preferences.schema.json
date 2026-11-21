@@ -579,6 +579,10 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
+    },
+    "setupDone": {
+      "default": true,
+      "type": "boolean"
     }
   },
   "required": [
@@ -590,7 +594,8 @@
     "themeMode",
     "trayDisplay",
     "features",
-    "featuresVersion"
+    "featuresVersion",
+    "setupDone"
   ],
   "additionalProperties": false
 }

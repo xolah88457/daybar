@@ -23,6 +23,7 @@ use std::{
 const SETTINGS: &str = "daybar-settings.json";
 const FOCUS: &str = "focus-timer.json";
 const SLEEP: &str = "sleep-data.json";
+const SPACES: &str = "daybar-spaces.json";
 const LIMIT: u64 = 8 * 1024 * 1024;
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 fn io(e: impl std::fmt::Display) -> String {
@@ -184,7 +185,7 @@ fn retire_sample_data(sandbox: &Path, stamp: &str) -> Result<()> {
 }
 
 fn managed(name: &str) -> bool {
-    matches!(name, SETTINGS | FOCUS | SLEEP)
+    matches!(name, SETTINGS | FOCUS | SLEEP | SPACES)
         || name.starts_with("daily-log-") && name.ends_with(".json")
 }
 fn logical_name(name: &str) -> &str {
@@ -193,7 +194,7 @@ fn logical_name(name: &str) -> &str {
         .unwrap_or(name)
 }
 fn canonical(name: &str) -> Option<String> {
-    for base in [SETTINGS, FOCUS, SLEEP] {
+    for base in [SETTINGS, FOCUS, SLEEP, SPACES] {
         let stem = base.trim_end_matches(".json");
         if name.ends_with(".json")
             && (name.starts_with(&format!("{stem} ")) || name.starts_with(&format!("{stem}(")))
@@ -240,6 +241,8 @@ fn validate_file(file: &str, content: &[u8]) -> Result<()> {
         let raw: serde_json::Value = serde_json::from_slice(content).map_err(io)?;
         ensure(raw.get("plan").is_some(), "Missing required plan")?;
         decode::<SleepData>(content)?;
+    } else if file == SPACES {
+        decode::<SpacesFile>(content)?;
     } else if file.starts_with("daily-log-") {
         decode::<DailyLogFile>(content)?;
     } else {
@@ -299,12 +302,22 @@ impl Store {
             tray_display: TrayDisplay::Auto,
             features: Features::default(),
             features_version: FEATURES_VERSION,
+            // A brand-new install (no preferences and a sandbox never seeded) gets the guided setup.
+            setup_done: preference_file.is_none()
+                || bytes(&sandbox.join(STARTER_MARKER))?.is_some(),
         };
         if let Some(path) = &preference_file {
             if let Some(raw) = bytes(path)? {
                 prefs = decode(&raw)?;
                 // In memory only: the next save writes the upgraded switches and version.
                 prefs.upgrade_features();
+            } else if !prefs.setup_done {
+                // Remember that setup is still owed, so quitting before finishing shows it again.
+                if let Some(parent) = path.parent() {
+                    no_symlinks(parent)?;
+                    fs::create_dir_all(parent).map_err(io)?;
+                }
+                atomic(path, &encode(&prefs)?)?;
             }
         }
         // A debug restart always revokes folder consent BEFORE any selected-folder metadata/read.
@@ -378,6 +391,28 @@ impl Store {
             atomic(&marker, b"blank start\n")?;
         }
         Ok(())
+    }
+    /// "Remove sample data": moves everything in the private folder into `sample-data-<stamp>/`
+    /// (nothing is deleted) and writes the blank starter again. A connected real folder is refused.
+    fn reset_starter(&self) -> Result<MutationResult> {
+        {
+            let state = self.lock()?;
+            ensure(
+                !state.prefs.real_data,
+                "Daybar only clears its private folder. Edit a connected folder's tasks instead",
+            )?;
+            retire_sample_data(&self.sandbox, &Local::now().format("%Y%m%d-%H%M%S").to_string())?;
+            for (name, content) in starter_files(Local::now().date_naive())? {
+                validate_file(&name, &content)?;
+                atomic(&self.sandbox.join(&name), &content)?;
+            }
+            atomic(&self.sandbox.join(STARTER_MARKER), b"blank start\n")?;
+        }
+        Ok(MutationResult {
+            snapshot: self.snapshot()?,
+            credited_minutes: None,
+            message: Some("Cleared. The old files are kept in a sample-data folder.".into()),
+        })
     }
     pub fn root(&self) -> Result<PathBuf> {
         Ok(PathBuf::from(&self.lock()?.prefs.data_folder))
@@ -484,6 +519,8 @@ impl Store {
             daily_log: DailyLog::new(),
             focus: FocusData::default(),
             sleep: SleepData::default(),
+            spaces: SpacesFile::default(),
+            space_logs: BTreeMap::new(),
             preferences: state.prefs.clone(),
             issues: vec![],
             conflicts: vec![],
@@ -545,6 +582,16 @@ impl Store {
         }
         if let Some(raw) = files.get(&format!("daily-log-{}.json", snap.settings.habits.log_id)) {
             snap.daily_log = normalize_log(decode(raw)?, &snap.settings.habits.tasks);
+        }
+        if let Some(raw) = files.get(SPACES) {
+            snap.spaces = decode(raw)?;
+        }
+        for space in &snap.spaces.spaces {
+            let log = match files.get(&log_name(&space.habits.log_id)) {
+                Some(raw) => normalize_log(decode(raw)?, &space.habits.tasks),
+                None => DailyLog::new(),
+            };
+            snap.space_logs.insert(space.id.clone(), log);
         }
         snap.issues
             .extend(state.errors.iter().map(|(file, message)| DataIssue {
@@ -696,6 +743,9 @@ impl Store {
         self.mutate_at(op, Local::now().timestamp_millis())
     }
     pub(crate) fn mutate_at(&self, op: Operation, now: i64) -> Result<MutationResult> {
+        if matches!(op, Operation::ResetStarter) {
+            return self.reset_starter();
+        }
         let mut state = self.lock()?;
         let (mut snap, files) = self.load(&state)?;
         ensure(
@@ -706,6 +756,8 @@ impl Store {
         let old_focus = snap.focus.clone();
         let old_sleep = snap.sleep.clone();
         let old_log = snap.daily_log.clone();
+        let old_spaces = snap.spaces.clone();
+        let old_space_logs = snap.space_logs.clone();
         let mut updates = BTreeMap::new();
         let mut credit = None;
         let mut message = None;
@@ -715,20 +767,90 @@ impl Store {
                 date: day,
                 mut task,
                 done,
+                space,
             } => {
                 date(&day)?;
                 name(&mut task)?;
+                let (tasks, subs, log) = target(&mut snap, &space)?;
+                ensure(tasks.contains(&task), "Unknown active task")?;
+                let subs = subs.get(&task).cloned().unwrap_or_default();
+                toggle_task(log, &day, &task, done, &subs);
+            }
+            Operation::SetSubtask {
+                date: day,
+                mut task,
+                mut subtask,
+                done,
+                space,
+            } => {
+                date(&day)?;
+                name(&mut task)?;
+                name(&mut subtask)?;
+                let (tasks, subs, log) = target(&mut snap, &space)?;
+                ensure(tasks.contains(&task), "Unknown active task")?;
+                let subs = subs.get(&task).cloned().unwrap_or_default();
+                ensure(subs.contains(&subtask), "Unknown subtask")?;
+                toggle_subtask(log, &day, &task, &subtask, done, &subs);
+            }
+            Operation::RenameTask {
+                mut from,
+                mut to,
+                space: Some(id),
+            } if id != MAIN_SPACE => {
+                name(&mut from)?;
+                name(&mut to)?;
+                let space = snap
+                    .spaces
+                    .spaces
+                    .iter_mut()
+                    .find(|s| s.id == id)
+                    .ok_or("Unknown space")?;
+                let h = &mut space.habits;
+                ensure(h.tasks.contains(&from), "Unknown active task")?;
                 ensure(
-                    snap.settings.habits.tasks.contains(&task),
-                    "Unknown active task",
+                    from == to || !h.tasks.contains(&to) && !h.archived_tasks.contains(&to),
+                    "Task name already exists",
                 )?;
-                let tasks = snap.daily_log.entry(day).or_default();
-                tasks.retain(|t| t != &task);
-                if done {
-                    tasks.push(task);
+                for t in &mut h.tasks {
+                    if *t == from {
+                        *t = to.clone();
+                    }
+                }
+                if let Some(subs) = space.subtasks.remove(&from) {
+                    space.subtasks.insert(to.clone(), subs);
+                }
+                if let Some(log) = snap.space_logs.get_mut(&id) {
+                    rename_log(log, &from, &to);
+                }
+                for link in snap.spaces.focus.values_mut() {
+                    if link.space == id && link.task.as_ref() == Some(&from) {
+                        link.task = Some(to.clone());
+                    }
                 }
             }
-            Operation::RenameTask { mut from, mut to } => {
+            Operation::ArchiveTask {
+                mut task,
+                space: Some(id),
+            } if id != MAIN_SPACE => {
+                name(&mut task)?;
+                let space = snap
+                    .spaces
+                    .spaces
+                    .iter_mut()
+                    .find(|s| s.id == id)
+                    .ok_or("Unknown space")?;
+                let h = &mut space.habits;
+                ensure(h.tasks.contains(&task), "Unknown active task")?;
+                ensure(h.tasks.len() > 1, "Keep at least one active task")?;
+                h.tasks.retain(|t| t != &task);
+                if !h.archived_tasks.contains(&task) {
+                    h.archived_tasks.push(task);
+                }
+                h.day_complete_min = h.day_complete_min.min(h.tasks.len() as u32);
+            }
+            Operation::RenameTask {
+                mut from, mut to, ..
+            } => {
                 name(&mut from)?;
                 name(&mut to)?;
                 ensure(
@@ -749,8 +871,18 @@ impl Store {
                 if let Some(n) = snap.settings.habits.focus_thresholds.remove(&from) {
                     snap.settings.habits.focus_thresholds.insert(to.clone(), n);
                 }
+                // Every log that shares the main task list (phone widget logs too); spaces keep their own.
+                let space_files: BTreeSet<String> = snap
+                    .spaces
+                    .spaces
+                    .iter()
+                    .map(|s| log_name(&s.habits.log_id))
+                    .collect();
+                if let Some(subs) = snap.spaces.main.subtasks.remove(&from) {
+                    snap.spaces.main.subtasks.insert(to.clone(), subs);
+                }
                 for (file, raw) in &files {
-                    if file.starts_with("daily-log-") {
+                    if file.starts_with("daily-log-") && !space_files.contains(file) {
                         let mut log = normalize_log(decode(raw)?, &old_settings.habits.tasks);
                         rename_log(&mut log, &from, &to);
                         updates.insert(file.clone(), encode(&log)?);
@@ -768,7 +900,7 @@ impl Store {
                     }
                 }
             }
-            Operation::ArchiveTask { mut task } => {
+            Operation::ArchiveTask { mut task, .. } => {
                 name(&mut task)?;
                 ensure(
                     snap.settings.habits.tasks.contains(&task),
@@ -793,11 +925,36 @@ impl Store {
                 timer_type,
                 minutes,
                 mut task,
+                space,
             } => {
+                let space = space.filter(|id| id != MAIN_SPACE);
                 if let Some(t) = &mut task {
                     name(t)?;
-                    ensure(snap.settings.habits.tasks.contains(t), "Unknown timer task")?;
                 }
+                let link = match &space {
+                    Some(id) => {
+                        let s = snap
+                            .spaces
+                            .spaces
+                            .iter()
+                            .find(|s| &s.id == id)
+                            .ok_or("Unknown space")?;
+                        if let Some(t) = &task {
+                            ensure(s.habits.tasks.contains(t), "Unknown timer task")?;
+                        }
+                        // The space's task is kept beside the ledger, never in focus-timer.json.
+                        Some(SpaceFocus {
+                            space: id.clone(),
+                            task: task.take(),
+                        })
+                    }
+                    None => {
+                        if let Some(t) = &task {
+                            ensure(snap.settings.habits.tasks.contains(t), "Unknown timer task")?;
+                        }
+                        None
+                    }
+                };
                 focus::start(
                     &mut snap.focus,
                     timer_type,
@@ -806,6 +963,9 @@ impl Store {
                     now,
                     snap.settings.focus.block_minutes,
                 )?;
+                if let (Some(link), Some(state)) = (link, &snap.focus.state) {
+                    snap.spaces.focus.insert(state.start.to_string(), link);
+                }
             }
             Operation::StopTimer => {
                 let n =
@@ -848,10 +1008,47 @@ impl Store {
                 snap.settings = settings;
                 focus::normalize(&mut snap.focus, snap.settings.focus.block_minutes)?;
             }
+            Operation::SaveSpaces { mut spaces } => {
+                spaces.validate()?;
+                // Focus links are written only by starting a timer.
+                spaces.focus = std::mem::take(&mut snap.spaces.focus);
+                for space in &spaces.spaces {
+                    ensure(
+                        space.habits.log_id != snap.settings.habits.log_id,
+                        "A space cannot use the main task log",
+                    )?;
+                    if let Some(old) = snap.spaces.spaces.iter().find(|s| s.id == space.id) {
+                        ensure(
+                            old.habits.log_id == space.habits.log_id,
+                            "Log ID cannot be changed; preserve the existing history file",
+                        )?;
+                        for task in &old.habits.tasks {
+                            ensure(
+                                space.habits.tasks.contains(task)
+                                    || space.habits.archived_tasks.contains(task),
+                                "Use archive or rename to preserve task history",
+                            )?;
+                        }
+                    }
+                }
+                snap.space_logs.retain(|id, _| spaces.spaces.iter().any(|s| &s.id == id));
+                for space in &spaces.spaces {
+                    if !snap.space_logs.contains_key(&space.id) {
+                        let log = match files.get(&log_name(&space.habits.log_id)) {
+                            Some(raw) => normalize_log(decode(raw)?, &space.habits.tasks),
+                            None => DailyLog::new(),
+                        };
+                        snap.space_logs.insert(space.id.clone(), log);
+                    }
+                }
+                snap.spaces = spaces;
+            }
+            Operation::ResetStarter => unreachable!("handled before loading"),
         }
         snap.settings.validate()?;
         snap.focus.validate()?;
         snap.sleep.validate()?;
+        snap.spaces.validate()?;
         union_log(
             &mut snap.daily_log,
             focus::linked(&snap.focus, &snap.settings),
@@ -868,6 +1065,15 @@ impl Store {
         let log_file = format!("daily-log-{}.json", snap.settings.habits.log_id);
         if old_log != snap.daily_log || updates.contains_key(&log_file) {
             updates.insert(log_file, encode(&snap.daily_log)?);
+        }
+        if !same(&old_spaces, &snap.spaces) {
+            updates.insert(SPACES.into(), encode(&snap.spaces)?);
+        }
+        for space in &snap.spaces.spaces {
+            let log = snap.space_logs.get(&space.id);
+            if log != old_space_logs.get(&space.id) && log.is_some_and(|l| !l.is_empty() || files.contains_key(&log_name(&space.habits.log_id))) {
+                updates.insert(log_name(&space.habits.log_id), encode(log.unwrap())?);
+            }
         }
         self.commit(&mut state, &files, updates)?;
         self.notify_focus(&state, &old_focus, &snap.focus);
@@ -960,6 +1166,13 @@ impl Store {
                     )?;
                 }
                 encode(&a)?
+            } else if base == SPACES {
+                let b: SpacesFile = decode(&original)?;
+                ensure(
+                    same(&snap.spaces, &b),
+                    "Spaces differ; pick the copy you want and discard the other",
+                )?;
+                encode(&b)?
             } else {
                 let b: Settings = decode(&original)?;
                 ensure(
@@ -980,11 +1193,76 @@ impl Store {
         self.snapshot()
     }
 }
+fn log_name(log_id: &str) -> String {
+    format!("daily-log-{log_id}.json")
+}
+/// Id of the main space in operations (`None` means the same).
+pub const MAIN_SPACE: &str = "main";
+/// The task list, subtask definitions and log an operation addresses.
+fn target<'a>(
+    snap: &'a mut Snapshot,
+    space: &Option<String>,
+) -> Result<(&'a [String], &'a SubtaskMap, &'a mut DailyLog)> {
+    match space.as_deref().filter(|id| *id != MAIN_SPACE) {
+        None => Ok((
+            &snap.settings.habits.tasks,
+            &snap.spaces.main.subtasks,
+            &mut snap.daily_log,
+        )),
+        Some(id) => {
+            let s = snap
+                .spaces
+                .spaces
+                .iter()
+                .find(|s| s.id == id)
+                .ok_or("Unknown space")?;
+            Ok((
+                &s.habits.tasks,
+                &s.subtasks,
+                snap.space_logs.entry(id.to_string()).or_default(),
+            ))
+        }
+    }
+}
+fn set_entry(day: &mut Vec<String>, entry: &str, done: bool) {
+    day.retain(|t| t != entry);
+    if done {
+        day.push(entry.into());
+    }
+}
+/// A task with subtasks takes them along: ticking it ticks all of them, unticking clears them.
+/// Mirrors `toggleTask` in packages/core/src/spaces.ts.
+pub(crate) fn toggle_task(log: &mut DailyLog, day: &str, task: &str, done: bool, subs: &[String]) {
+    let entries = log.entry(day.into()).or_default();
+    set_entry(entries, task, done);
+    for sub in subs {
+        set_entry(entries, &subtask_entry(task, sub), done);
+    }
+}
+/// The parent is done exactly when every subtask is. Mirrors `toggleSubtask`.
+pub(crate) fn toggle_subtask(
+    log: &mut DailyLog,
+    day: &str,
+    task: &str,
+    sub: &str,
+    done: bool,
+    subs: &[String],
+) {
+    let entries = log.entry(day.into()).or_default();
+    set_entry(entries, &subtask_entry(task, sub), done);
+    let all = subs
+        .iter()
+        .all(|s| entries.contains(&subtask_entry(task, s)));
+    set_entry(entries, task, all);
+}
 fn rename_log(log: &mut DailyLog, from: &str, to: &str) {
+    let prefix = format!("{from}{SUBTASK_SEPARATOR}");
     for tasks in log.values_mut() {
         for t in tasks.iter_mut() {
             if t == from {
                 *t = to.into();
+            } else if let Some(sub) = t.strip_prefix(&prefix) {
+                *t = subtask_entry(to, sub);
             }
         }
         let mut seen = BTreeSet::new();

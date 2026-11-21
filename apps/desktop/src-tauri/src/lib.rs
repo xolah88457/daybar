@@ -97,6 +97,9 @@ pub fn run() {
             features::radar::radar_request_access,
             features::radar::radar_calendars,
             features::radar::radar_items,
+            features::radar::radar_google_status,
+            features::radar::radar_google_connect,
+            features::radar::radar_google_disconnect,
             //
             features::away::away_status,
             features::away::away_dismiss,

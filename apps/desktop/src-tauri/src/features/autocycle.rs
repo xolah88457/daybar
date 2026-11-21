@@ -85,7 +85,7 @@ pub fn run(store: &Store, snapshot: &Snapshot, now: i64) -> Result<Option<u32>, 
     let op = Operation::StartTimer {
         timer_type: "break".into(),
         minutes: plan.minutes,
-        task: None,
+        task: None, space: None
     };
     match store.mutate_at(op, now) {
         Ok(_) => Ok(Some(plan.minutes)),
@@ -140,6 +140,8 @@ mod tests {
             daily_log: Default::default(),
             focus: FocusData::default(),
             sleep: Default::default(),
+            spaces: Default::default(),
+            space_logs: Default::default(),
             preferences,
             issues: vec![],
             conflicts: vec![],
@@ -336,7 +338,7 @@ mod tests {
             Operation::StartTimer {
                 timer_type: "focus".into(),
                 minutes,
-                task: None,
+                task: None, space: None
             }
         }
 
