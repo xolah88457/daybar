@@ -477,11 +477,11 @@ describe('dashboard operations and failures', () => {
     delete (window as Window & { __TAURI_INTERNALS__?: unknown })
       .__TAURI_INTERNALS__;
   });
-  it('supports bare and modified 1–6 navigation without hijacking typing or dialogs', async () => {
+  it('supports bare and modified 1–7 navigation without hijacking typing or dialogs', async () => {
     const mock = mockClient();
     render(<Dashboard client={mock.client} />);
     await screen.findByRole('checkbox', { name: /Read a chapter/ });
-    const modules = ['Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'Settings'];
+    const modules = ['Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'Overview', 'Settings'];
     for (const [index, name] of modules.entries()) {
       fireEvent.keyDown(window, { key: String(index + 1) });
       expect(

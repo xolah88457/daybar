@@ -27,6 +27,8 @@ import { featureOverlays, todayCards } from '../features/registry';
 import { todayView, visibleViews } from '../features/views';
 import { theme, layoutTheme, dayProjectedSettings } from './primitives';
 import { SettingsPanel } from './settings';
+import { Overview, SpacePage } from './spaces';
+import { placeholderTasks, SetupWizard } from './setup';
 
 function message(error: unknown) {
   return error instanceof Error
@@ -53,6 +55,9 @@ export function Dashboard({
   const [notice, setNotice] = useState('');
   const [demo, setDemo] = useState(false);
   const [systemDark, setSystemDark] = useState(true);
+  // The setup window opens by itself until it is finished or skipped, and from Settings on request.
+  const [setupForced, setSetupForced] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
   const working = useRef(false);
   const pendingChange = useRef(false);
   const mounted = useRef(false);
@@ -61,7 +66,8 @@ export function Dashboard({
   const settled = useRef<number | null>(null);
   const main = useRef<HTMLElement>(null);
   const features = snapshot?.preferences.features ?? defaultFeatures;
-  const views = useMemo(() => visibleViews(features), [features]);
+  const spaces = snapshot?.spaces;
+  const views = useMemo(() => visibleViews(features, spaces), [features, spaces]);
   // Number keys and the sidebar follow the visible views; a hidden view falls back to Today.
   const activeView = views.find((v) => v.id === viewId) ?? views[0];
   const view = activeView.id;
@@ -288,6 +294,19 @@ export function Dashboard({
           confirm
         }
       : null;
+  const showSetup =
+    !!actions &&
+    !actions.snapshot.issues.length &&
+    (setupForced || (!actions.snapshot.preferences.setupDone && !setupDismissed));
+  const closeSetup = useCallback(() => {
+    setSetupForced(false);
+    setSetupDismissed(true);
+  }, []);
+  const clearDemo = async () => {
+    if (await confirm('Clear the demo data and start from a blank day? It is only in this tab.')) {
+      if (await run({ kind: 'reset_starter' })) setSetupForced(true);
+    }
+  };
   const themeMode = snapshot?.preferences.themeMode ?? 'night';
   const effectiveNight =
     themeMode === 'night' || (themeMode === 'auto' && systemDark);
@@ -335,9 +354,11 @@ export function Dashboard({
               aria-current={view === v.id ? 'page' : undefined}
               onClick={() => navigate(v.id)}
             >
-              <span aria-hidden="true">{v.symbol}</span>
+              <span aria-hidden="true" style={v.color ? { color: v.color } : undefined}>
+                {v.symbol}
+              </span>
               {v.label}
-              <kbd>{i + 1}</kbd>
+              {i < 9 && <kbd>{i + 1}</kbd>}
             </button>
           ))}
         </nav>
@@ -411,6 +432,11 @@ export function Dashboard({
           <div className="demo-banner">
             <span>◎ BROWSER DEMO</span> Sample data lives in memory and resets
             on reload. Your files are untouched.
+            {snapshot && (
+              <button type="button" disabled={busy} onClick={() => void clearDemo()}>
+                Remove demo data
+              </button>
+            )}
           </div>
         )}
         {error && (
@@ -507,6 +533,17 @@ export function Dashboard({
           </div>
         ) : (
           <>
+            {view === 'Today' && !showSetup && placeholderTasks(actions.snapshot.settings) && (
+              <div className="notice setup-nudge">
+                <strong>Your task list still has the placeholder “First habit”.</strong>
+                <p>A one-minute setup sets your tasks, a countdown and your spaces.</p>
+                <div className="button-row">
+                  <button className="primary" onClick={() => setSetupForced(true)}>
+                    Set up Daybar →
+                  </button>
+                </div>
+              </div>
+            )}
             {view === 'Today' && <Today {...moduleActions} />}
             {view === 'Countdown' && <Countdown {...moduleActions} />}
             {view === 'Habits' && <Habits {...moduleActions} />}
@@ -519,6 +556,15 @@ export function Dashboard({
               <div className="stack">
                 <Sleep {...moduleActions} />
               </div>
+            )}
+            {view === 'Overview' && <Overview {...moduleActions} navigate={navigate} />}
+            {activeView.space && (
+              <SpacePage
+                key={activeView.space}
+                {...moduleActions}
+                navigate={navigate}
+                space={activeView.space}
+              />
             )}
             {activeView.View && (
               <activeView.View
@@ -533,6 +579,7 @@ export function Dashboard({
                   updater={updater}
                   busy={busy}
                   savePreferences={savePreferences}
+                  openSetup={() => setSetupForced(true)}
                 />
               </div>
             )}
@@ -552,6 +599,14 @@ export function Dashboard({
           </span>
         </footer>
       </main>
+      {showSetup && actions && (
+        <SetupWizard
+          {...actions}
+          busy={busy}
+          savePreferences={savePreferences}
+          onClose={closeSetup}
+        />
+      )}
       {/* Shell-level overlays contributed by enabled features (see features/registry.ts). */}
       {actions &&
         overlays.map(({ id, Overlay }) => (

@@ -25,6 +25,8 @@ use tauri::{Emitter, Manager, State};
 
 #[path = "radar_mac.rs"]
 mod native;
+#[path = "google.rs"]
+pub mod google;
 
 pub const ID: &str = "radar";
 /// Cached items older than this are re-read.
@@ -63,6 +65,8 @@ pub struct RadarStatus {
     pub supported: bool,
     pub events: AccessState,
     pub reminders: AccessState,
+    /// Signed in to Google Calendar (read without macOS Calendar access).
+    pub google: bool,
 }
 impl RadarStatus {
     fn current() -> Self {
@@ -71,6 +75,7 @@ impl RadarStatus {
             supported: native::supported(),
             events: events.into(),
             reminders: reminders.into(),
+            google: google_connected(),
         }
     }
 }
@@ -317,7 +322,11 @@ pub fn due_alerts(items: &[RadarItem], cfg: &RadarConfig, now: DateTime<Local>) 
 struct Cache {
     /// What the cached items were read for (see [`fetch_key`]).
     key: String,
+    /// EventKit items plus the Google ones not already among them.
     items: Vec<RadarItem>,
+    native: Vec<RadarItem>,
+    google: Vec<RadarItem>,
+    google_calendars: Vec<RadarCalendar>,
     calendars: RadarCalendars,
     fetched_at: Option<i64>,
     error: Option<String>,
@@ -327,6 +336,9 @@ impl Cache {
         Self {
             key: String::new(),
             items: Vec::new(),
+            native: Vec::new(),
+            google: Vec::new(),
+            google_calendars: Vec::new(),
             calendars: RadarCalendars {
                 events: Vec::new(),
                 reminders: Vec::new(),
@@ -409,26 +421,64 @@ fn ensure_fresh_within(
     } else {
         Some(RadarCalendars::default())
     };
+    let google = google_fetch(query.from_ms, query.to_ms, &cfg.calendars);
     let mut c = cache();
     let before = (c.items.clone(), c.calendars.clone(), c.error.clone());
+    let same_key = c.key == key;
+    let mut errors = Vec::new();
     match fetched {
-        Ok(items) => {
-            c.items = items.into_iter().map(RadarItem::from).collect();
-            c.error = None;
-        }
+        Ok(items) => c.native = items.into_iter().map(RadarItem::from).collect(),
         Err(e) => {
-            if c.key != key {
-                c.items.clear();
+            if !same_key {
+                c.native.clear();
             }
-            c.error = Some(e);
+            errors.push(e);
         }
     }
-    if let Some(lists) = lists {
+    match google {
+        None => {
+            c.google.clear();
+            c.google_calendars.clear();
+        }
+        Some(Ok(g)) => {
+            c.google = g.items;
+            c.google_calendars = g.calendars;
+        }
+        // Offline or a hiccup: keep the last good Google items for the same window.
+        Some(Err(e)) => {
+            if !same_key {
+                c.google.clear();
+            }
+            errors.push(format!("Google Calendar: {e}"));
+        }
+    }
+    c.items = google::merge(c.native.clone(), c.google.clone());
+    c.error = (!errors.is_empty()).then(|| errors.join(" · "));
+    if let Some(mut lists) = lists {
+        lists.events.extend(c.google_calendars.iter().cloned());
         c.calendars = lists;
     }
     c.key = key;
     c.fetched_at = Some(now.timestamp_millis());
     (c.items.clone(), c.calendars.clone(), c.error.clone()) != before
+}
+
+/// Google events for the window, or `None` when not signed in. Tests substitute their own.
+#[cfg(not(test))]
+fn google_fetch(from_ms: i64, to_ms: i64, wanted: &[String]) -> Option<Result<google::Fetched, String>> {
+    google::fetch(from_ms, to_ms, wanted)
+}
+#[cfg(not(test))]
+fn google_connected() -> bool {
+    google::status().connected
+}
+#[cfg(test)]
+fn google_fetch(_: i64, _: i64, _: &[String]) -> Option<Result<google::Fetched, String>> {
+    testing::GOOGLE.lock().unwrap_or_else(|e| e.into_inner()).take()
+}
+#[cfg(test)]
+fn google_connected() -> bool {
+    false
 }
 
 fn kick() {
@@ -561,9 +611,11 @@ pub async fn radar_request_access(backend: State<'_, Backend>) -> CommandResult<
 #[tauri::command]
 pub async fn radar_calendars() -> CommandResult<RadarCalendars> {
     tauri::async_runtime::spawn_blocking(|| {
-        native::calendars()
+        let mut lists = native::calendars()
             .map(RadarCalendars::from)
-            .unwrap_or_default()
+            .unwrap_or_default();
+        lists.events.extend(cache().google_calendars.iter().cloned());
+        lists
     })
     .await
     .map_err(blocking_failed)
@@ -590,10 +642,59 @@ pub async fn radar_items(
     Ok(result)
 }
 
+/// Whether Google Calendar is signed in, and to which account.
+#[tauri::command]
+pub async fn radar_google_status() -> CommandResult<google::GoogleStatus> {
+    tauri::async_runtime::spawn_blocking(google::status)
+        .await
+        .map_err(blocking_failed)
+}
+
+/// Opens Google's consent page in the browser and waits (up to five minutes) for the reply, then
+/// stores the sign-in in the Keychain and re-reads the radar.
+#[tauri::command]
+pub async fn radar_google_connect(
+    app: tauri::AppHandle,
+    backend: State<'_, Backend>,
+    client_id: String,
+    client_secret: String,
+) -> CommandResult<google::GoogleStatus> {
+    let cfg = backend.store.preferences()?.features.radar;
+    let status = tauri::async_runtime::spawn_blocking(move || {
+        let status = google::connect(&client_id, &client_secret)?;
+        ensure_fresh(&cfg, true, Local::now());
+        Ok::<_, String>(status)
+    })
+    .await
+    .map_err(blocking_failed)??;
+    announce(&app);
+    Ok(status)
+}
+
+/// Revokes and forgets the Google sign-in; Google events leave the radar.
+#[tauri::command]
+pub async fn radar_google_disconnect(
+    app: tauri::AppHandle,
+    backend: State<'_, Backend>,
+) -> CommandResult<google::GoogleStatus> {
+    let cfg = backend.store.preferences()?.features.radar;
+    let status = tauri::async_runtime::spawn_blocking(move || {
+        let status = google::disconnect()?;
+        ensure_fresh(&cfg, true, Local::now());
+        Ok::<_, String>(status)
+    })
+    .await
+    .map_err(blocking_failed)??;
+    announce(&app);
+    Ok(status)
+}
+
 #[cfg(test)]
 pub(crate) mod testing {
     use super::*;
     static LOCK: Mutex<()> = Mutex::new(());
+    /// What the next Google read returns (`None`: not signed in).
+    pub static GOOGLE: Mutex<Option<Result<google::Fetched, String>>> = Mutex::new(None);
 
     /// Tests that touch the process-wide cache hold this for their whole body.
     pub fn lock() -> MutexGuard<'static, ()> {
@@ -646,6 +747,8 @@ mod tests {
             daily_log: Default::default(),
             focus: Default::default(),
             sleep: Default::default(),
+            spaces: Default::default(),
+            space_logs: Default::default(),
             preferences,
             issues: vec![],
             conflicts: vec![],
@@ -840,7 +943,7 @@ mod tests {
         let status = RadarStatus::current();
         assert_eq!(
             serde_json::to_value(status).unwrap(),
-            json!({"supported": false, "events": "unsupported", "reminders": "unsupported"})
+            json!({"supported": false, "events": "unsupported", "reminders": "unsupported", "google": false})
         );
         assert!(native::request_access(true, true).is_err());
         assert!(native::fetch(&native::Query {
@@ -870,6 +973,39 @@ mod tests {
     }
 
     #[test]
+    fn google_events_join_the_radar_and_survive_a_failed_read() {
+        let _guard = testing::lock();
+        testing::clear();
+        let c = cfg();
+        let now = *NOW;
+        let soon = now.timestamp_millis() + 86_400_000;
+        let set = |next: Option<Result<google::Fetched, String>>| {
+            *testing::GOOGLE.lock().unwrap() = next;
+        };
+        set(Some(Ok(google::Fetched {
+            items: vec![event("Board meeting", soon, "Team")],
+            calendars: vec![RadarCalendar { title: "Team".into(), account: "Google · me@example.com".into() }],
+        })));
+        ensure_fresh(&c, true, now);
+        assert_eq!(titles(&items_for(&c, now).items), ["Board meeting"]);
+        assert!(cache().calendars.events.iter().any(|cal| cal.title == "Team"));
+
+        // Offline: the last Google items stay, with an error that names Google.
+        set(Some(Err("Could not reach Google".into())));
+        ensure_fresh(&c, true, now);
+        let out = items_for(&c, now);
+        assert_eq!(titles(&out.items), ["Board meeting"]);
+        assert!(out.error.unwrap().contains("Google Calendar: Could not reach Google"));
+
+        // Signed out: they go.
+        set(None);
+        ensure_fresh(&c, true, now);
+        assert!(items_for(&c, now).items.is_empty());
+        assert!(!cache().calendars.events.iter().any(|cal| cal.title == "Team"));
+        testing::clear();
+    }
+
+    #[test]
     fn command_payloads_are_camel_case() {
         let item = event("Essay", 1_000, "Work");
         assert_eq!(
@@ -885,6 +1021,7 @@ mod tests {
                 supported: true,
                 events: AccessState::FullAccess,
                 reminders: AccessState::NotDetermined,
+                google: false,
             },
             refreshed_at: Some(7),
             error: None,
@@ -892,7 +1029,7 @@ mod tests {
         let json = serde_json::to_value(&all).unwrap();
         assert_eq!(
             json["status"],
-            json!({"supported":true,"events":"fullAccess","reminders":"notDetermined"})
+            json!({"supported":true,"events":"fullAccess","reminders":"notDetermined","google":false})
         );
         assert_eq!(json["refreshedAt"], 7);
         assert_eq!(json["error"], serde_json::Value::Null);

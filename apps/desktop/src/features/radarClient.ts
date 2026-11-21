@@ -16,6 +16,16 @@ export interface RadarStatus {
   supported: boolean;
   events: Access;
   reminders: Access;
+  /** Signed in to Google Calendar, which is read without macOS Calendar access. */
+  google?: boolean;
+}
+/** The Google Calendar sign-in, kept in the macOS Keychain. */
+export interface GoogleStatus {
+  /** False outside the Mac app. */
+  supported: boolean;
+  connected: boolean;
+  /** The signed-in address, when connected. */
+  account: string | null;
 }
 export interface RadarCalendar {
   title: string;
@@ -47,6 +57,14 @@ export interface RadarClient {
   items(refresh?: boolean): Promise<RadarItems>;
   /** Called when the native cache or the permissions change. */
   subscribe(onChange: () => void): Promise<() => void>;
+  googleStatus(): Promise<GoogleStatus>;
+  /**
+   * Opens Google's consent page in the browser and resolves once the person comes back (or after
+   * five minutes). The client ID and secret come from the person's own Google Cloud project.
+   */
+  googleConnect(clientId: string, clientSecret: string): Promise<GoogleStatus>;
+  /** Revokes the sign-in and forgets it. */
+  googleDisconnect(): Promise<GoogleStatus>;
 }
 
 export const tauriRadarClient: RadarClient = {
@@ -54,10 +72,18 @@ export const tauriRadarClient: RadarClient = {
   requestAccess: () => invoke<RadarStatus>('radar_request_access'),
   calendars: () => invoke<RadarCalendars>('radar_calendars'),
   items: (refresh = false) => invoke<RadarItems>('radar_items', { refresh }),
-  subscribe: (onChange) => listen('daybar://radar', onChange)
+  subscribe: (onChange) => listen('daybar://radar', onChange),
+  googleStatus: () => invoke<GoogleStatus>('radar_google_status'),
+  googleConnect: (clientId, clientSecret) =>
+    invoke<GoogleStatus>('radar_google_connect', { clientId, clientSecret }),
+  googleDisconnect: () => invoke<GoogleStatus>('radar_google_disconnect')
 };
 
+/** The client ID shape Google issues for OAuth clients. */
+export const googleClientIdPattern = /^[\w.-]+\.apps\.googleusercontent\.com$/;
+
 const fullAccess: RadarStatus = { supported: true, events: 'fullAccess', reminders: 'fullAccess' };
+const demoGoogleAccount = 'you@gmail.com';
 
 /** A realistic spread, from overdue to 40 days out, relative to the clock. Kept in memory only. */
 export function sampleItems(now: Date): RadarItem[] {
@@ -110,14 +136,29 @@ export function createDemoRadarClient(
     grantedStatus?: RadarStatus;
     items?: RadarItem[];
     calendars?: RadarCalendars;
+    /** Start signed in to Google. */
+    google?: boolean;
   } = {}
 ): RadarClient {
   const clock = options.clock ?? (() => new Date());
   let status = options.status ?? fullAccess;
+  let google = options.google ?? false;
   const listeners = new Set<() => void>();
+  const googleStatus = (): GoogleStatus => ({
+    supported: true,
+    connected: google,
+    account: google ? demoGoogleAccount : null
+  });
+  const googleItems = (): RadarItem[] => {
+    const d = addDays(startOfDay(clock()), 3);
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 11).getTime();
+    return [
+      { id: 'google:demo-standup', title: 'Team offsite planning', date: start, end: start + 3600000, allDay: false, source: 'Team', kind: 'event' }
+    ];
+  };
   return {
     async status() {
-      return { ...status };
+      return { ...status, google };
     },
     async requestAccess() {
       if (status.events === 'notDetermined' || status.reminders === 'notDetermined') {
@@ -127,13 +168,16 @@ export function createDemoRadarClient(
       return { ...status };
     },
     async calendars() {
-      return structuredClone(options.calendars ?? sampleCalendars);
+      const lists = structuredClone(options.calendars ?? sampleCalendars);
+      if (google) lists.events.push({ title: 'Team', account: `Google · ${demoGoogleAccount}` });
+      return lists;
     },
     async items() {
       const readable = status.events === 'fullAccess' || status.reminders === 'fullAccess';
+      const own = readable ? structuredClone(options.items ?? sampleItems(clock())) : [];
       return {
-        items: readable ? structuredClone(options.items ?? sampleItems(clock())) : [],
-        status: { ...status },
+        items: google ? [...own, ...googleItems()].sort((a, b) => a.date - b.date) : own,
+        status: { ...status, google },
         refreshedAt: clock().getTime(),
         error: null
       };
@@ -141,6 +185,22 @@ export function createDemoRadarClient(
     async subscribe(onChange) {
       listeners.add(onChange);
       return () => listeners.delete(onChange);
+    },
+    async googleStatus() {
+      return googleStatus();
+    },
+    async googleConnect(clientId, clientSecret) {
+      if (!googleClientIdPattern.test(clientId.trim()))
+        throw new Error('That does not look like a Google OAuth client ID (it ends in .apps.googleusercontent.com).');
+      if (!clientSecret.trim()) throw new Error('Paste the client secret that came with the client ID.');
+      google = true;
+      listeners.forEach((fn) => fn());
+      return googleStatus();
+    },
+    async googleDisconnect() {
+      google = false;
+      listeners.forEach((fn) => fn());
+      return googleStatus();
     }
   };
 }

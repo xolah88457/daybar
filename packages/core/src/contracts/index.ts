@@ -170,14 +170,61 @@ export const preferencesSchema = z.object({
   trayDisplay: z.enum(['auto', 'focusMinutes', 'focusHours', 'focusBlocks', 'activeTimer', 'bedtime', 'nextTask', 'countdown', 'nextDeadline']).default('auto'),
   features: featuresSchema.default(() => featuresSchema.parse({})),
   // Which feature defaults this file has been brought up to. The Mac app upgrades older files once.
-  featuresVersion: z.number().int().min(0).default(currentFeaturesVersion)
+  featuresVersion: z.number().int().min(0).default(currentFeaturesVersion),
+  // False only for a brand-new install until the guided setup is finished or skipped; files
+  // written before the setup existed load as done.
+  setupDone: z.boolean().default(true)
 }).strict();
 export type Preferences = z.infer<typeof preferencesSchema>;
+// Spaces (decision 015): extra task lists such as Work and Personal, each with its own history file
+// `daily-log-<logId>.json`, countdowns and focus credit. Stored in `daybar-spaces.json` beside the
+// shared files. The phone scripts never read it, so the phone keeps showing the main space.
+/** Separates a task from its subtask in a daily-log entry: "Workout › Stretch". */
+export const SUBTASK_SEPARATOR = ' \u203a ';
+const spaceIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
+const logIdSchema = z.string().regex(/^[a-zA-Z0-9_]+$/).max(60);
+const subtaskMapSchema = z.record(name, z.array(name).max(30)).default({}).superRefine((map, ctx) => {
+  for (const [task, subs] of Object.entries(map)) {
+    if (new Set(subs).size !== subs.length) ctx.addIssue({ code: 'custom', path: [task], message: 'Duplicate subtasks' });
+    for (const sub of subs) if ((task + SUBTASK_SEPARATOR + sub).length > 120) ctx.addIssue({ code: 'custom', path: [task], message: 'Task and subtask together must be 120 characters or fewer' });
+  }
+});
+const spaceHabitsSchema = z.object({
+  title: name, logId: logIdSchema, startDate: dateKeySchema, endDate: z.union([dateKeySchema, z.literal('')]).default(''),
+  tasks: z.array(name).min(1).max(50).refine(xs => new Set(xs).size === xs.length, 'Duplicate tasks'),
+  archivedTasks: z.array(name).default([]), dayCompleteMin: z.number().int().min(1).default(1)
+}).strict().refine(h => h.dayCompleteMin <= h.tasks.length, 'Completion minimum exceeds task count')
+  .refine(h => !h.endDate || h.endDate >= h.startDate, 'End date precedes start date');
+const spaceSchema = z.object({
+  id: spaceIdSchema, name, color,
+  habits: spaceHabitsSchema, subtasks: subtaskMapSchema,
+  countdowns: z.array(extraCountdownSchema).max(12).refine(xs => new Set(xs.map(x => x.id)).size === xs.length, 'Duplicate countdown IDs').default([])
+}).strict();
+const spaceFocusSchema = z.object({ space: spaceIdSchema, task: name.optional() }).strict();
+export const spacesFileSchema = z.object({
+  version: z.literal(1).default(1),
+  main: z.object({ name: name.default('Personal'), color: color.default('#58a6ff'), subtasks: subtaskMapSchema }).strict().default(() => ({ name: 'Personal', color: '#58a6ff', subtasks: {} })),
+  spaces: z.array(spaceSchema).max(12).default([]).superRefine((xs, ctx) => {
+    if (new Set(xs.map(x => x.id)).size !== xs.length) ctx.addIssue({ code: 'custom', message: 'Duplicate space IDs' });
+    if (new Set(xs.map(x => x.habits.logId)).size !== xs.length) ctx.addIssue({ code: 'custom', message: 'Two spaces share a log ID' });
+  }),
+  // Which space a focus session (keyed by its start epoch, like the focus ledger) was started in.
+  focus: z.record(z.string().regex(/^(?:0|[1-9]\d*)$/), spaceFocusSchema).default({})
+}).strict();
+export const defaultSpaces = spacesFileSchema.parse({});
+export type SpacesFile = z.infer<typeof spacesFileSchema>;
+export type Space = SpacesFile['spaces'][number];
+export type SpaceHabits = Space['habits'];
+export type SubtaskMap = Space['subtasks'];
+
 export type Operation =
-  | { kind: 'set_task'; date: string; task: string; done: boolean }
-  | { kind: 'rename_task'; from: string; to: string }
-  | { kind: 'archive_task'; task: string }
-  | { kind: 'start_timer'; timerType: 'focus' | 'break'; minutes: number; task?: string }
+  | { kind: 'set_task'; date: string; task: string; done: boolean; space?: string }
+  | { kind: 'set_subtask'; date: string; task: string; subtask: string; done: boolean; space?: string }
+  | { kind: 'rename_task'; from: string; to: string; space?: string }
+  | { kind: 'archive_task'; task: string; space?: string }
+  | { kind: 'start_timer'; timerType: 'focus' | 'break'; minutes: number; task?: string; space?: string }
+  | { kind: 'save_spaces'; spaces: SpacesFile }
+  | { kind: 'reset_starter' }
   | { kind: 'stop_timer' }
   | { kind: 'settle_timer' }
   | { kind: 'log_sleep'; entry: 'wake' | 'bed'; timestamp: number }
@@ -189,6 +236,7 @@ export interface DataIssue { file: string; message: string }
 export interface Conflict { file: string; canonical: string }
 export interface Snapshot {
   settings: Settings; dailyLog: DailyLog; focus: FocusData; sleep: SleepData;
+  spaces: SpacesFile; spaceLogs: Record<string, DailyLog>;
   preferences: Preferences; issues: DataIssue[]; conflicts: Conflict[];
 }
 export interface MutationResult { snapshot: Snapshot; creditedMinutes?: number; message?: string }

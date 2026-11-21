@@ -37,7 +37,7 @@ describe('module toggles in the dashboard', () => {
   it('shows every view with the default features and no Deadline Radar placeholder', async () => {
     const { container } = render(<Dashboard client={mockClient(fixture()).client} />);
     await screen.findByRole('checkbox', { name: /Read a chapter/ });
-    expect(navNames()).toEqual(['◫Today1', '▦Countdown2', '✓Habits3', '◷Focus4', '☾Sleep5', '⚙Settings6']);
+    expect(navNames()).toEqual(['◫Today1', '▦Countdown2', '✓Habits3', '◷Focus4', '☾Sleep5', '▤Overview6', '⚙Settings7']);
     expect(screen.queryByText('SOON')).toBeNull();
     expect(screen.queryByText(/Deadline Radar/)).toBeNull();
     for (const card of ['progress', 'focus', 'habits', 'countdown'])
@@ -61,12 +61,12 @@ describe('module toggles in the dashboard', () => {
   it('removes the sidebar items of modules that are off and numbers the rest in order', async () => {
     render(<Dashboard client={mockClient(withOff('habits', 'sleep')).client} />);
     await screen.findByRole('heading', { level: 1, name: 'Here & now.' });
-    expect(navNames()).toEqual(['◫Today1', '▦Countdown2', '◷Focus3', '⚙Settings4']);
+    expect(navNames()).toEqual(['◫Today1', '▦Countdown2', '◷Focus3', '▤Overview4', '⚙Settings5']);
     fireEvent.keyDown(window, { key: '3' });
     expect(h1()).toHaveTextContent('Focus');
-    fireEvent.keyDown(window, { key: '4' });
-    expect(h1()).toHaveTextContent('Settings');
     fireEvent.keyDown(window, { key: '5' });
+    expect(h1()).toHaveTextContent('Settings');
+    fireEvent.keyDown(window, { key: '6' });
     expect(h1()).toHaveTextContent('Settings');
     fireEvent.keyDown(window, { key: '2', ctrlKey: true });
     expect(h1()).toHaveTextContent('Countdown');
@@ -83,7 +83,7 @@ describe('module toggles in the dashboard', () => {
   it('explains an empty Today when every module is off', async () => {
     render(<Dashboard client={mockClient(withOff('countdown', 'habits', 'focus', 'sleep')).client} />);
     expect(await screen.findByText(/Every module is switched off/)).toBeInTheDocument();
-    expect(navNames()).toEqual(['◫Today1', '⚙Settings2']);
+    expect(navNames()).toEqual(['◫Today1', '▤Overview2', '⚙Settings3']);
   });
   it('goes back to Today when the current view is switched off', async () => {
     const mock = mockClient(fixture());
@@ -112,7 +112,7 @@ describe('module toggles in the dashboard', () => {
 describe('view and registry seams', () => {
   it('lists features in registry order, with modules on by default and nothing extra', () => {
     expect(visibleViews(fixture().preferences.features).map((v) => v.id)).toEqual([
-      'Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'Settings'
+      'Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'Overview', 'Settings'
     ]);
     const ids = featureRegistry.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -123,11 +123,11 @@ describe('view and registry seams', () => {
     const all = fixture().preferences.features;
     all.radar.enabled = true;
     expect(visibleViews(all).map((v) => v.id)).toEqual([
-      'Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'radar', 'Settings'
+      'Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'Overview', 'radar', 'Settings'
     ]);
     all.insights.enabled = true;
     expect(visibleViews(all).map((v) => v.id)).toEqual([
-      'Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'radar', 'insights', 'Settings'
+      'Today', 'Countdown', 'Habits', 'Focus', 'Sleep', 'Overview', 'radar', 'insights', 'Settings'
     ]);
   });
 });

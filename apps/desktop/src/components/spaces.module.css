@@ -1,0 +1,225 @@
+/* Spaces: Overview cards and the per-space page. `--space` is the space's own colour. */
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--line);
+}
+.totals > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--background);
+}
+.totals span {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.totals strong {
+  font-size: 20px;
+  font-weight: 500;
+}
+.totals small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--space, var(--blue));
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.012);
+}
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cardHead h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cardHead h2 i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--space, var(--blue));
+}
+.cardTitle {
+  margin: -6px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.today {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.today strong {
+  font-size: 24px;
+  font-weight: 500;
+}
+.today small {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.today span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 2px 0 0;
+}
+.facts div {
+  min-width: 0;
+}
+.facts dt {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+  font-size: 11px;
+}
+.countdown {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+}
+.countdown span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.countdown span:last-child {
+  flex: none;
+  color: var(--muted);
+}
+.open {
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 10px;
+}
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+.countdowns {
+  display: grid;
+  gap: 16px;
+}
+.countdownItem {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.countdownItem strong {
+  overflow-wrap: anywhere;
+}
+.countdownItem :global(.caption) {
+  margin: 0;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.fields label {
+  display: grid;
+  gap: 4px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 0;
+}
+.fields input {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  min-width: 0;
+}
+.fields input[type='color'] {
+  height: 34px;
+  padding: 2px;
+}
+.subhead {
+  margin: 24px 0 10px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+.countdownFields {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.countdownFields > button {
+  justify-self: start;
+  font-size: 10px;
+}
+.countdownRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.countdownRow input {
+  min-width: 0;
+  font-size: 11px;
+}
+.danger {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 560px) {
+  .countdownRow {
+    grid-template-columns: 1fr 1fr;
+  }
+  .countdownRow input:first-child {
+    grid-column: 1 / -1;
+  }
+}

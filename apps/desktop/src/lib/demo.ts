@@ -4,26 +4,52 @@ import {
   key,
   linkedTasks,
   logSleep,
+  MAIN_SPACE,
   normalizeFocus,
+  renameInLog,
   settleFocus,
   startFocus,
-  stopFocus
+  stopFocus,
+  toggleSubtask,
+  toggleTask
 } from '@daybar/core';
 import {
   dateKeySchema,
   currentFeaturesVersion,
   defaultFeatures,
   defaultSettings,
+  defaultSpaces,
   focusDataSchema,
   preferencesSchema,
   settingsSchema,
-  sleepDataSchema
+  sleepDataSchema,
+  spacesFileSchema
 } from '@daybar/core/contracts';
 import type {
   DaybarClient,
+  DailyLog,
   MutationResult,
   Snapshot
 } from '@daybar/core/contracts';
+
+/** The task list, subtasks and log an operation addresses in the demo. */
+function target(next: Snapshot, space?: string) {
+  if (!space || space === MAIN_SPACE)
+    return {
+      tasks: next.settings.habits.tasks,
+      subtasks: next.spaces.main.subtasks,
+      log: next.dailyLog,
+      setLog: (log: DailyLog) => (next.dailyLog = log)
+    };
+  const found = next.spaces.spaces.find((s) => s.id === space);
+  if (!found) throw new Error('That space no longer exists.');
+  return {
+    tasks: found.habits.tasks,
+    subtasks: found.subtasks,
+    log: next.spaceLogs[space] ?? {},
+    setLog: (log: DailyLog) => (next.spaceLogs[space] = log)
+  };
+}
 
 function demoSnapshot(now = new Date()): Snapshot {
   const settings = structuredClone(defaultSettings);
@@ -45,6 +71,8 @@ function demoSnapshot(now = new Date()): Snapshot {
     dailyLog,
     sleep,
     focus: { state: null, days: { [key(now)]: { count: 3, minutes: 85 } } },
+    spaces: structuredClone(defaultSpaces),
+    spaceLogs: {},
     preferences: {
       dataFolder: 'Browser memory · resets on reload',
       realData: false,
@@ -54,7 +82,8 @@ function demoSnapshot(now = new Date()): Snapshot {
       themeMode: 'night',
       trayDisplay: 'auto',
       features: structuredClone(defaultFeatures),
-      featuresVersion: currentFeaturesVersion
+      featuresVersion: currentFeaturesVersion,
+      setupDone: true
     },
     issues: [],
     conflicts: []
@@ -88,36 +117,50 @@ export function createDemoClient(
           'Resolve file errors before writing. No data was changed.'
         );
       switch (operation.kind) {
-        case 'set_task': {
+        case 'set_task':
+        case 'set_subtask': {
           dateKeySchema.parse(operation.date);
           if (operation.date > key(now))
             throw new Error('Future days cannot be edited.');
-          if (!s.habits.tasks.includes(operation.task))
+          const t = target(next, operation.space);
+          if (!t.tasks.includes(operation.task))
             throw new Error('Task is no longer active.');
-          const tasks = new Set(next.dailyLog[operation.date] ?? []);
-          if (operation.done) tasks.add(operation.task);
-          else tasks.delete(operation.task);
-          if (tasks.size) next.dailyLog[operation.date] = [...tasks];
-          else delete next.dailyLog[operation.date];
+          const subs = t.subtasks[operation.task] ?? [];
+          t.setLog(
+            operation.kind === 'set_task'
+              ? toggleTask(t.log, operation.date, operation.task, operation.done, subs)
+              : toggleSubtask(t.log, operation.date, operation.task, operation.subtask, operation.done, subs)
+          );
           break;
         }
         case 'rename_task': {
           const to = operation.to.trim();
+          const space =
+            operation.space && operation.space !== MAIN_SPACE
+              ? next.spaces.spaces.find((x) => x.id === operation.space)
+              : undefined;
+          if (operation.space && operation.space !== MAIN_SPACE && !space)
+            throw new Error('That space no longer exists.');
+          const h = space ? space.habits : s.habits;
           if (
-            !s.habits.tasks.includes(operation.from) ||
+            !h.tasks.includes(operation.from) ||
             !to ||
-            [...s.habits.tasks, ...s.habits.archivedTasks].includes(to)
+            [...h.tasks, ...h.archivedTasks].includes(to)
           )
             throw new Error('Choose a unique, nonempty task name.');
-          s.habits.tasks = s.habits.tasks.map((t) =>
-            t === operation.from ? to : t
-          );
-          for (const day of Object.keys(next.dailyLog))
-            next.dailyLog[day] = [
-              ...new Set(
-                next.dailyLog[day].map((t) => (t === operation.from ? to : t))
-              )
-            ];
+          h.tasks = h.tasks.map((t) => (t === operation.from ? to : t));
+          const subs = space ? space.subtasks : next.spaces.main.subtasks;
+          if (subs[operation.from]) {
+            subs[to] = subs[operation.from];
+            delete subs[operation.from];
+          }
+          if (space) {
+            next.spaceLogs[space.id] = renameInLog(next.spaceLogs[space.id] ?? {}, operation.from, to);
+            for (const link of Object.values(next.spaces.focus))
+              if (link.space === space.id && link.task === operation.from) link.task = to;
+            break;
+          }
+          next.dailyLog = renameInLog(next.dailyLog, operation.from, to);
           if (s.habits.focusThresholds[operation.from] !== undefined) {
             s.habits.focusThresholds[to] =
               s.habits.focusThresholds[operation.from];
@@ -129,22 +172,51 @@ export function createDemoClient(
             if (session.task === operation.from) session.task = to;
           break;
         }
-        case 'archive_task':
-          if (
-            !s.habits.tasks.includes(operation.task) ||
-            s.habits.tasks.length === 1
-          )
+        case 'archive_task': {
+          const space =
+            operation.space && operation.space !== MAIN_SPACE
+              ? next.spaces.spaces.find((x) => x.id === operation.space)
+              : undefined;
+          const h = space ? space.habits : s.habits;
+          if (!h.tasks.includes(operation.task) || h.tasks.length === 1)
             throw new Error('Keep at least one active task.');
-          s.habits.tasks = s.habits.tasks.filter((t) => t !== operation.task);
-          s.habits.archivedTasks = [
-            ...new Set([...s.habits.archivedTasks, operation.task])
-          ];
-          s.habits.dayCompleteMin = Math.min(
-            s.habits.dayCompleteMin,
-            s.habits.tasks.length
-          );
+          h.tasks = h.tasks.filter((t) => t !== operation.task);
+          h.archivedTasks = [...new Set([...h.archivedTasks, operation.task])];
+          h.dayCompleteMin = Math.min(h.dayCompleteMin, h.tasks.length);
           break;
-        case 'start_timer':
+        }
+        case 'save_spaces': {
+          const parsed = spacesFileSchema.parse(operation.spaces);
+          for (const space of parsed.spaces) {
+            if (space.habits.logId === s.habits.logId)
+              throw new Error('A space cannot use the main task log.');
+            const old = next.spaces.spaces.find((x) => x.id === space.id);
+            if (old && old.habits.logId !== space.habits.logId)
+              throw new Error('Log ID cannot be changed.');
+            if (old?.habits.tasks.some((t) => !space.habits.tasks.includes(t) && !space.habits.archivedTasks.includes(t)))
+              throw new Error('Use Rename or Archive to preserve task history.');
+          }
+          parsed.focus = next.spaces.focus;
+          next.spaceLogs = Object.fromEntries(
+            parsed.spaces.map((x) => [x.id, next.spaceLogs[x.id] ?? {}])
+          );
+          next.spaces = parsed;
+          break;
+        }
+        case 'reset_starter': {
+          const today = key(now);
+          const blank = structuredClone(defaultSettings);
+          blank.countdown = { title: 'Countdown', startDate: today, endDate: key(addDays(now, 365)) };
+          blank.habits = { ...blank.habits, startDate: today, tasks: ['First habit'], archivedTasks: [], focusThresholds: {} };
+          next.settings = blank;
+          next.dailyLog = {};
+          next.focus = { state: null, days: {}, sessions: {} };
+          next.sleep = { wakes: {}, beds: {}, plan: null };
+          next.spaces = structuredClone(defaultSpaces);
+          next.spaceLogs = {};
+          break;
+        }
+        case 'start_timer': {
           if (next.focus.state)
             throw new Error('Stop the current timer before starting another.');
           if (
@@ -153,7 +225,9 @@ export function createDemoClient(
             operation.minutes > 240
           )
             throw new Error('Choose 1–240 whole minutes.');
-          if (operation.task && !s.habits.tasks.includes(operation.task))
+          const space = operation.space && operation.space !== MAIN_SPACE ? operation.space : undefined;
+          const tasks = target(next, space).tasks;
+          if (operation.task && !tasks.includes(operation.task))
             throw new Error('Task is no longer active.');
           next.focus = startFocus(
             next.focus,
@@ -161,9 +235,14 @@ export function createDemoClient(
             operation.minutes,
             now,
             s.focus.blockMinutes,
-            operation.task
+            space ? undefined : operation.task
           );
+          if (space && next.focus.state)
+            next.spaces.focus[String(next.focus.state.start)] = operation.task
+              ? { space, task: operation.task }
+              : { space };
           break;
+        }
         case 'stop_timer': {
           const result = stopFocus(next.focus, now, s.focus.blockMinutes);
           next.focus = result.data;
@@ -225,6 +304,7 @@ export function createDemoClient(
       next.settings = settingsSchema.parse(next.settings);
       next.focus = focusDataSchema.parse(next.focus);
       next.sleep = sleepDataSchema.parse(next.sleep);
+      next.spaces = spacesFileSchema.parse(next.spaces);
       const result: MutationResult = { snapshot: publish(next) };
       if (creditedMinutes !== undefined)
         result.creditedMinutes = creditedMinutes;

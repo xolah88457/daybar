@@ -431,6 +431,15 @@ h1 {
   letter-spacing: 0.7px;
   white-space: nowrap;
 }
+.demo-banner > button {
+  margin-left: auto;
+  flex: none;
+  padding: 5px 10px;
+  font-size: 9px;
+}
+.setup-nudge {
+  border-left: 3px solid var(--green);
+}
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);

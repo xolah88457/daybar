@@ -1,0 +1,208 @@
+/* The guided setup window. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+}
+.dialog {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  margin: 0;
+  padding: 26px;
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+.dialog h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  outline: none;
+}
+.progress {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progress li {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.progress li[data-done],
+.progress li[aria-current='step'] {
+  background: var(--green);
+}
+.progress span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.body > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.field {
+  display: grid;
+  gap: 5px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 0;
+}
+.field input {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  min-width: 0;
+}
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+}
+.inline input {
+  width: 70px;
+}
+.list {
+  display: grid;
+  gap: 6px;
+}
+.row {
+  display: flex;
+  gap: 6px;
+}
+.row input {
+  flex: 1;
+  min-width: 0;
+}
+.row button {
+  padding: 0 12px;
+}
+.add {
+  justify-self: start;
+  font-size: 10px;
+}
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chips button {
+  padding: 6px 11px;
+  font-size: 10px;
+}
+.chips button[aria-pressed='true'] {
+  color: var(--green);
+  border-color: var(--green);
+}
+.toggles {
+  display: grid;
+  gap: 6px;
+}
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.toggle input {
+  margin-top: 3px;
+}
+.toggle span {
+  display: grid;
+  gap: 2px;
+}
+.toggle small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--yellow);
+  border-radius: 6px;
+}
+.callout p {
+  margin: 0;
+  font-size: 11px;
+  flex: 1 1 220px;
+}
+.hint {
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+.tips {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+.actions button {
+  font-size: 10px;
+}
+.spacer {
+  flex: 1;
+}
+.skip {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  padding-left: 0;
+}
+@media (max-width: 480px) {
+  .pair {
+    grid-template-columns: 1fr;
+  }
+}

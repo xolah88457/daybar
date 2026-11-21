@@ -76,8 +76,12 @@ pub struct Preferences {
  #[serde(default)] pub features: Features,
  /// Which feature defaults this file has been brought up to. Missing (0) means a file written before
  /// 0.3.1, which `upgrade_features` brings up to date on load.
- #[serde(default)] pub features_version: u32
+ #[serde(default)] pub features_version: u32,
+ /// False only for a brand-new install until the guided setup is finished or skipped. Files written
+ /// before the setup existed load as done.
+ #[serde(default = "yes")] pub setup_done: bool
 }
+fn yes() -> bool { true }
 /// Bumped when feature defaults change. Mirrors `currentFeaturesVersion` in the core contracts.
 /// 2: the useful features start on (0.3.1); see docs/DECISIONS.md 012.
 pub const FEATURES_VERSION: u32 = 2;
@@ -200,17 +204,49 @@ pub struct DataIssue { pub file: String, pub message: String }
 pub struct Conflict { pub file: String, pub canonical: String }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
-pub struct Snapshot { pub settings: Settings, pub daily_log: DailyLog, pub focus: FocusData, pub sleep: SleepData, pub preferences: Preferences, pub issues: Vec<DataIssue>, pub conflicts: Vec<Conflict> }
+pub struct Snapshot { pub settings: Settings, pub daily_log: DailyLog, pub focus: FocusData, pub sleep: SleepData, pub spaces: SpacesFile, pub space_logs: BTreeMap<String, DailyLog>, pub preferences: Preferences, pub issues: Vec<DataIssue>, pub conflicts: Vec<Conflict> }
+/// Separates a task from its subtask in a daily-log entry ("Workout › Stretch"); mirrors core.
+pub const SUBTASK_SEPARATOR: &str = " \u{203a} ";
+pub fn subtask_entry(task: &str, subtask: &str) -> String { format!("{task}{SUBTASK_SEPARATOR}{subtask}") }
+pub type SubtaskMap = BTreeMap<String, Vec<String>>;
+// Spaces (`daybar-spaces.json`, decision 015). Mirrors `spacesFileSchema`; limits in validation.rs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all="camelCase", deny_unknown_fields)]
+pub struct SpacesFile { pub version: u32, pub main: MainSpace, pub spaces: Vec<Space>, pub focus: BTreeMap<String, SpaceFocus> }
+impl Default for SpacesFile { fn default() -> Self { Self { version: 1, main: MainSpace::default(), spaces: vec![], focus: BTreeMap::new() } } }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all="camelCase", deny_unknown_fields)]
+pub struct MainSpace { pub name: String, pub color: String, pub subtasks: SubtaskMap }
+impl Default for MainSpace { fn default() -> Self { Self { name: "Personal".into(), color: "#58a6ff".into(), subtasks: SubtaskMap::new() } } }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+pub struct Space {
+ pub id: String, pub name: String, pub color: String, pub habits: SpaceHabits,
+ #[serde(default)] pub subtasks: SubtaskMap, #[serde(default)] pub countdowns: Vec<ExtraCountdown>
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+pub struct SpaceHabits {
+ pub title: String, pub log_id: String, pub start_date: String, #[serde(default)] pub end_date: String,
+ pub tasks: Vec<String>, #[serde(default)] pub archived_tasks: Vec<String>, #[serde(default = "one")] pub day_complete_min: u32
+}
+fn one() -> u32 { 1 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpaceFocus { pub space: String, #[serde(default, skip_serializing_if="Option::is_none")] pub task: Option<String> }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct MutationResult { pub snapshot: Snapshot, #[serde(skip_serializing_if="Option::is_none")] pub credited_minutes: Option<u32>, #[serde(skip_serializing_if="Option::is_none")] pub message: Option<String> }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag="kind", deny_unknown_fields)]
 pub enum Operation {
- #[serde(rename="set_task")] SetTask { date: String, task: String, done: bool },
- #[serde(rename="rename_task")] RenameTask { from: String, to: String },
- #[serde(rename="archive_task")] ArchiveTask { task: String },
- #[serde(rename="start_timer")] StartTimer { #[serde(rename="timerType")] timer_type: String, minutes: u32, task: Option<String> },
+ #[serde(rename="set_task")] SetTask { date: String, task: String, done: bool, #[serde(default)] space: Option<String> },
+ #[serde(rename="set_subtask")] SetSubtask { date: String, task: String, subtask: String, done: bool, #[serde(default)] space: Option<String> },
+ #[serde(rename="rename_task")] RenameTask { from: String, to: String, #[serde(default)] space: Option<String> },
+ #[serde(rename="archive_task")] ArchiveTask { task: String, #[serde(default)] space: Option<String> },
+ #[serde(rename="start_timer")] StartTimer { #[serde(rename="timerType")] timer_type: String, minutes: u32, task: Option<String>, #[serde(default)] space: Option<String> },
+ #[serde(rename="save_spaces")] SaveSpaces { spaces: SpacesFile },
+ #[serde(rename="reset_starter")] ResetStarter,
  #[serde(rename="stop_timer")] StopTimer,
  #[serde(rename="settle_timer")] SettleTimer,
  #[serde(rename="log_sleep")] LogSleep { entry: String, timestamp: i64 },

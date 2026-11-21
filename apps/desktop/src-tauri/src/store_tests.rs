@@ -15,7 +15,7 @@ fn task(day: &str, task: &str) -> Operation {
     Operation::SetTask {
         date: day.into(),
         task: task.into(),
-        done: true,
+        done: true, space: None
     }
 }
 fn all_backups(root: &Path) -> Vec<PathBuf> {
@@ -171,7 +171,7 @@ fn rename_transfers_every_log_and_sessions_archive_keeps_history() {
             Operation::StartTimer {
                 timer_type: "focus".into(),
                 minutes: 25,
-                task: Some("Read a chapter".into()),
+                task: Some("Read a chapter".into()), space: None
             },
             now,
         )
@@ -187,7 +187,7 @@ fn rename_transfers_every_log_and_sessions_archive_keeps_history() {
     let s = store
         .mutate(Operation::RenameTask {
             from: "Read a chapter".into(),
-            to: "Study".into(),
+            to: "Study".into(), space: None
         })
         .unwrap()
         .snapshot;
@@ -208,7 +208,7 @@ fn rename_transfers_every_log_and_sessions_archive_keeps_history() {
     store.mutate(task("2026-11-15", "Study")).unwrap();
     let s = store
         .mutate(Operation::ArchiveTask {
-            task: "Study".into(),
+            task: "Study".into(), space: None
         })
         .unwrap()
         .snapshot;
@@ -264,7 +264,7 @@ fn conflict_sessions_deduplicate_and_baselines_must_agree() {
             Operation::StartTimer {
                 timer_type: "focus".into(),
                 minutes: 25,
-                task: None,
+                task: None, space: None
             },
             now,
         )
@@ -332,6 +332,7 @@ fn debug_restart_revokes_persisted_real_folder_without_probing_it() {
         tray_display: TrayDisplay::Auto,
         features: Features::default(),
         features_version: FEATURES_VERSION,
+        setup_done: true,
     };
     atomic(&prefs, &encode(&p).unwrap()).unwrap();
     let store = Store::open(root.clone(), Some(prefs)).unwrap();
@@ -543,4 +544,194 @@ fn old_sample_data_is_moved_aside_once_and_never_deleted() {
             .count(),
         1
     );
+}
+
+fn work_space(store: &Store) -> SpacesFile {
+    let mut spaces = store.snapshot().unwrap().spaces;
+    spaces.main.subtasks.insert("Read a chapter".into(), vec!["Pick book".into(), "Read".into()]);
+    spaces.spaces.push(Space {
+        id: "work".into(),
+        name: "Work".into(),
+        color: "#ff9f43".into(),
+        habits: SpaceHabits {
+            title: "Work tasks".into(),
+            log_id: "Space_work".into(),
+            start_date: "2026-11-01".into(),
+            end_date: String::new(),
+            tasks: vec!["Inbox zero".into(), "Ship it".into()],
+            archived_tasks: vec![],
+            day_complete_min: 1,
+        },
+        subtasks: BTreeMap::from([("Ship it".into(), vec!["Write".into(), "Review".into()])]),
+        countdowns: vec![],
+    });
+    spaces
+}
+fn sub(day: &str, task: &str, subtask: &str, done: bool, space: Option<&str>) -> Operation {
+    Operation::SetSubtask {
+        date: day.into(),
+        task: task.into(),
+        subtask: subtask.into(),
+        done,
+        space: space.map(Into::into),
+    }
+}
+#[test]
+fn spaces_keep_their_own_log_and_subtasks_tick_the_parent() {
+    let (_d, store, root) = sandbox();
+    let spaces = work_space(&store);
+    store.mutate(Operation::SaveSpaces { spaces }).unwrap();
+    assert!(root.join(SPACES).exists());
+    // Saving a space creates no history file until something is ticked.
+    assert!(!root.join("daily-log-Space_work.json").exists());
+    let day = "2026-11-15";
+    store.mutate(sub(day, "Ship it", "Write", true, Some("work"))).unwrap();
+    let s = store.snapshot().unwrap();
+    assert_eq!(s.space_logs["work"][day], vec!["Ship it › Write"]);
+    assert!(!s.space_logs["work"][day].contains(&"Ship it".to_string()));
+    store.mutate(sub(day, "Ship it", "Review", true, Some("work"))).unwrap();
+    let s = store.snapshot().unwrap();
+    assert!(s.space_logs["work"][day].contains(&"Ship it".to_string()), "all subtasks done ticks the parent");
+    let main_before = s.daily_log.get(day).cloned();
+    store.mutate(sub(day, "Ship it", "Write", false, Some("work"))).unwrap();
+    let s = store.snapshot().unwrap();
+    assert!(!s.space_logs["work"][day].contains(&"Ship it".to_string()), "unticking one unticks the parent");
+    assert_eq!(s.daily_log.get(day).cloned(), main_before, "the main log is untouched");
+    let raw: DailyLog = serde_json::from_slice(&fs::read(root.join("daily-log-Space_work.json")).unwrap()).unwrap();
+    assert_eq!(raw[day], vec!["Ship it › Review"]);
+    // Ticking a parent ticks every subtask; unticking clears them.
+    store
+        .mutate(Operation::SetTask { date: day.into(), task: "Read a chapter".into(), done: true, space: None })
+        .unwrap();
+    let s = store.snapshot().unwrap();
+    for e in ["Read a chapter", "Read a chapter › Pick book", "Read a chapter › Read"] {
+        assert!(s.daily_log[day].contains(&e.to_string()), "{e}");
+    }
+    store
+        .mutate(Operation::SetTask { date: day.into(), task: "Read a chapter".into(), done: false, space: Some("main".into()) })
+        .unwrap();
+    assert!(!store.snapshot().unwrap().daily_log[day].iter().any(|e| e.starts_with("Read a chapter")));
+    // A task from another space, an unknown space or subtask is refused.
+    assert!(store.mutate(Operation::SetTask { date: day.into(), task: "Inbox zero".into(), done: true, space: None }).is_err());
+    assert!(store.mutate(Operation::SetTask { date: day.into(), task: "Inbox zero".into(), done: true, space: Some("nope".into()) }).is_err());
+    assert!(store.mutate(sub(day, "Ship it", "Nope", true, Some("work"))).is_err());
+}
+#[test]
+fn space_rename_archive_and_history_rules() {
+    let (_d, store, root) = sandbox();
+    store.mutate(Operation::SaveSpaces { spaces: work_space(&store) }).unwrap();
+    let day = "2026-11-15";
+    store.mutate(sub(day, "Ship it", "Write", true, Some("work"))).unwrap();
+    store
+        .mutate(Operation::RenameTask { from: "Ship it".into(), to: "Launch".into(), space: Some("work".into()) })
+        .unwrap();
+    let s = store.snapshot().unwrap();
+    assert_eq!(s.space_logs["work"][day], vec!["Launch › Write"]);
+    assert!(s.spaces.spaces[0].subtasks.contains_key("Launch"));
+    // A main rename leaves space logs alone, even if a name matches.
+    let main_log = fs::read(root.join("daily-log-Space_work.json")).unwrap();
+    store
+        .mutate(Operation::RenameTask { from: "Read a chapter".into(), to: "Study".into(), space: None })
+        .unwrap();
+    assert_eq!(fs::read(root.join("daily-log-Space_work.json")).unwrap(), main_log);
+    assert!(store.snapshot().unwrap().spaces.main.subtasks.contains_key("Study"));
+    store.mutate(Operation::ArchiveTask { task: "Inbox zero".into(), space: Some("work".into()) }).unwrap();
+    let s = store.snapshot().unwrap();
+    assert_eq!(s.spaces.spaces[0].habits.archived_tasks, vec!["Inbox zero"]);
+    // Dropping a task without archiving, changing a log ID or reusing the main log is refused.
+    let mut bad = s.spaces.clone();
+    bad.spaces[0].habits.tasks = vec!["Other".into()];
+    assert!(store.mutate(Operation::SaveSpaces { spaces: bad }).is_err());
+    let mut bad = s.spaces.clone();
+    bad.spaces[0].habits.log_id = "Elsewhere".into();
+    assert!(store.mutate(Operation::SaveSpaces { spaces: bad }).is_err());
+    let mut bad = s.spaces.clone();
+    bad.spaces[0].id = "other".into();
+    bad.spaces[0].habits.log_id = "Daily_Tasks".into();
+    assert!(store.mutate(Operation::SaveSpaces { spaces: bad }).is_err());
+    // Deleting a space keeps its history file.
+    let mut gone = s.spaces.clone();
+    gone.spaces.clear();
+    store.mutate(Operation::SaveSpaces { spaces: gone }).unwrap();
+    assert!(root.join("daily-log-Space_work.json").exists());
+    assert!(store.snapshot().unwrap().space_logs.is_empty());
+}
+#[test]
+fn a_space_timer_is_linked_beside_the_ledger_not_inside_it() {
+    let (_d, store, root) = sandbox();
+    store.mutate(Operation::SaveSpaces { spaces: work_space(&store) }).unwrap();
+    let now = 1_800_000_000_000;
+    let start = |task: Option<&str>, space: Option<&str>| Operation::StartTimer {
+        timer_type: "focus".into(),
+        minutes: 25,
+        task: task.map(Into::into),
+        space: space.map(Into::into),
+    };
+    assert!(store.mutate_at(start(Some("Read a chapter"), Some("work")), now).is_err(), "main task in a space");
+    store.mutate_at(start(Some("Ship it"), Some("work")), now).unwrap();
+    let s = store.snapshot().unwrap();
+    assert!(s.focus.state.as_ref().unwrap().task.is_none(), "space tasks stay out of focus-timer.json");
+    let link = &s.spaces.focus[&now.to_string()];
+    assert_eq!((link.space.as_str(), link.task.as_deref()), ("work", Some("Ship it")));
+    let raw = fs::read_to_string(root.join(FOCUS)).unwrap();
+    assert!(!raw.contains("work") && !raw.contains("Ship it"));
+    // Editing spaces never drops a focus link.
+    let mut edit = s.spaces.clone();
+    edit.focus.clear();
+    edit.main.name = "Home".into();
+    store.mutate_at(Operation::SaveSpaces { spaces: edit }, now + 1000).unwrap();
+    assert!(store.snapshot().unwrap().spaces.focus.contains_key(&now.to_string()));
+}
+#[test]
+fn reset_starter_moves_everything_aside_and_refuses_a_real_folder() {
+    let (_d, store, root) = sandbox();
+    store.mutate(Operation::SaveSpaces { spaces: work_space(&store) }).unwrap();
+    store.mutate(sub("2026-11-15", "Ship it", "Write", true, Some("work"))).unwrap();
+    let r = store.mutate(Operation::ResetStarter).unwrap();
+    assert_eq!(r.snapshot.settings.habits.tasks, vec!["First habit"]);
+    assert!(r.snapshot.spaces.spaces.is_empty() && r.snapshot.daily_log.is_empty());
+    let moved: Vec<_> = fs::read_dir(&root)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with("sample-data-"))
+        .collect();
+    assert_eq!(moved.len(), 1);
+    for f in [SETTINGS, SPACES, "daily-log-Space_work.json", "daily-log-Daily_Tasks.json"] {
+        assert!(moved[0].path().join(f).exists(), "{f} kept");
+    }
+}
+#[test]
+fn spaces_conflict_copies_merge_only_when_identical() {
+    let (_d, store, root) = sandbox();
+    store.mutate(Operation::SaveSpaces { spaces: work_space(&store) }).unwrap();
+    fs::copy(root.join(SPACES), root.join("daybar-spaces 2.json")).unwrap();
+    let s = store.snapshot().unwrap();
+    assert_eq!(s.conflicts[0].canonical, SPACES);
+    store.resolve_conflict("daybar-spaces 2.json".into(), "merge".into()).unwrap();
+    let mut other = work_space(&store);
+    other.main.name = "Different".into();
+    fs::write(root.join("daybar-spaces 2.json"), serde_json::to_vec(&other).unwrap()).unwrap();
+    assert!(store.resolve_conflict("daybar-spaces 2.json".into(), "merge".into()).is_err());
+}
+#[test]
+fn a_brand_new_install_asks_for_setup_and_an_existing_one_does_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let prefs = root.join("prefs").join("preferences.json");
+    let sandbox = root.join("data");
+    fs::create_dir_all(&sandbox).unwrap();
+    let store = Store::open(sandbox.clone(), Some(prefs.clone())).unwrap();
+    assert!(!store.preferences().unwrap().setup_done);
+    drop(store);
+    // Quitting before finishing shows it again next time.
+    let store = Store::open(sandbox.clone(), Some(prefs.clone())).unwrap();
+    assert!(!store.preferences().unwrap().setup_done);
+    let mut done = store.preferences().unwrap();
+    done.setup_done = true;
+    store.set_preferences(done).unwrap();
+    drop(store);
+    assert!(Store::open(sandbox.clone(), Some(prefs)).unwrap().preferences().unwrap().setup_done);
+    // An existing install without a preferences file (never changed a setting) is not asked.
+    let other = root.join("prefs2").join("preferences.json");
+    assert!(Store::open(sandbox, Some(other)).unwrap().preferences().unwrap().setup_done);
 }

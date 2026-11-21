@@ -36,11 +36,11 @@ describe('feature-contributed views, Today cards and config', () => {
     render(<Dashboard client={client(s)} />);
     expect(await screen.findByText('Radar today card')).toBeInTheDocument();
     const names = nav().getAllByRole('button').map((b) => b.textContent);
-    expect(names).toEqual(['◫Today1', '▦Countdown2', '✓Habits3', '◷Focus4', '☾Sleep5', '⌖Deadline Radar6', '⚙Settings7']);
-    fireEvent.keyDown(window, { key: '6' });
+    expect(names).toEqual(['◫Today1', '▦Countdown2', '✓Habits3', '◷Focus4', '☾Sleep5', '▤Overview6', '⌖Deadline Radar7', '⚙Settings8']);
+    fireEvent.keyDown(window, { key: '7' });
     expect(screen.getByRole('heading', { level: 1, name: 'Deadline Radar' })).toBeInTheDocument();
     expect(screen.getByText('Radar page body')).toBeInTheDocument();
-    fireEvent.keyDown(window, { key: '7' });
+    fireEvent.keyDown(window, { key: '8' });
     expect(await screen.findByText('Radar config sees 21 days')).toBeInTheDocument();
   });
   it('hides the view again when its feature needs something that is off', async () => {

@@ -186,7 +186,7 @@ fn toggle_focus_operation(s: &Snapshot) -> Option<Operation> {
         Operation::StartTimer {
             timer_type: "focus".into(),
             minutes: s.settings.focus.focus_options[0],
-            task: None,
+            task: None, space: None
         }
     })
 }
@@ -225,7 +225,7 @@ fn on_menu(app: &AppHandle, id: &str) {
                     Operation::StartTimer {
                         timer_type: kind.into(),
                         minutes,
-                        task: None,
+                        task: None, space: None
                     },
                 );
             }
@@ -244,7 +244,7 @@ fn on_menu(app: &AppHandle, id: &str) {
                 let done = !s.daily_log.get(&date).is_some_and(|ts| ts.contains(&task));
                 backend
                     .store
-                    .mutate(Operation::SetTask { date, task, done })?;
+                    .mutate(Operation::SetTask { date, task, done, space: None })?;
                 Ok(())
             })();
             finish_mutation(&app, &backend, result);
@@ -782,6 +782,8 @@ mod tests {
             daily_log: Default::default(),
             focus: FocusData::default(),
             sleep: SleepData::default(),
+            spaces: Default::default(),
+            space_logs: Default::default(),
             preferences: Preferences {
                 data_folder: "/sandbox".into(),
                 real_data: false,
@@ -792,6 +794,7 @@ mod tests {
                 tray_display,
                 features: Features::all_optional_off(),
                 features_version: crate::contracts::FEATURES_VERSION,
+                setup_done: true,
             },
             issues: vec![],
             conflicts: vec![],
@@ -824,7 +827,7 @@ mod tests {
         let start = |timer_type: &str| Operation::StartTimer {
             timer_type: timer_type.into(),
             minutes: 25,
-            task: None,
+            task: None, space: None
         };
         assert!(quiet_focus_start(&s, &start("focus"), now));
         assert!(!quiet_focus_start(&s, &start("break"), now));
@@ -1268,7 +1271,7 @@ mod tests {
         let focus_start = Operation::StartTimer {
             timer_type: "focus".into(),
             minutes: 25,
-            task: None,
+            task: None, space: None
         };
         // Bed is 5 minutes away: with the Sleep module on this is no-phone time.
         s.sleep.plan = Some(SleepPlan {

@@ -301,6 +301,8 @@ mod tests {
                 ..Default::default()
             },
             sleep: Default::default(),
+            spaces: Default::default(),
+            space_logs: Default::default(),
             preferences: p.clone(),
             issues: vec![],
             conflicts: vec![],

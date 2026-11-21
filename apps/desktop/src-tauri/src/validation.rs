@@ -333,27 +333,125 @@ impl Validate for Features {
             clock(&m.active_start) && clock(&m.active_end),
             "Movement nudges: active hours must be HH:MM",
         )?;
-        let items = &mut self.extra_countdowns.items;
-        ensure(items.len() <= 12, "At most 12 extra countdowns")?;
-        let mut ids = BTreeSet::new();
-        for item in items.iter_mut() {
+        countdowns(&mut self.extra_countdowns.items)
+    }
+}
+fn countdowns(items: &mut [ExtraCountdown]) -> Result<()> {
+    ensure(items.len() <= 12, "At most 12 extra countdowns")?;
+    let mut ids = BTreeSet::new();
+    for item in items.iter_mut() {
+        ensure(
+            !item.id.is_empty()
+                && item.id.len() <= 40
+                && item
+                    .id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'),
+            "Invalid countdown ID",
+        )?;
+        ensure(ids.insert(item.id.clone()), "Duplicate countdown IDs")?;
+        name(&mut item.title)?;
+        date(&item.start_date)?;
+        date(&item.end_date)?;
+        ensure(
+            item.end_date >= item.start_date,
+            "End date precedes start date",
+        )?;
+    }
+    Ok(())
+}
+fn color(c: &str) -> Result<()> {
+    ensure(
+        c.len() == 7 && c.starts_with('#') && c.bytes().skip(1).all(|b| b.is_ascii_hexdigit()),
+        "Invalid colour",
+    )
+}
+fn subtasks(map: &mut SubtaskMap) -> Result<()> {
+    let mut clean = SubtaskMap::new();
+    for (mut task, mut subs) in std::mem::take(map) {
+        name(&mut task)?;
+        names(&mut subs)?;
+        ensure(subs.len() <= 30, "At most 30 subtasks per task")?;
+        ensure(
+            subs.iter().collect::<BTreeSet<_>>().len() == subs.len(),
+            "Duplicate subtasks",
+        )?;
+        for sub in &subs {
             ensure(
-                !item.id.is_empty()
-                    && item.id.len() <= 40
-                    && item
-                        .id
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'),
-                "Invalid countdown ID",
+                subtask_entry(&task, sub).encode_utf16().count() <= 120,
+                "Task and subtask together must be 120 characters or fewer",
             )?;
-            ensure(ids.insert(item.id.clone()), "Duplicate countdown IDs")?;
-            name(&mut item.title)?;
-            date(&item.start_date)?;
-            date(&item.end_date)?;
+        }
+        clean.insert(task, subs);
+    }
+    *map = clean;
+    Ok(())
+}
+pub fn space_id(id: &str) -> Result<()> {
+    ensure(
+        !id.is_empty()
+            && id.len() <= 40
+            && id.bytes().next().is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-'),
+        "Invalid space ID",
+    )
+}
+/// Mirrors `spacesFileSchema` (packages/core/src/contracts/index.ts). Keep limits identical.
+impl Validate for SpacesFile {
+    fn validate(&mut self) -> Result<()> {
+        ensure(self.version == 1, "Unknown spaces file version")?;
+        name(&mut self.main.name)?;
+        color(&self.main.color)?;
+        subtasks(&mut self.main.subtasks)?;
+        ensure(self.spaces.len() <= 12, "At most 12 spaces")?;
+        let (mut ids, mut logs) = (BTreeSet::new(), BTreeSet::new());
+        for space in &mut self.spaces {
+            space_id(&space.id)?;
+            ensure(ids.insert(space.id.clone()), "Duplicate space IDs")?;
+            name(&mut space.name)?;
+            color(&space.color)?;
+            let h = &mut space.habits;
+            name(&mut h.title)?;
             ensure(
-                item.end_date >= item.start_date,
-                "End date precedes start date",
+                !h.log_id.is_empty()
+                    && h.log_id.len() <= 60
+                    && h.log_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+                "Invalid log ID",
             )?;
+            ensure(logs.insert(h.log_id.clone()), "Two spaces share a log ID")?;
+            date(&h.start_date)?;
+            if !h.end_date.is_empty() {
+                date(&h.end_date)?;
+                ensure(h.end_date >= h.start_date, "End date precedes start date")?;
+            }
+            names(&mut h.tasks)?;
+            names(&mut h.archived_tasks)?;
+            ensure(
+                !h.tasks.is_empty()
+                    && h.tasks.len() <= 50
+                    && h.tasks.iter().collect::<BTreeSet<_>>().len() == h.tasks.len(),
+                "Empty or duplicate tasks",
+            )?;
+            ensure(
+                h.day_complete_min > 0 && h.day_complete_min as usize <= h.tasks.len(),
+                "Completion minimum exceeds task count",
+            )?;
+            subtasks(&mut space.subtasks)?;
+            countdowns(&mut space.countdowns)?;
+        }
+        for (start, link) in &mut self.focus {
+            ensure(
+                !start.is_empty()
+                    && start.bytes().all(|b| b.is_ascii_digit())
+                    && (start == "0" || !start.starts_with('0')),
+                "Invalid focus session key",
+            )?;
+            space_id(&link.space)?;
+            if let Some(task) = &mut link.task {
+                name(task)?;
+            }
         }
         Ok(())
     }

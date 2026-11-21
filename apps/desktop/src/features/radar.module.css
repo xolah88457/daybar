@@ -143,3 +143,55 @@
     text-align: left;
   }
 }
+/* Google Calendar sign-in (Settings). */
+.google {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.google legend {
+  padding: 0 4px;
+  font-size: 10px;
+}
+.googleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.googleRow p {
+  margin: 0;
+  font-size: 10px;
+  flex: 1 1 220px;
+}
+.googleForm {
+  display: grid;
+  gap: 10px;
+}
+.googleForm button {
+  justify-self: start;
+}
+.howto {
+  font-size: 9px;
+  color: var(--muted);
+}
+.howto summary {
+  cursor: pointer;
+}
+.howto ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  line-height: 1.7;
+}
+.problem {
+  margin: 0;
+  font-size: 10px;
+  color: var(--red);
+}

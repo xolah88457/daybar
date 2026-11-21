@@ -1,5 +1,5 @@
 import { featureIds, moduleFeatureIds } from '@daybar/core';
-import { currentFeaturesVersion, defaultFeatures, defaultSettings } from '@daybar/core/contracts';
+import { currentFeaturesVersion, defaultFeatures, defaultSettings, defaultSpaces } from '@daybar/core/contracts';
 import type { Features, Snapshot } from '@daybar/core/contracts';
 
 /**
@@ -24,6 +24,8 @@ export function fixture(): Snapshot {
     dailyLog: {},
     focus: { state: null, days: {} },
     sleep: { wakes: {}, beds: {}, plan: null },
+    spaces: structuredClone(defaultSpaces),
+    spaceLogs: {},
     preferences: {
       dataFolder: '.dev-data',
       realData: false,
@@ -33,7 +35,8 @@ export function fixture(): Snapshot {
       themeMode: 'night',
       trayDisplay: 'auto',
       features: allOptionalOff(),
-      featuresVersion: currentFeaturesVersion
+      featuresVersion: currentFeaturesVersion,
+      setupDone: true
     },
     issues: [],
     conflicts: []

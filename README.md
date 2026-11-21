@@ -50,7 +50,24 @@ Almost everything starts **on**. Only the three that interrupt you often or chan
 | | Command palette | Built in | ⌘K to jump to a screen, start or stop focus, tick off a task or log wake/bed. |
 | | Extra countdowns | Built in | More countdowns on Today once you add one. Mac only; the phone keeps the main countdown. |
 
-Alerts only fire while Daybar is running, like every other Daybar notification. None of these features use the network.
+Alerts only fire while Daybar is running, like every other Daybar notification. None of these features use the network, except Google Calendar once you connect it (below).
+
+### Google Calendar alongside iCloud
+
+Deadline Radar reads everything in macOS Calendar, which already includes iCloud and any Google account added under System Settings → Internet Accounts. To read Google Calendar directly instead, connect it in **Settings → Deadline Radar → Options → Google Calendar**. Daybar uses your own Google Cloud OAuth client, so nothing is shared with anyone else:
+
+1. In [console.cloud.google.com](https://console.cloud.google.com), create a project and enable the **Google Calendar API**.
+2. Under **Google Auth Platform**, set up the consent screen as *External* and add your Google address as a test user.
+3. Under **Clients**, create an OAuth client of type **Desktop app**, and copy its client ID and client secret.
+4. Paste both into Daybar and press **Connect Google Calendar**. Your browser opens Google's consent page; approve read-only calendar access and return to Daybar.
+
+Google's calendars then appear in the Calendars list next to iCloud ones, and their events show on the radar, its Today card, alerts and the menu-bar label. An event that is in both (because the account is also in macOS Calendar) shows once. The sign-in is kept in your Keychain and never written to the data folder or the phone. **Disconnect** revokes it.
+
+### Spaces, subtasks and setup
+
+- **Spaces** keep work, personal life and anything else apart: each has its own tasks, history, countdowns and focus time. Create one on the **Overview** page, which shows today's progress, streak and focus for every space side by side; each space then has its own page in the sidebar. The iPhone widgets keep showing your main space.
+- **Subtasks:** press **+** next to any task to add steps. They stay collapsed behind a count such as **2/3**; the task ticks itself when every step is done.
+- **Setup:** a new install opens a short guided setup. Run it again, or remove the sample data, from **Settings → Start fresh**; the browser demo's banner also has **Remove demo data**.
 
 ## From Scriptable widgets to a desktop app
 

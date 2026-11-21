@@ -321,7 +321,7 @@ mod tests {
         let start = |minutes| Operation::StartTimer {
             timer_type: "focus".into(),
             minutes,
-            task: None,
+            task: None, space: None
         };
         store.mutate_at(start(25), t0).unwrap();
         // The timer ran out while nobody was looking: the next read settles it (and reports it once).
