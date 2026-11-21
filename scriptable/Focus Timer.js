@@ -218,6 +218,9 @@ const LONG_BREAK_OPTIONS = setting("focus", "longBreakOptions", [15, 30]);   // 
 const BLOCK_MINUTES = setting("focus", "blockMinutes", 25);              // one block = this many focus minutes (50 min = 2 blocks)
 const HABIT_TASKS = setting("habits", "tasks", ["Coursework", "Live Trading", "Trade Review", "Apostles work"]);   // tasks focus sessions can be linked to
 
+// Appearance, like Daybar's: "night" (the default), "day", or "auto" to follow the iPhone's light/dark mode.
+const THEME = "night";
+
 // Look
 const BG_COLOR = setting("appearance", "background", "#0d1117");
 const TEXT_COLOR = setting("appearance", "text", "#ffffff");
@@ -230,10 +233,23 @@ const PADDING = setting("appearance", "gap", 2);
 const BORDER_RADIUS = setting("appearance", "radius", 2);
 const SIDE_PADDING = 12;
 const WIDGET_WIDTH = 354;          // medium widget width in points; adjust if the row does not reach the right edge
+const SMALL_WIDTH = 150;           // small widget width in points; adjust if the row does not reach the edge
+const RECENT_MINUTES = 20;         // a focus session that ended this recently suggests a break
+const LONG_BREAK_EVERY = 4;        // every 4th completed focus session today suggests the long break
 // ============================================
 
 const MENLO = new Font("Menlo", 11);
 const MENLO_BOLD = new Font("Menlo-Bold", 12);
+
+// Daybar's Day palette. Colors you changed in the shared settings stay as you set them.
+const DAY = {"#0d1117":"#f4f3ed","#ffffff":"#202820","#39d353":"#18764b","#58a6ff":"#286a9f","#ff5c5c":"#b43737","#ff9f43":"#a65410","#f2cc60":"#80620b"};
+function C(hex, alpha = 1) {
+  const night = new Color(hex, alpha);
+  if (THEME === "night") return night;
+  const day = new Color(DAY[hex.toLowerCase()] || hex, alpha);
+  return THEME === "day" ? day : Color.dynamic(day, night);
+}
+function runURL(action) { return "scriptable:///run/" + encodeURIComponent(Script.name()) + (action ? "?action=" + action : ""); }
 
 function pad(n) { return String(n).padStart(2, "0"); }
 function key(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -333,7 +349,7 @@ async function startTimer(type, minutes, task) {
     const n = new Notification();
     n.identifier = "focus-timer";
     n.title = type === "focus" ? "Focus session done" : "Break over";
-    n.body = type === "focus" ? "Nice work. Take a break." : "Ready for the next session?";
+    n.body = type === "focus" ? (task ? `Nice work on ${task}. Take a break.` : "Nice work. Take a break.") : "Ready for the next session?";
     n.sound = "complete";
     n.setTriggerDate(new Date(data.state.end));
     await n.schedule();
@@ -363,51 +379,100 @@ async function chooseTask(type) {
   return choice < 0 ? null : choice === 0 ? undefined : HABIT_TASKS[choice - 1];
 }
 
-function createWidget(data) {
+function createWidget(data, family = config.widgetFamily) {
+  const small = family === "small";
+  const width = small ? SMALL_WIDTH : WIDGET_WIDTH;
   const today = data.days[key(new Date())] || { count: 0, minutes: 0 };
   today.count = Math.floor(today.minutes / BLOCK_MINUTES);   // blocks come from total minutes
   const s = data.state;
 
   const widget = new ListWidget();
-  widget.backgroundColor = new Color(BG_COLOR);
+  widget.backgroundColor = C(BG_COLOR);
   widget.setPadding(12, SIDE_PADDING, 12, SIDE_PADDING);
+  widget.url = runURL();
   if (s) widget.refreshAfterDate = new Date(s.end);
 
   const head = widget.addStack();
   head.layoutHorizontally();
   const title = head.addText(TITLE);
   title.font = MENLO_BOLD;
-  title.textColor = new Color(TEXT_COLOR);
+  title.textColor = C(TEXT_COLOR);
+  title.lineLimit = 1;
+  title.minimumScaleFactor = 0.7;
   head.addSpacer();
-  // show the end time too: iOS widgets can't stop a live timer at 0, so if the countdown
+  // medium shows the end time too: iOS widgets can't stop a live timer at 0, so if the countdown
   // ever starts counting back up, this tells you the time is already over
-  const label = s ? `${s.type === "focus" ? "FOCUS" : "BREAK"} • ends ${fmtClock(new Date(s.end))}` : "READY";
+  const kind = s ? (s.type === "focus" ? "FOCUS" : "BREAK") : "READY";
+  const label = s && !small ? `${kind} • ends ${fmtClock(new Date(s.end))}` : kind;
   const status = head.addText(label);
   status.font = MENLO_BOLD;
-  status.textColor = new Color(s && s.type !== "focus" ? BREAK_COLOR : FOCUS_COLOR);
+  status.textColor = C(s && s.type !== "focus" ? BREAK_COLOR : FOCUS_COLOR);
+  status.lineLimit = 1;
 
   widget.addSpacer(8);
 
+  const bigFont = new Font("Menlo-Bold", small ? 30 : 38);
   if (s) {
     // Native iOS timer dates count upward after expiry; a snapshot never goes negative.
     const seconds = Math.max(0, Math.ceil((s.end - Date.now()) / 1000));
-    const t = widget.addText(`${Math.floor(seconds / 60)}:${pad(seconds % 60)}`);
-    t.font = new Font("Menlo-Bold", 38);
-    t.textColor = new Color(s.type === "focus" ? FOCUS_COLOR : BREAK_COLOR);
+    const text = `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
     widget.refreshAfterDate = new Date(Math.min(s.end, Date.now() + 60000));
+    const color = C(s.type === "focus" ? FOCUS_COLOR : BREAK_COLOR);
+    if (small) {
+      const t = widget.addText(text);
+      t.font = bigFont;
+      t.textColor = color;
+      t.lineLimit = 1;
+      t.minimumScaleFactor = 0.6;
+      const note = widget.addText(s.task ? `${s.task} • ends ${fmtClock(new Date(s.end))}` : `ends ${fmtClock(new Date(s.end))}`);
+      note.font = MENLO;
+      note.textColor = C(TEXT_COLOR, 0.5);
+      note.lineLimit = 1;
+      note.minimumScaleFactor = 0.6;
+    } else {
+      const line = widget.addStack();
+      line.layoutHorizontally();
+      line.centerAlignContent();
+      const t = line.addText(text);
+      t.font = bigFont;
+      t.textColor = color;
+      line.addSpacer();
+      const side = line.addStack();
+      side.layoutVertically();
+      const elapsed = Math.max(0, Math.min(s.minutes, Math.floor((Date.now() - s.start) / 60000)));
+      const task = side.addText(s.task || "No task");
+      task.font = MENLO;
+      task.textColor = C(TEXT_COLOR, s.task ? 0.8 : 0.4);
+      task.rightAlignText();
+      task.lineLimit = 1;
+      task.minimumScaleFactor = 0.6;
+      const prog = side.addText(`${elapsed}/${s.minutes} min`);
+      prog.font = MENLO;
+      prog.textColor = C(TEXT_COLOR, 0.5);
+      prog.rightAlignText();
+      prog.lineLimit = 1;
+    }
   } else {
     const t = widget.addText(`${FOCUS_OPTIONS[0]}:00`);
-    t.font = new Font("Menlo-Bold", 38);
-    t.textColor = new Color(TEXT_COLOR, 0.35);
+    t.font = bigFont;
+    t.textColor = C(TEXT_COLOR, 0.35);
+    t.lineLimit = 1;
+    t.minimumScaleFactor = 0.6;
+    if (small) {
+      const note = widget.addText("tap to start");
+      note.font = MENLO;
+      note.textColor = C(TEXT_COLOR, 0.5);
+      note.lineLimit = 1;
+    }
   }
 
-  widget.addSpacer(10);
+  widget.addSpacer(small ? 8 : 10);
 
   // Block counter: a single row like the days-left grid. Green = finished blocks, grey = unfilled.
   const row = widget.addStack();
   row.layoutHorizontally();
   row.spacing = PADDING;
-  const avail = WIDGET_WIDTH - 2 * SIDE_PADDING;
+  const avail = width - 2 * SIDE_PADDING;
   // pick a whole number of blocks and size them so the row ends exactly where it started
   const slots = Math.max(1, Math.round((avail + PADDING) / (CELL_SIZE + PADDING)));
   const cellSize = (avail - (slots - 1) * PADDING) / slots;
@@ -416,35 +481,60 @@ function createWidget(data) {
     cell.size = new Size(cellSize, cellSize);
     cell.cornerRadius = BORDER_RADIUS;
     cell.backgroundColor = i < today.count
-      ? new Color(FOCUS_COLOR)
-      : new Color(UNFILLED_COLOR, UNFILLED_OPACITY);
+      ? C(FOCUS_COLOR)
+      : C(UNFILLED_COLOR, UNFILLED_OPACITY);
   }
 
   widget.addSpacer(6);
-  const foot = widget.addText(`Today ${today.count} block${today.count === 1 ? "" : "s"}  •  ${today.minutes} min`);
+  const plural = `block${today.count === 1 ? "" : "s"}`;
+  const foot = widget.addText(small ? `${today.count} ${plural} • ${today.minutes} min` : `Today ${today.count} ${plural}  •  ${today.minutes} min`);
   foot.font = MENLO;
-  foot.textColor = new Color(TEXT_COLOR, 0.5);
+  foot.textColor = C(TEXT_COLOR, 0.5);
   foot.lineLimit = 1;
+  foot.minimumScaleFactor = 0.7;
 
   return widget;
 }
 
-async function showMenu(data) {
-  const options = [
-    ...FOCUS_OPTIONS.map(m => ({ label: `Focus ${m} min`, type: "focus", minutes: m })),
-    ...BREAK_OPTIONS.map(m => ({ label: `Break ${m} min`, type: "break", minutes: m })),
-    ...LONG_BREAK_OPTIONS.map(m => ({ label: `Long break ${m} min`, type: "break", minutes: m }))
+function lastFocus(data) {
+  let last = null;
+  for (const s of Object.values(data.sessions || {})) {
+    if (s.type === "focus" && (!last || s.end > last.end)) last = s;
+  }
+  return last;
+}
+
+// Ordered idle options. Repeat leads the focus group; right after a focus session breaks come first.
+function menuOptions(data, now = Date.now()) {
+  const last = lastFocus(data);
+  const recent = !!last && now - last.end <= RECENT_MINUTES * 60000;
+  const doneToday = Object.values(data.sessions || {})
+    .filter(s => s.type === "focus" && s.creditedMinutes > 0 && s.date === key(new Date(now))).length;
+  const longFirst = recent && doneToday > 0 && doneToday % LONG_BREAK_EVERY === 0;
+  const focus = [
+    ...(last ? [{ label: `Repeat: Focus ${last.minutes} min${last.task ? " • " + last.task : ""}`, type: "focus", minutes: last.minutes, ...(last.task ? { task: last.task } : {}), repeat: true }] : []),
+    ...FOCUS_OPTIONS.map(m => ({ label: `Focus ${m} min`, type: "focus", minutes: m }))
   ];
+  const short = BREAK_OPTIONS.map(m => ({ label: `Break ${m} min`, type: "break", minutes: m }));
+  const long = LONG_BREAK_OPTIONS.map(m => ({ label: `Long break ${m} min`, type: "break", minutes: m }));
+  const breaks = longFirst ? [...long, ...short] : [...short, ...long];
+  return recent ? [...breaks, ...focus] : [...focus, ...breaks];
+}
+
+async function showMenu(data) {
+  const now = Date.now();
+  const options = menuOptions(data, now);
+  const last = lastFocus(data);
 
   const menu = new Alert();
   menu.title = TITLE;
   const s = data.state;
   if (s) {
-    const left = Math.max(0, Math.ceil((s.end - Date.now()) / 60000));
-    menu.message = `${s.type === "focus" ? "Focusing" : "On break"} • ${left} min left`;
+    const left = Math.max(0, Math.ceil((s.end - now) / 60000));
+    menu.message = `${s.type === "focus" ? "Focusing" : "On break"} • ${left} min left • ends ${fmtClock(new Date(s.end))}` + (s.task ? `\nTask: ${s.task}` : "");
     menu.addDestructiveAction(s.type === "focus" ? "Stop and count time worked" : "Stop timer");
   } else {
-    menu.message = "Pick what to start";
+    menu.message = last && now - last.end <= RECENT_MINUTES * 60000 ? "Focus done. Time for a break?" : "Pick what to start";
     for (const o of options) menu.addAction(o.label);
     menu.addAction("Custom focus length");
   }
@@ -464,7 +554,9 @@ async function showMenu(data) {
       await done.present();
     }
   } else if (choice < options.length) {
-    const option = options[choice], task = await chooseTask(option.type);
+    const option = options[choice];
+    // Repeat skips the task picker and reuses the last task.
+    const task = option.repeat ? option.task : await chooseTask(option.type);
     if (task !== null) await startTimer(option.type, option.minutes, task);
   } else {
     const input = new Alert();
@@ -481,7 +573,7 @@ async function showMenu(data) {
       }
     }
   }
-  await createWidget(await settle()).presentSmall();
+  await createWidget(await settle(), "small").presentSmall();
 }
 
 const data = await settle();

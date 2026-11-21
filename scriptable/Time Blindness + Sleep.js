@@ -168,6 +168,9 @@ const BEDTIME_ALERTS = setting("sleep", "bedtimeAlerts", true);        // notifi
 const ROUTINE_MINUTES = setting("sleep", "routineMinutes", 120);        // night routine + bed prep starts this long before bed
 const NO_PHONE_MINUTES = setting("sleep", "noPhoneMinutes", 60);        // no phone time starts this long before bed
 
+// Appearance, like Daybar's: "night" (the default), "day", or "auto" to follow the iPhone's light/dark mode.
+const THEME = "night";
+
 // Look
 const BG_COLOR = setting("appearance", "background", "#0d1117");
 const TEXT_COLOR = setting("appearance", "text", "#ffffff");
@@ -176,10 +179,24 @@ const WARN_COLOR = setting("appearance", "yellow", "#f2cc60");
 const URGENT_COLOR = setting("appearance", "red", "#ff5c5c");
 const SIDE_PADDING = 12;
 const WIDGET_WIDTH = 320;
+const SMALL_WIDTH = 150;           // small widget width in points; adjust if the bar does not reach the edge
 // ============================================
 
 const STALE_HOURS = AWAKE_HOURS + 6;   // after this long, a logged wake is assumed old
 const MENLO = new Font("Menlo", 11);
+
+// Daybar's Day palette. Colors you changed in the shared settings stay as you set them.
+const DAY = {"#0d1117":"#f4f3ed","#ffffff":"#202820","#39d353":"#18764b","#58a6ff":"#286a9f","#ff5c5c":"#b43737","#ff9f43":"#a65410","#f2cc60":"#80620b"};
+function C(hex, alpha = 1) {
+  const night = new Color(hex, alpha);
+  if (THEME === "night") return night;
+  const day = new Color(DAY[hex.toLowerCase()] || hex, alpha);
+  return THEME === "day" ? day : Color.dynamic(day, night);
+}
+// Tapping the widget runs this script (whatever you named it) straight into its menu.
+function runURL(action) {
+  return "scriptable:///run/" + encodeURIComponent(Script.name()) + (action ? "?action=" + action : "");
+}
 
 // ---------- time helpers ----------
 function pad(n) { return String(n).padStart(2, "0"); }
@@ -433,7 +450,7 @@ async function scheduleBedAlerts(bed, now) {
 }
 
 // ---------- widget ----------
-async function createWidget() {
+async function createWidget(family = config.widgetFamily) {
   const data = await load();
   const now = new Date();
   const st = currentState(data, now);
@@ -453,19 +470,63 @@ async function createWidget() {
   }
 
   const widget = new ListWidget();
-  widget.backgroundColor = new Color(BG_COLOR);
+  widget.backgroundColor = C(BG_COLOR);
   widget.setPadding(12, SIDE_PADDING, 12, SIDE_PADDING);
+  widget.url = runURL();
   widget.refreshAfterDate = new Date(now.getTime() + 5 * 60000);
 
   const elapsedMin = (now - st.wake) / 60000;
   const leftMin = (bed - now) / 60000;
   const p = st.asleep ? 0 : Math.min(1, Math.max(0, elapsedMin / Math.max(1, (bed - st.wake) / 60000)));
-  const col = st.asleep ? new Color(TEXT_COLOR, 0.4)
-    : leftMin <= 0 ? new Color(URGENT_COLOR)
-    : leftMin <= 120 ? new Color(WARN_COLOR)
-    : new Color(GOOD_COLOR);
+  const col = st.asleep ? C(TEXT_COLOR, 0.4)
+    : leftMin <= 0 ? C(URGENT_COLOR)
+    : leftMin <= 120 ? C(WARN_COLOR)
+    : C(GOOD_COLOR);
 
   if (!st.asleep) await scheduleBedAlerts(bed, now);
+
+  // in the last two hours, show what to be doing instead of the plan/bed line
+  let phase = null;
+  if (!st.asleep && leftMin > 0) {
+    if (leftMin <= NO_PHONE_MINUTES) phase = { text: "No phone time", color: C(URGENT_COLOR) };
+    else if (leftMin <= ROUTINE_MINUTES) phase = { text: "Night routine • bed prep", color: C(WARN_COLOR) };
+  }
+  const status = st.asleep ? `Wake in ${fmtDuration((st.wake - now) / 60000)}`
+    : leftMin <= 0 ? `Past bedtime by ${fmtDuration(-leftMin)}`
+    : `${fmtDuration(leftMin)} until bed`;
+
+  if (family === "small") {
+    widget.setPadding(12, SIDE_PADDING, 12, SIDE_PADDING);
+    const clockS = widget.addText(fmtClock(now));
+    clockS.font = new Font("Menlo-Bold", 12);
+    clockS.textColor = C(TEXT_COLOR, 0.6);
+    clockS.lineLimit = 1;
+    widget.addSpacer(4);
+    const bigS = widget.addText(status);
+    bigS.font = new Font("Menlo-Bold", 20);
+    bigS.textColor = col;
+    bigS.minimumScaleFactor = 0.5;
+    widget.addSpacer(8);
+    const w = SMALL_WIDTH - 2 * SIDE_PADDING;
+    const barS = widget.addStack();
+    barS.layoutHorizontally();
+    barS.size = new Size(w, 8);
+    barS.cornerRadius = 4;
+    barS.backgroundColor = C(TEXT_COLOR, setting("appearance", "futureOpacity", 0.12));
+    const fillS = barS.addStack();
+    fillS.size = new Size(Math.max(1, w * p), 8);
+    fillS.cornerRadius = 4;
+    fillS.backgroundColor = col;
+    barS.addSpacer();
+    widget.addSpacer(6);
+    const lineS = widget.addText(phase ? phase.text : `Bed ${fmtClock(bed)}`);
+    lineS.font = phase ? new Font("Menlo-Bold", 11) : new Font("Menlo", 11);
+    lineS.textColor = phase ? phase.color : C(TEXT_COLOR, 0.6);
+    lineS.lineLimit = 1;
+    lineS.minimumScaleFactor = 0.7;
+    widget.addSpacer();
+    return widget;
+  }
 
   // Top: clock + awake time
   const top = widget.addStack();
@@ -473,11 +534,11 @@ async function createWidget() {
   top.centerAlignContent();
   const clock = top.addText(fmtClock(now));
   clock.font = new Font("Menlo-Bold", 20);
-  clock.textColor = new Color(TEXT_COLOR);
+  clock.textColor = C(TEXT_COLOR);
   top.addSpacer();
   const right = top.addText(st.asleep ? "Sleeping" : `Awake ${fmtDuration(elapsedMin)}`);
   right.font = MENLO;
-  right.textColor = new Color(TEXT_COLOR, 0.6);
+  right.textColor = C(TEXT_COLOR, 0.6);
 
   widget.addSpacer(6);
 
@@ -487,7 +548,7 @@ async function createWidget() {
   bar.layoutHorizontally();
   bar.size = new Size(barW, 8);
   bar.cornerRadius = 4;
-  bar.backgroundColor = new Color(TEXT_COLOR, setting("appearance", "futureOpacity", 0.12));
+  bar.backgroundColor = C(TEXT_COLOR, setting("appearance", "futureOpacity", 0.12));
   const fill = bar.addStack();
   fill.size = new Size(Math.max(1, barW * p), 8);
   fill.cornerRadius = 4;
@@ -501,19 +562,15 @@ async function createWidget() {
   times.layoutHorizontally();
   const wokeT = times.addText(`${st.asleep ? "Wake" : "Woke"} ${fmtClock(st.wake)}${st.logged ? "" : " (est)"}`);
   wokeT.font = MENLO;
-  wokeT.textColor = new Color(TEXT_COLOR, 0.6);
+  wokeT.textColor = C(TEXT_COLOR, 0.6);
   times.addSpacer();
   const bedT = times.addText(`Bed ${fmtClock(bed)}`);
   bedT.font = MENLO;
-  bedT.textColor = new Color(TEXT_COLOR, 0.6);
+  bedT.textColor = C(TEXT_COLOR, 0.6);
 
   widget.addSpacer(4);
 
   // Main status line
-  let status;
-  if (st.asleep) status = `Wake in ${fmtDuration((st.wake - now) / 60000)}`;
-  else if (leftMin <= 0) status = `Past bedtime by ${fmtDuration(-leftMin)}`;
-  else status = `${fmtDuration(leftMin)} until bed`;
   const big = widget.addText(status);
   big.font = new Font("Menlo-Bold", 16);
   big.textColor = col;
@@ -533,15 +590,9 @@ async function createWidget() {
   } else {
     planStr = "No sleep plan • tap to set one up";
   }
-  // in the last two hours, show what to be doing instead of the plan line
-  let phase = null;
-  if (!st.asleep && leftMin > 0) {
-    if (leftMin <= NO_PHONE_MINUTES) phase = { text: "No phone time", color: new Color(URGENT_COLOR) };
-    else if (leftMin <= ROUTINE_MINUTES) phase = { text: "Night routine • bed prep", color: new Color(WARN_COLOR) };
-  }
   const plan = widget.addText(phase ? phase.text : planStr);
   plan.font = phase ? new Font("Menlo-Bold", 12) : new Font("Menlo", 10);
-  plan.textColor = phase ? phase.color : new Color(TEXT_COLOR, 0.5);
+  plan.textColor = phase ? phase.color : C(TEXT_COLOR, 0.5);
   plan.lineLimit = 1;
 
   return widget;
@@ -591,7 +642,7 @@ async function planScreen(data) {
     const addClearRow = () => {
       if (!Object.keys(data.wakes).length && !Object.keys(data.beds).length && !data.plan) return;
       addRow("Clear all logged sleep data", "Removes logged wake/bed times and the plan, so you can start fresh", {
-        color: new Color(URGENT_COLOR),
+        color: C(URGENT_COLOR),
         onSelect: async () => {
           const confirm = new Alert();
           confirm.title = "Clear all sleep data?";
@@ -635,13 +686,13 @@ async function planScreen(data) {
       const isCurrent = data.plan && k === nowK + 1;
       addRow(`${isCurrent ? "▶ " : ""}Night ${k}`,
         `Bed ${fmtMin(shiftToward(start.bed, TB, k))} → wake ${fmtMin(shiftToward(start.wake, TW, k))}`,
-        { color: isCurrent ? new Color(GOOD_COLOR) : undefined, height: 48 });
+        { color: isCurrent ? C(GOOD_COLOR) : undefined, height: 48 });
     }
 
     if (base) {
       addRow(data.plan ? "Restart plan from my current times" : "Start plan from today",
         "Uses your current average as the starting point", {
-          color: new Color(GOOD_COLOR),
+          color: C(GOOD_COLOR),
           onSelect: async () => {
             data = await startPlan(); render(); table.reload();
           }
@@ -649,7 +700,7 @@ async function planScreen(data) {
     }
     if (data.plan) {
       addRow("Stop plan", "", {
-        color: new Color(URGENT_COLOR),
+        color: C(URGENT_COLOR),
         onSelect: async () => { data = await stopPlan(); render(); table.reload(); }
       });
     }
@@ -660,32 +711,46 @@ async function planScreen(data) {
   await table.present(false);
 }
 
+// One-click action for the moment, like Daybar's: log waking in the morning, bedtime at night.
+function quickAction(data, now) {
+  const h = now.getHours();
+  if (h >= 4 && h <= 13 && !(key(now) in data.wakes)) return { label: "I'm up: log wake now", kind: "wake" };
+  if (h >= 19 || h < 4) {
+    const evening = h < 12 ? addDays(now, -1) : now;   // same attribution as logBed
+    if (!(key(evening) in data.beds)) return { label: "Going to bed: log now", kind: "bed" };
+  }
+  return null;
+}
+
 async function showMenu() {
   const data = await load();
   const base = baseline(data);
+  const quick = quickAction(data, new Date());
 
   const menu = new Alert();
   menu.title = TITLE;
   menu.message = base
     ? `Avg wake ${fmtMin(base.wake)} • bed ${fmtMin(base.bed)}${base.bedEst ? " (est)" : ""}`
     : "No sleep data logged yet";
-  menu.addAction("Log wake time");
-  menu.addAction("Log bedtime");
-  menu.addAction("Sleep plan");
-  menu.addAction("Preview widget");
+  const labels = [...(quick ? [quick.label] : []), "Log wake time", "Log bedtime", "Sleep plan", "Preview widget"];
+  for (const l of labels) menu.addAction(l);
   menu.addCancelAction("Close");
   const choice = await menu.presentSheet();
+  const picked = choice >= 0 ? labels[choice] : null;
 
-  if (choice === 0) {
+  if (quick && picked === quick.label) {
+    const d = new Date();
+    if (quick.kind === "wake") await logWake(d); else await logBed(d);
+  } else if (picked === "Log wake time") {
     const d = await pickTime("When did you wake up?");
     if (d) await logWake(d);
-  } else if (choice === 1) {
+  } else if (picked === "Log bedtime") {
     const d = await pickTime("When did you go to bed?");
     if (d) await logBed(d);
-  } else if (choice === 2) {
+  } else if (picked === "Sleep plan") {
     await planScreen(data);
   }
-  if (choice >= 0 && choice <= 3) await (await createWidget()).presentMedium();
+  if (picked) await (await createWidget()).presentMedium();
 }
 
 // ---------- run ----------

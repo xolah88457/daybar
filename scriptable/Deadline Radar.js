@@ -35,36 +35,76 @@ const ORANGE = "#ff9f43";
 const YELLOW = "#f2cc60";
 const GREEN = "#39d353";
 const SIDE_PADDING = 12;
+const SMALL_WIDTH = 150;            // small widget width in points
+
+// Appearance, like Daybar's: "night" (the default), "day", or "auto" to follow the iPhone's light/dark mode.
+const THEME = "night";
 // ============================================
 
 const MENLO = new Font("Menlo", 10);
 const MENLO_BOLD = new Font("Menlo-Bold", 12);
 
+// Daybar's Day palette. Colors you changed above stay as you set them.
+const DAY = {"#0d1117":"#f4f3ed","#ffffff":"#202820","#39d353":"#18764b","#58a6ff":"#286a9f","#ff5c5c":"#b43737","#ff9f43":"#a65410","#f2cc60":"#80620b"};
+function C(hex, alpha = 1) {
+  const night = new Color(hex, alpha);
+  if (THEME === "night") return night;
+  const day = new Color(DAY[hex.toLowerCase()] || hex, alpha);
+  return THEME === "day" ? day : Color.dynamic(day, night);
+}
+// Tapping the widget runs this script (whatever you named it) and opens the full list.
+function runURL(action) {
+  return "scriptable:///run/" + encodeURIComponent(Script.name()) + (action ? "?action=" + action : "");
+}
+// Events open Calendar at their start time; reminders open Reminders.
+function openURL(item) {
+  return item.kind === "event"
+    ? "calshow:" + Math.floor(item.date.getTime() / 1000 - 978307200)
+    : "x-apple-reminderkit://";
+}
+
 function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
 function daysUntil(d) { return Math.round((startOfDay(d) - startOfDay(new Date())) / 86400000); }
+// Days to count and color an item by: a multi-day event that already began but has not ended is
+// happening now (0), never overdue. Reminders keep their overdue days.
+function itemDays(item) {
+  const days = daysUntil(item.date);
+  const now = new Date();
+  return days < 0 && item.kind === "event" && item.end && item.end > now && item.date <= now ? 0 : days;
+}
 function fmt(d, format) {
   const f = new DateFormatter();
   f.dateFormat = format;
   return f.string(d);
 }
 function urgencyColor(days) {
-  if (days <= 0) return new Color(RED);
-  if (days <= 2) return new Color(ORANGE);
-  if (days <= 7) return new Color(YELLOW);
-  return new Color(GREEN);
+  if (days <= 0) return C(RED);
+  if (days <= 2) return C(ORANGE);
+  if (days <= 7) return C(YELLOW);
+  return C(GREEN);
 }
 function label(item) {
-  const days = daysUntil(item.date);
+  const days = itemDays(item);
   if (days < 0) return `${-days}d overdue`;
+  if (days === 0 && daysUntil(item.date) < 0) return item.allDay ? "Today" : "Now";
   if (days === 0) return item.allDay ? "Today" : `Today ${fmt(item.date, "h:mm a")}`;
   if (days === 1) return "Tomorrow";
   return `${days} days`;
+}
+function byDate(a, b) {
+  return a.date - b.date || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0);
+}
+function countText(items, short) {
+  const overdue = items.filter(i => itemDays(i) < 0).length;
+  if (short) return String(items.length);
+  return overdue ? `${overdue} overdue \u2022 ${items.length - overdue} upcoming` : `${items.length} upcoming`;
 }
 
 async function getItems() {
   const now = new Date();
   const from = startOfDay(now);
-  const to = new Date(from.getTime() + DAYS_AHEAD * 86400000);
+  const to = addDays(from, DAYS_AHEAD);
   const items = [];
 
   let cals = await Calendar.forEvents();
@@ -72,60 +112,113 @@ async function getItems() {
   const events = await CalendarEvent.between(from, to, cals);
   for (const e of events) {
     if (!e.isAllDay && e.endDate < now) continue; // skip events already finished today
+    if (e.startDate >= to) continue;               // starts at or after the horizon
     const t = e.title.toLowerCase();
     if (KEYWORDS.length && !KEYWORDS.some(k => t.includes(k))) continue;
-    items.push({ title: e.title, date: e.startDate, allDay: e.isAllDay, source: e.calendar.title });
+    items.push({ title: e.title, date: e.startDate, end: e.endDate, allDay: e.isAllDay, source: e.calendar.title, kind: "event" });
   }
 
   if (INCLUDE_REMINDERS) {
-    const earliest = new Date(from.getTime() - OVERDUE_DAYS_BACK * 86400000);
+    const earliest = addDays(from, -OVERDUE_DAYS_BACK);
     const reminders = await Reminder.allIncomplete();
     for (const r of reminders) {
       if (!r.dueDate) continue;
       if (REMINDER_LISTS.length && !REMINDER_LISTS.includes(r.calendar.title)) continue;
       if (r.dueDate < earliest || r.dueDate > to) continue;
-      items.push({ title: r.title, date: r.dueDate, allDay: !r.dueDateIncludesTime, source: r.calendar.title });
+      items.push({ title: r.title, date: r.dueDate, allDay: !r.dueDateIncludesTime, source: r.calendar.title, kind: "reminder" });
     }
   }
 
-  return items.sort((a, b) => a.date - b.date);
+  return items.sort(byDate);
 }
 
-async function createWidget() {
+function smallWidget(widget, items) {
+  const head = widget.addStack();
+  head.layoutHorizontally();
+  head.size = new Size(SMALL_WIDTH - 2 * SIDE_PADDING, 16);
+  const title = head.addText(TITLE);
+  title.font = MENLO_BOLD;
+  title.textColor = C(TEXT_COLOR);
+  title.lineLimit = 1;
+  title.minimumScaleFactor = 0.7;
+  head.addSpacer();
+  const count = head.addText(countText(items, true));
+  count.font = MENLO;
+  count.textColor = C(TEXT_COLOR, 0.5);
+  widget.addSpacer(8);
+
+  if (!items.length) {
+    const t = widget.addText("Nothing due.");
+    t.font = MENLO_BOLD;
+    t.textColor = C(GREEN);
+    return widget;
+  }
+  const item = items[0];
+  const col = urgencyColor(itemDays(item));
+  const lab = widget.addText(label(item));
+  lab.font = new Font("Menlo-Bold", 18);
+  lab.textColor = col;
+  lab.lineLimit = 1;
+  lab.minimumScaleFactor = 0.5;
+  widget.addSpacer(4);
+  const name = widget.addText(item.title);
+  name.font = MENLO_BOLD;
+  name.textColor = C(TEXT_COLOR);
+  name.lineLimit = 2;
+  name.minimumScaleFactor = 0.8;
+  const dt = widget.addText(fmt(item.date, "EEE, MMM d"));
+  dt.font = MENLO;
+  dt.textColor = C(TEXT_COLOR, 0.45);
+  dt.lineLimit = 1;
+  widget.addSpacer();
+  if (items.length > 1) {
+    const more = widget.addText(`+${items.length - 1} more`);
+    more.font = MENLO;
+    more.textColor = C(TEXT_COLOR, 0.5);
+    more.lineLimit = 1;
+  }
+  return widget;
+}
+
+async function createWidget(family = config.widgetFamily) {
   const items = await getItems();
-  const family = config.widgetFamily;
   const maxItems = (family === "large" || family === "extraLarge") ? MAX_ITEMS_LARGE : MAX_ITEMS_MEDIUM;
   const widget = new ListWidget();
-  widget.backgroundColor = new Color(BG_COLOR);
+  widget.backgroundColor = C(BG_COLOR);
   widget.setPadding(12, SIDE_PADDING, 12, SIDE_PADDING);
   widget.refreshAfterDate = new Date(Date.now() + 30 * 60000);
+  widget.url = runURL();
+  if (family === "small") return smallWidget(widget, items);
 
   const head = widget.addStack();
   head.layoutHorizontally();
   const title = head.addText(TITLE);
   title.font = MENLO_BOLD;
-  title.textColor = new Color(TEXT_COLOR);
+  title.textColor = C(TEXT_COLOR);
+  title.lineLimit = 1;
   head.addSpacer();
-  const count = head.addText(`${items.length} upcoming`);
+  const count = head.addText(countText(items));
   count.font = MENLO;
-  count.textColor = new Color(TEXT_COLOR, 0.5);
+  count.textColor = C(TEXT_COLOR, 0.5);
+  count.lineLimit = 1;
+  count.minimumScaleFactor = 0.7;
 
   widget.addSpacer(8);
 
   if (!items.length) {
-    const t = widget.addText("Nothing due. Enjoy it.");
+    const t = widget.addText("Nothing due.");
     t.font = MENLO_BOLD;
-    t.textColor = new Color(GREEN);
+    t.textColor = C(GREEN);
     return widget;
   }
 
   items.slice(0, maxItems).forEach((item, i) => {
-    const days = daysUntil(item.date);
-    const col = urgencyColor(days);
+    const col = urgencyColor(itemDays(item));
 
     const row = widget.addStack();
     row.layoutHorizontally();
     row.centerAlignContent();
+    row.url = openURL(item);
 
     const accent = row.addStack();
     accent.size = new Size(4, 30);
@@ -138,11 +231,11 @@ async function createWidget() {
     left.layoutVertically();
     const name = left.addText(item.title);
     name.font = MENLO_BOLD;
-    name.textColor = new Color(TEXT_COLOR);
+    name.textColor = C(TEXT_COLOR);
     name.lineLimit = 1;
     const src = left.addText(item.source);
     src.font = MENLO;
-    src.textColor = new Color(TEXT_COLOR, 0.45);
+    src.textColor = C(TEXT_COLOR, 0.45);
     src.lineLimit = 1;
 
     row.addSpacer();
@@ -152,10 +245,11 @@ async function createWidget() {
     const lab = right.addText(label(item));
     lab.font = MENLO_BOLD;
     lab.textColor = col;
+    lab.lineLimit = 1;
     lab.rightAlignText();
     const dt = right.addText(fmt(item.date, "EEE, MMM d"));
     dt.font = MENLO;
-    dt.textColor = new Color(TEXT_COLOR, 0.45);
+    dt.textColor = C(TEXT_COLOR, 0.45);
     dt.rightAlignText();
 
     if (i < Math.min(items.length, maxItems) - 1) widget.addSpacer(8);
@@ -171,22 +265,25 @@ async function showList() {
 
   const head = new UITableRow();
   head.isHeader = true;
-  head.addText(TITLE, `${items.length} upcoming`);
+  head.addText(TITLE, countText(items));
   table.addRow(head);
 
   for (const item of items) {
     const row = new UITableRow();
     row.height = 56;
-    row.addText(item.title, `${item.source} • ${fmt(item.date, "EEE, MMM d")}`).widthWeight = 70;
+    row.addText(item.title, `${item.source} \u2022 ${fmt(item.date, "EEE, MMM d")}`).widthWeight = 70;
     const l = row.addText(label(item));
     l.rightAligned();
-    l.titleColor = urgencyColor(daysUntil(item.date));
+    l.titleColor = urgencyColor(itemDays(item));
     l.widthWeight = 30;
+    row.onSelect = () => Safari.open(openURL(item));
+    row.dismissOnSelect = false;
     table.addRow(row);
   }
   await table.present(false);
 }
 
+// ---------- run ----------
 if (config.runsInWidget) {
   Script.setWidget(await createWidget());
 } else {

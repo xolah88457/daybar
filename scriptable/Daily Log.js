@@ -164,6 +164,9 @@ const TASKS = setting("habits", "tasks", ["Coursework", "Live Trading", "Trade R
 // TASKS.length = all of them. Set a number (e.g. 1) to be more lenient.
 const DAY_COMPLETE_MIN = setting("habits", "dayCompleteMin", 1);
 
+// Appearance, like Daybar's: "night" (the default), "day", or "auto" to follow the iPhone's light/dark mode.
+const THEME = "night";
+
 // Look
 const BG_COLOR = setting("appearance", "background", "#0d1117");
 const TEXT_COLOR = setting("appearance", "text", "#ffffff");
@@ -183,12 +186,29 @@ const PADDING = setting("appearance", "gap", 2);
 const BORDER_RADIUS = setting("appearance", "radius", 2);
 const SIDE_PADDING = 12;
 const WIDGET_WIDTH = 354;          // medium widget width in points; adjust if the grid does not reach the right edge
+const LARGE_TASKS = 8;             // tasks listed under the grid on a large widget
+const SMALL_TASKS = 4;             // tasks listed on a small widget
 // ============================================
 
 const LOG_ID = args.widgetParameter || setting("habits", "logId", "Daily_Tasks"); // widget parameter = separate log
 
 const MENLO_REGULAR = new Font("Menlo", 11);
 const MENLO_BOLD = new Font("Menlo-Bold", 12);
+
+// Daybar's Day palette. Colors you changed in the shared settings stay as you set them.
+const DAY = {"#0d1117":"#f4f3ed","#ffffff":"#202820","#39d353":"#18764b","#58a6ff":"#286a9f","#ff5c5c":"#b43737","#ff9f43":"#a65410","#f2cc60":"#80620b"};
+const dayHex = hex => DAY[hex.toLowerCase()] || hex;
+function C(hex, alpha = 1, light = dayHex(hex)) {
+  const night = new Color(hex, alpha);
+  if (THEME === "night") return night;
+  const day = new Color(light, alpha);
+  return THEME === "day" ? day : Color.dynamic(day, night);
+}
+// Tapping the widget runs this script (whatever you named it) straight into today's checklist.
+function runURL(action) {
+  return "scriptable:///run/" + encodeURIComponent(Script.name()) + "?action=" + action +
+    (args.widgetParameter ? "&log=" + encodeURIComponent(args.widgetParameter) : "");
+}
 
 // ---------- helpers ----------
 function pad(n) { return String(n).padStart(2, "0"); }
@@ -202,7 +222,9 @@ function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDat
 function daysBetween(a, b) { return Math.round((startOfDay(a) - startOfDay(b)) / 86400000); }
 
 // Log format: { "2026-10-05": ["Course 1", "Course 3"], ... }
-const logFile = "daily-log-" + LOG_ID.replace(/[^a-z0-9]/gi, "_") + ".json";
+// A tap from a widget with a separate log carries that log's id.
+const ACTIVE_LOG = (config.runsInWidget ? null : args.queryParameters?.log) || LOG_ID;
+const logFile = "daily-log-" + ACTIVE_LOG.replace(/[^a-z0-9]/gi, "_") + ".json";
 function normalizeLog(raw) {
   return Array.isArray(raw) ? Object.fromEntries(raw.map(k => [k, TASKS.slice()])) : raw;
 }
@@ -235,19 +257,24 @@ function blend(a, b, t) {
   const A = hexToRgb(a), B = hexToRgb(b);
   return rgbToHex(A.map((v, i) => v + (B[i] - v) * t));
 }
-// n = tasks done that day (1 or more)
-function dayColor(n) {
+// n = tasks done that day (1 or more); colors = DONE_COLOR then the partial colors
+function dayColor(n, done = DONE_COLOR, partial = PARTIAL_COLORS) {
   const total = TASKS.length;
-  if (n >= total) return DONE_COLOR;
+  if (n >= total) return done;
   // position along the partial colors: first step = start, last step = end
   const t = total === 2 ? 0.5 : (n - 1) / (total - 2);
-  const segs = PARTIAL_COLORS.length - 1;
+  const segs = partial.length - 1;
   const pos = Math.min(segs, Math.max(0, t * segs));
   const i = Math.min(segs - 1, Math.floor(pos));
-  return blend(PARTIAL_COLORS[i], PARTIAL_COLORS[i + 1], pos - i);
+  return blend(partial[i], partial[i + 1], pos - i);
+}
+function dayCellColor(n, opacity) {
+  return C(dayColor(n), opacity, dayColor(n, dayHex(DONE_COLOR), PARTIAL_COLORS.map(dayHex)));
 }
 
 // ---------- stats ----------
+// Same rules as Daybar: a day counts when DAY_COMPLETE_MIN tasks are done, and an unfinished
+// today does not break yesterday's streak until the day is over.
 function getStats(log) {
   const start = parseKey(START_DATE);
   const end = END_DATE ? parseKey(END_DATE) : null;
@@ -257,15 +284,20 @@ function getStats(log) {
   const total = end ? daysBetween(end, start) + 1 : null;
   if (total !== null) elapsed = Math.min(elapsed, total);
 
-  let completedDays = 0;
-  for (const k of Object.keys(log)) {
-    const d = parseKey(k);
-    if (d < start || d > today || (end && d > end)) continue;
-    if (doneOn(log, k).length >= DAY_COMPLETE_MIN) completedDays++;
+  let completedDays = 0, longestStreak = 0, run = 0;
+  const complete = d => doneOn(log, key(d)).length >= DAY_COMPLETE_MIN;
+  for (let i = 0; i < elapsed; i++) {
+    if (complete(addDays(start, i))) { completedDays++; run++; longestStreak = Math.max(longestStreak, run); }
+    else run = 0;
+  }
+  let currentStreak = run;
+  if (elapsed > 0 && key(addDays(start, elapsed - 1)) === key(today) && !complete(today)) {
+    currentStreak = 0;
+    for (let i = elapsed - 2; i >= 0 && complete(addDays(start, i)); i--) currentStreak++;
   }
 
   return {
-    start, end, today, total, elapsed, completedDays,
+    start, end, today, total, elapsed, completedDays, currentStreak, longestStreak,
     missedDays: Math.max(0, elapsed - completedDays),
     todayDone: doneOn(log, key(today)).length,
     daysLeft: end ? Math.max(0, daysBetween(end, today)) : null
@@ -273,13 +305,59 @@ function getStats(log) {
 }
 
 // ---------- widget ----------
-async function createWidget() {
+function header(stack, s) {
+  const titleText = stack.addText(TITLE);
+  titleText.font = MENLO_BOLD;
+  titleText.textColor = C(TEXT_COLOR);
+  titleText.lineLimit = 1;
+}
+// One task line: a colored square (done) or a dim one, then the name.
+function taskLine(widget, task, done, font) {
+  const row = widget.addStack();
+  row.layoutHorizontally();
+  row.centerAlignContent();
+  const box = row.addStack();
+  box.size = new Size(8, 8);
+  box.cornerRadius = BORDER_RADIUS;
+  box.backgroundColor = done ? C(DONE_COLOR) : C(EMPTY_COLOR, FUTURE_OPACITY);
+  row.addSpacer(6);
+  const t = row.addText(task);
+  t.font = font;
+  t.textColor = C(TEXT_COLOR, done ? 0.45 : 0.9);
+  t.lineLimit = 1;
+  return row;
+}
+
+function smallWidget(widget, log, s) {
+  const done = new Set(doneOn(log, key(s.today)));
+  header(widget, s);
+  widget.addSpacer(2);
+  const count = widget.addText(`${s.todayDone}/${TASKS.length}`);
+  count.font = new Font("Menlo-Bold", 26);
+  count.textColor = s.todayDone >= TASKS.length ? C(DONE_COLOR) : s.todayDone ? dayCellColor(s.todayDone, 1) : C(TEXT_COLOR, 0.35);
+  widget.addSpacer(4);
+  for (const t of TASKS.slice(0, SMALL_TASKS)) { taskLine(widget, t, done.has(t), new Font("Menlo", 10)); widget.addSpacer(2); }
+  if (TASKS.length > SMALL_TASKS) {
+    const more = widget.addText(`+${TASKS.length - SMALL_TASKS} more`);
+    more.font = new Font("Menlo", 9);
+    more.textColor = C(TEXT_COLOR, 0.4);
+  }
+  widget.addSpacer();
+  const streak = widget.addText(`${s.currentStreak}d streak`);
+  streak.font = new Font("Menlo-Bold", 10);
+  streak.textColor = C(s.currentStreak ? DONE_COLOR : TEXT_COLOR, s.currentStreak ? 1 : 0.4);
+  return widget;
+}
+
+async function createWidget(family = config.widgetFamily) {
   const log = await loadLog();
   const s = getStats(log);
 
   const widget = new ListWidget();
-  widget.backgroundColor = new Color(BG_COLOR);
+  widget.backgroundColor = C(BG_COLOR);
   widget.setPadding(12, SIDE_PADDING, 12, SIDE_PADDING);
+  widget.url = runURL("today");
+  if (family === "small") return smallWidget(widget, log, s);
 
   const avail = WIDGET_WIDTH - 2 * SIDE_PADDING;
   let cols, gridStart, cellSize;
@@ -315,11 +393,11 @@ async function createWidget() {
       if (n > 0) {
         const frac = n / TASKS.length;
         const opacity = MIN_DONE_OPACITY + frac * (1 - MIN_DONE_OPACITY);
-        cell.backgroundColor = new Color(dayColor(n), Math.min(1, opacity));
+        cell.backgroundColor = dayCellColor(n, Math.min(1, opacity));
       } else if (date > s.today) {
-        cell.backgroundColor = new Color(EMPTY_COLOR, FUTURE_OPACITY);
+        cell.backgroundColor = C(EMPTY_COLOR, FUTURE_OPACITY);
       } else {
-        cell.backgroundColor = new Color(EMPTY_COLOR, EMPTY_OPACITY);
+        cell.backgroundColor = C(EMPTY_COLOR, EMPTY_OPACITY);
       }
     }
     if (row < ROWS - 1) widget.addSpacer(PADDING);
@@ -331,25 +409,37 @@ async function createWidget() {
   const footer = widget.addStack();
   footer.layoutHorizontally();
   footer.centerAlignContent();
-
-  const titleText = footer.addText(TITLE);
-  titleText.font = MENLO_BOLD;
-  titleText.textColor = new Color(TEXT_COLOR);
-  titleText.lineLimit = 1;
-
+  header(footer, s);
   footer.addSpacer();
 
   const countText = footer.addText(`${s.completedDays}/${s.elapsed}`);
   countText.font = MENLO_BOLD;
-  countText.textColor = new Color(DONE_COLOR);
+  countText.textColor = C(DONE_COLOR);
 
   const pct = s.elapsed > 0 ? Math.round((s.completedDays / s.elapsed) * 100) : 0;
-  let subStr = `Today ${s.todayDone}/${TASKS.length}  •  ${pct}%  •  ${s.missedDays} missed`;
-  if (s.end) subStr += `  •  ${s.daysLeft}d left`;
+  let subStr = `Today ${s.todayDone}/${TASKS.length}  •  ${s.currentStreak}d streak  •  ${pct}%`;
+  subStr += s.end ? `  •  ${s.daysLeft}d left` : `  •  ${s.missedDays} missed`;
   const sub = widget.addText(subStr);
   sub.font = MENLO_REGULAR;
-  sub.textColor = new Color(TEXT_COLOR, 0.5);
+  sub.textColor = C(TEXT_COLOR, 0.5);
   sub.lineLimit = 1;
+
+  if (family === "large") {
+    // Today's checklist under the grid; tapping anywhere opens it to tick tasks off.
+    widget.addSpacer(12);
+    const done = new Set(doneOn(log, key(s.today)));
+    for (const t of TASKS.slice(0, LARGE_TASKS)) { taskLine(widget, t, done.has(t), MENLO_REGULAR); widget.addSpacer(5); }
+    if (TASKS.length > LARGE_TASKS) {
+      const more = widget.addText(`+${TASKS.length - LARGE_TASKS} more`);
+      more.font = MENLO_REGULAR;
+      more.textColor = C(TEXT_COLOR, 0.4);
+    }
+    widget.addSpacer();
+    const best = widget.addText(`Best streak ${s.longestStreak}d  •  ${s.completedDays} days completed`);
+    best.font = MENLO_REGULAR;
+    best.textColor = C(TEXT_COLOR, 0.5);
+    best.lineLimit = 1;
+  }
 
   return widget;
 }
@@ -358,6 +448,7 @@ async function createWidget() {
 async function editDay(log, k) {
   const table = new UITable();
   table.showSeparators = true;
+  const isToday = k === key(new Date());
 
   const render = () => {
     table.removeAllRows();
@@ -365,7 +456,7 @@ async function editDay(log, k) {
 
     const head = new UITableRow();
     head.isHeader = true;
-    head.addText(`${TITLE}  •  ${k}`, `${done.size}/${TASKS.length} done`);
+    head.addText(`${TITLE}  •  ${isToday ? "Today" : k}`, `${done.size}/${TASKS.length} done`);
     table.addRow(head);
 
     for (const t of TASKS) {
@@ -381,6 +472,18 @@ async function editDay(log, k) {
       };
       table.addRow(row);
     }
+
+    if (isToday) {
+      const s = getStats(log);
+      const foot = new UITableRow();
+      foot.height = 60;
+      const allDone = done.size >= TASKS.length;
+      const counts = done.size >= DAY_COMPLETE_MIN;
+      const text = foot.addText(allDone ? "All done today" : counts ? "Today counts" : `${DAY_COMPLETE_MIN - done.size} more to count today`,
+        `Streak ${s.currentStreak}d  •  best ${s.longestStreak}d`);
+      text.titleColor = counts ? C(DONE_COLOR) : C(TEXT_COLOR, 0.6);
+      table.addRow(foot);
+    }
   };
 
   render();
@@ -394,9 +497,10 @@ async function showMenu() {
 
   const menu = new Alert();
   menu.title = TITLE;
-  menu.message = `Today ${s.todayDone}/${TASKS.length} • ${s.completedDays}/${s.elapsed} days completed`;
+  menu.message = `Today ${s.todayDone}/${TASKS.length} • ${s.currentStreak}d streak • ${s.completedDays}/${s.elapsed} days completed`;
   menu.addAction("Update today");
-  menu.addAction("Edit a past day");
+  menu.addAction("Edit yesterday");
+  menu.addAction("Edit another day");
   menu.addAction("Preview widget");
   menu.addCancelAction("Close");
 
@@ -405,21 +509,26 @@ async function showMenu() {
   if (choice === 0) {
     await editDay(log, key(new Date()));
   } else if (choice === 1) {
+    await editDay(log, key(addDays(new Date(), -1)));
+  } else if (choice === 2) {
     const picker = new DatePicker();
-    picker.initialDate = addDays(new Date(), -1);
+    picker.initialDate = addDays(new Date(), -2);
     picker.maximumDate = new Date();
     const date = await picker.pickDate();
     if (date) await editDay(log, key(date));
   }
 
-  if (choice === 0 || choice === 1 || choice === 2) {
-    await (await createWidget()).presentMedium();
+  if (choice >= 0 && choice <= 3) {
+    await (await createWidget("medium")).presentMedium();
   }
 }
 
 // ---------- run ----------
 if (config.runsInWidget) {
   Script.setWidget(await createWidget());
+} else if (args.queryParameters?.action === "today") {
+  // tapped the widget: straight to today's checklist
+  await editDay(await loadLog(), key(new Date()));
 } else {
   await showMenu();
 }
