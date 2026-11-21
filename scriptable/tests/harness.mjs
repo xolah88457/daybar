@@ -58,9 +58,10 @@ export function storage() {
   };
 }
 
-export async function run(name, {store=storage(), settings, now=Date.parse('2026-11-15T17:00:00Z'), boot=false, shortcut, parameter, code: codeOverride} = {}) {
+export async function run(name, {store=storage(), settings, now=Date.parse('2026-11-15T17:00:00Z'), boot=false, shortcut, parameter, code: codeOverride,
+  family='medium', inApp=false, query, choices=[], calendars={}} = {}) {
   if (settings !== undefined) store.put('daybar-settings.json',settings);
-  const notifications = [], widgets = [], output = [];
+  const notifications = [], widgets = [], output = [], presented = [], tables = [], alerts = [], opened = [];
   class FakeDate extends Date {
     constructor(...a) { super(...(a.length ? a : [now])); }
     static now() { return now; }
@@ -71,7 +72,29 @@ export async function run(name, {store=storage(), settings, now=Date.parse('2026
     addText(text) { const child = new Element(text); this.children.push(child); return child; }
     addDate(date) { const child = this.addText(String(date)); child.applyTimerStyle = () => {}; return child; }
     addSpacer() {} setPadding() {} layoutHorizontally() {} layoutVertically() {} centerAlignContent() {}
-    rightAlignText() {} rightAligned() {} async presentMedium() {} async presentSmall() {}
+    rightAlignText() {} rightAligned() {}
+    async presentMedium() { presented.push(['medium',this]); } async presentSmall() { presented.push(['small',this]); }
+    async presentLarge() { presented.push(['large',this]); }
+  }
+  // In-app screens: each Alert/UITable answer comes from `choices` in order (default: cancel).
+  const next = () => choices.length ? choices.shift() : -1;
+  class UITableRow {
+    constructor() { this.cells = []; }
+    addText(title, subtitle) { const cell = {title, subtitle, rightAligned() {}}; this.cells.push(cell); return cell; }
+  }
+  class UITable {
+    constructor() { this.rows = []; }
+    addRow(r) { this.rows.push(r); } removeAllRows() { this.rows = []; } reload() {}
+    async present() {
+      tables.push(this.rows.map(r => r.cells.map(c => [c.title, c.subtitle].filter(Boolean).join(' | ')).join(' ')));
+      // a choice that is a string selects the first row whose title starts with it
+      while (typeof choices[0] === 'string') {
+        const want = choices.shift(), row = this.rows.find(r => r.cells[0]?.title?.startsWith(want));
+        if (!row?.onSelect) throw new Error(`no selectable row: ${want}`);
+        await row.onSelect();
+        if (row.dismissOnSelect !== false) break;
+      }
+    }
   }
   class Notification {
     static async removePending(ids) { output.push(['removed',ids]); }
@@ -79,27 +102,38 @@ export async function run(name, {store=storage(), settings, now=Date.parse('2026
     async schedule() { notifications.push(this); }
   }
   class Alert {
-    addAction() {} addCancelAction() {} addDestructiveAction() {}
-    async presentSheet() { return -1; } async presentAlert() { return -1; } async present() { return -1; }
+    constructor() { this.actions = []; }
+    addAction(t) { this.actions.push(t); } addCancelAction() {} addDestructiveAction(t) { this.actions.push(t); }
+    addTextField(_, value) { this.field = value; return {setNumberPadKeyboard() {}}; } textFieldValue() { return this.field; }
+    pick() {
+      alerts.push({title:this.title, message:this.message, actions:this.actions});
+      const c = next();
+      // a choice that is a string selects the action that starts with it
+      return typeof c === 'string' ? this.actions.findIndex(a => a.startsWith(c)) : c;
+    }
+    async presentSheet() { return this.pick(); } async presentAlert() { return this.pick(); } async present() { return this.pick(); }
   }
   class Font { static systemFont() { return {}; } }
   const context = vm.createContext({
     FileManager:store.FileManager, Date:FakeDate, Font, Notification, Alert,
-    Color:class { constructor(hex,opacity=1) { this.hex=hex; this.opacity=opacity; } },
+    Color:class { constructor(hex,opacity=1) { this.hex=hex; this.opacity=opacity; } static dynamic(light,dark) { return {hex:dark.hex,opacity:dark.opacity,light,dark}; } },
+    UITable, UITableRow, Safari:{open:u => opened.push(u)},
     Size:class { constructor(width,height) { this.width=width; this.height=height; } },
     ListWidget:Element, DateFormatter:class { string(d) { return d.toISOString(); } },
-    Calendar:{async forEvents() { return []; }}, CalendarEvent:{async between() { return []; }},
-    Reminder:{async allIncomplete() { return []; }},
-    Script:{setWidget:w => widgets.push(w), complete() {}, setShortcutOutput:v => output.push(v)},
-    args:{widgetParameter:parameter,shortcutParameter:shortcut}, config:{runsInWidget:true,widgetFamily:'medium'},
+    Calendar:{async forEvents() { return (calendars.events || []).map(e => e.calendar).filter((c,i,a) => a.indexOf(c) === i); }},
+    CalendarEvent:{async between(from,to,cals) { return (calendars.events || []).filter(e => cals.includes(e.calendar) && e.startDate < to && e.endDate > from); }},
+    Reminder:{async allIncomplete() { return calendars.reminders || []; }},
+    Script:{setWidget:w => widgets.push(w), complete() {}, setShortcutOutput:v => output.push(v), name:() => name},
+    args:{widgetParameter:parameter,shortcutParameter:shortcut,queryParameters:query || {}}, config:{runsInWidget:!inApp,widgetFamily:inApp ? undefined : family},
     console
   });
   let code = codeOverride !== undefined ? codeOverride : await source(name);
   const apis = {
-    'Daily Log':'DB,loadLog,setTask,doneOn,dayColor,getStats,createWidget,TASKS,TITLE,LOG_ID,DAY_COMPLETE_MIN,MAX_CELL_SIZE,PADDING,BORDER_RADIUS',
-    'Days Left':'DB,createWidget,addDays,daysBetween,START_DATE,END_DATE,TITLE,MAX_CELL_SIZE,PADDING,BORDER_RADIUS',
-    'Focus Timer':'DB,load,settle,startTimer,stopTimer,completeLinkedTasks,createWidget,BLOCK_MINUTES,FOCUS_OPTIONS,BREAK_OPTIONS,LONG_BREAK_OPTIONS,TITLE',
-    'Time Blindness + Sleep':'DB,load,logWake,logBed,startPlan,stopPlan,clearSleep,ingest,parseWhen,resolveDates,findSleepSessions,circMean,currentState,addDays,daysBetween,createWidget,TITLE,AWAKE_HOURS,SLEEP_HOURS,STEP_MINUTES,AVERAGE_DAYS'
+    'Daily Log':'DB,loadLog,setTask,doneOn,dayColor,getStats,createWidget,editDay,showMenu,logFile,THEME,C,runURL,TASKS,TITLE,LOG_ID,DAY_COMPLETE_MIN,MAX_CELL_SIZE,PADDING,BORDER_RADIUS',
+    'Days Left':'DB,createWidget,getStats,splitLeft,milestones,showDetails,addDays,daysBetween,START_DATE,END_DATE,TITLE,MAX_CELL_SIZE,PADDING,BORDER_RADIUS,THEME,C,runURL',
+    'Focus Timer':'DB,load,settle,startTimer,stopTimer,completeLinkedTasks,createWidget,showMenu,menuOptions,lastFocus,THEME,C,runURL,BLOCK_MINUTES,FOCUS_OPTIONS,BREAK_OPTIONS,LONG_BREAK_OPTIONS,TITLE',
+    'Time Blindness + Sleep':'DB,load,logWake,logBed,startPlan,stopPlan,clearSleep,ingest,parseWhen,resolveDates,findSleepSessions,circMean,currentState,addDays,daysBetween,createWidget,showMenu,quickAction,TITLE,AWAKE_HOURS,SLEEP_HOURS,STEP_MINUTES,AVERAGE_DAYS,THEME,C,runURL',
+    'Deadline Radar':'getItems,createWidget,showList,label,itemDays,urgencyColor,openURL,daysUntil,TITLE,THEME,C,runURL'
   };
   if (!boot) {
     const marker = name === 'Focus Timer' ? 'const data = await settle();\nif (config.runsInWidget)' : name === 'Days Left' ? 'const widget = createWidget();\nif (config.runsInWidget)' : '// ---------- run ----------';
@@ -109,7 +143,7 @@ export async function run(name, {store=storage(), settings, now=Date.parse('2026
     code = code.slice(0,index) + `\nreturn {${apis[name].split(',').map(n => `${n}: typeof ${n} === "undefined" ? undefined : ${n}`).join(',')}};`;
   }
   const api = await new vm.Script(`(async () => {\n${code}\n})()`, {filename:name+'.js'}).runInContext(context);
-  return {api,store,notifications,widgets,output,advance(ms) { now += ms; }, date:s => new FakeDate(s)};
+  return {api,store,notifications,widgets,output,presented,tables,alerts,opened,advance(ms) { now += ms; }, date:s => new FakeDate(s)};
 }
 
 export function allText(element) {

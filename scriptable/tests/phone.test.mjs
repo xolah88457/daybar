@@ -18,9 +18,6 @@ for (const name of scripts) test(`${name}: header and asynchronous Scriptable sy
   assert.ok(code.startsWith('// Variables used by Scriptable.\n// These must be at the very top'));
   assert.doesNotThrow(() => new vm.Script(`(async () => {${code}\n})()`));
 });
-test('Deadline Radar is byte-identical to legacy', async () => {
-  assert.equal(await source('Deadline Radar'),await readFile(new URL('../../legacy/Deadline Radar.js',import.meta.url),'utf8'));
-});
 for (const name of scripts) test(`${name}: full widget entry point runs`, async () => {
   const r = await run(name,{boot:true});
   assert.equal(r.widgets.length,1);

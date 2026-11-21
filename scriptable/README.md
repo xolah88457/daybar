@@ -2,6 +2,18 @@
 
 Five separate JavaScript files are provided here: [Days Left](./Days%20Left.js), [Daily Log](./Daily%20Log.js), [Focus Timer](./Focus%20Timer.js), [Time Blindness + Sleep](./Time%20Blindness%20%2B%20Sleep.js), and [Deadline Radar](./Deadline%20Radar.js). Open each on GitHub, then use **Raw** to download or copy its source. They are standalone scripts with no npm packages, imports, Mac app, or network service required. The first four scripts share settings and data with Daybar for Mac. **Deadline Radar remains phone-only**: it reads Apple Calendars and Reminders in Scriptable and does not read Daybar settings or sync its radar data to the Mac.
 
+## What each widget does
+
+- **Days Left**: small, medium and large. Medium is the main layout. Large adds details under the grid. Tapping opens a details screen with milestones, weekdays left and previews of all three sizes.
+- **Daily Log**: small, medium and large. Medium is the main layout. Large adds today's checklist under the grid. Tapping opens today's checklist directly, using the widget parameter's log if one is set. It shows current and best streaks, with the same rules as the Mac app: a day counts once it reaches `dayCompleteMin`, and today does not break the current streak until the day is over.
+- **Focus Timer**: small and medium. Tapping opens a menu. The first choice is Repeat last session. Right after a focus session, breaks come first, and the long break leads after every 4th focus session of the day.
+- **Time Blindness + Sleep**: small and medium. Tapping opens a menu. Its first choice is a one-tap log by time of day: "I'm up" in the morning, "Going to bed" in the evening.
+- **Deadline Radar**: small, medium and large. Tapping opens the full list. Each row opens Calendar (`calshow:`) for events or Reminders for reminders. It follows the Mac's rules: a running multi-day event shows "Now" or "Today", not overdue; the window is DST-safe; items with equal dates are ordered by title; and the header counts overdue items.
+
+## Appearance
+
+Each script has `const THEME = "night";` near its settings. Set it to `"day"` for Daybar's Day palette, or `"auto"` to follow the iPhone's light/dark mode (it uses `Color.dynamic`). Colors you customised in shared settings are kept as set. The choice is per script. It is not in shared settings, which the Mac validates strictly, and Daybar's own Day/Night choice is Mac-only.
+
 ## Before you start: protect existing data
 
 1. Stop any active timer in an older Focus Timer and do not run old and updated Focus Timer scripts together. Older versions can double-credit and write local-only data.
@@ -32,7 +44,7 @@ An exported entry's value is the raw text for that filename, not an object to st
 3. Keep shared JSON files directly in **iCloud Drive/Scriptable**, the folder represented by Scriptable's `FileManager.iCloud().documentsDirectory()`. Do not put them in an arbitrary nested folder. In Finder, choose **Keep Downloaded** for the Scriptable folder where available. On iPhone, allow Scriptable to download/await evicted files; do not assume an offline placeholder is ready to edit.
 4. Install the five scripts linked above. For each file, open it from GitHub, use **Raw** to download or copy the complete source into a Scriptable script with the matching name; preserve the three `Variables used by Scriptable` header lines at the top. Alternatively import via the share sheet; remove duplicate script names only after backup. Do not overwrite the originals until you have backups.
 5. Run **Daily Log**, **Focus Timer**, and **Time Blindness + Sleep** once in the Scriptable app and check the result. Grant notification permission if you want their phone alerts. Run **Days Left** and **Deadline Radar** too; grant calendar/reminder permissions to Deadline Radar only if you want those data sources. Permissions and data access are controlled on your device.
-6. Add Scriptable widgets to the Home Screen and choose the matching script in each widget's configuration. Medium is the intended size for Daily Log, Days Left, and Sleep; Focus also supports a small preview. Configure Daily Log's optional widget parameter only when you intentionally want a separate log. Keep it empty to use shared `habits.logId` (default `Daily_Tasks`). A different widget parameter writes to its own `daily-log-<parameter>.json` and will not show as the configured Mac Daily Log. Focus-to-habit credit always targets `habits.logId`, not a separate widget parameter.
+6. Add Scriptable widgets to the Home Screen and choose the matching script in each widget's configuration. Small, medium and large work for Days Left, Daily Log and Deadline Radar; Focus and Sleep support small and medium. Medium remains the main layout. On large, Days Left adds details and Daily Log adds today's checklist. Configure Daily Log's optional widget parameter only when you intentionally want a separate log. Keep it empty to use shared `habits.logId` (default `Daily_Tasks`). A different widget parameter writes to its own `daily-log-<parameter>.json` and will not show as the configured Mac Daily Log. Focus-to-habit credit always targets `habits.logId`, not a separate widget parameter.
 
 ### Existing Scriptable users and local migration
 
@@ -92,7 +104,7 @@ For a simple manual Shortcut, replace steps 1–3 with a Dictionary containing `
 - Session keys are exact decimal start-epoch milliseconds, with the shared contract's `type`, `minutes`, `creditedMinutes`, `end`, `date`, optional `task`. Legacy `days` become a baseline once; derived totals never become a second baseline. Crediting an existing key is a no-op. This prevents replay credit, **not** divergent concurrent-device writes that iCloud has not yet delivered.
 - Focus → Habits involves two files, not a cross-file transaction. A later Focus run repairs earned checklist completion after interruption; the session remains credited if habits data is corrupt. There is no atomic transaction across devices/files.
 - Focus shows a **snapshot** countdown clamped to zero rather than iOS's native date timer, which counts upward after expiry. Refresh is requested every minute/at expiry, but iOS controls refresh frequency: it may display a stale positive snapshot until refreshed. End-clock time and the scheduled notification remain available. Settling happens on the next script run, not continuously in the background.
-- Notification permissions, live iCloud behavior, widget sizing and actual iOS refresh must be checked on your phone; Node tests cannot verify them.
+- Notification permissions, live iCloud behavior, widget sizing, `Color.dynamic` (THEME `auto`), tap URLs and actual iOS refresh must be checked on your phone; Node tests cannot verify them.
 
 ## Tests (no iCloud access)
 
@@ -103,4 +115,4 @@ TZ=America/Toronto node --test scriptable/tests/*.test.mjs
 TZ=UTC node --test scriptable/tests/*.test.mjs
 ```
 
-The VM harness executes the actual standalone scripts with in-memory Scriptable/FileManager stubs, including storage mutations and full widget entry points. Tests include async syntax for all five files, exact Radar copy, settings fallback/rejection, evicted downloads, local migration/no overwrite, malformed preservation, interleaved edits, failed moves/recovery, legacy arrays/baselines, duplicate settlement, focus-task repair, DST/calendar dates, midnight credit and Shortcut ingestion.
+The VM harness executes the actual standalone scripts with in-memory Scriptable/FileManager stubs, including storage mutations and full widget entry points. Tests include async syntax for all five files, Days Left medium in night mode matching the legacy script (golden test; Radar is no longer a byte copy of legacy), settings fallback/rejection, evicted downloads, local migration/no overwrite, malformed preservation, interleaved edits, failed moves/recovery, legacy arrays/baselines, duplicate settlement, focus-task repair, DST/calendar dates, midnight credit and Shortcut ingestion.

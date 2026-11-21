@@ -93,6 +93,9 @@ const START_DATE = setting("countdown", "startDate", "2026-09-09");
 const END_DATE = setting("countdown", "endDate", "2027-05-24");
 const TITLE = setting("countdown", "title", "End of University");
 
+// Appearance, like Daybar's: "night" (the default), "day", or "auto" to follow the iPhone's light/dark mode.
+const THEME = "night";
+
 // Look
 const BG_COLOR = setting("appearance", "background", "#0d1117");
 const TEXT_COLOR = setting("appearance", "text", "#ffffff");
@@ -108,10 +111,24 @@ const PADDING = setting("appearance", "gap", 2);               // gap between ce
 const BORDER_RADIUS = setting("appearance", "radius", 2);
 const SIDE_PADDING = 12;
 const WIDGET_WIDTH = 320;
+const SMALL_WIDTH = 150;           // small widget width in points; adjust if the bar does not reach the edge
 // ============================================
 
 const MENLO = new Font("Menlo", 11);
 const MENLO_BOLD = new Font("Menlo-Bold", 12);
+
+// Daybar's Day palette. Colors you changed in the shared settings stay as you set them.
+const DAY = {"#0d1117":"#f4f3ed","#ffffff":"#202820","#39d353":"#18764b","#58a6ff":"#286a9f","#ff5c5c":"#b43737","#ff9f43":"#a65410","#f2cc60":"#80620b"};
+function C(hex, alpha = 1) {
+  const night = new Color(hex, alpha);
+  if (THEME === "night") return night;
+  const day = new Color(DAY[hex.toLowerCase()] || hex, alpha);
+  return THEME === "day" ? day : Color.dynamic(day, night);
+}
+// Tapping the widget runs this script (whatever you named it) straight into its details.
+function runURL(action) {
+  return "scriptable:///run/" + encodeURIComponent(Script.name()) + (action ? "?action=" + action : "");
+}
 
 function parseKey(s) {
   const [y, m, d] = s.split("-").map(Number);
@@ -120,24 +137,85 @@ function parseKey(s) {
 function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
 function daysBetween(a, b) { return Math.round((startOfDay(a) - startOfDay(b)) / 86400000); }
+function fmt(d, format) { const f = new DateFormatter(); f.dateFormat = format; return f.string(d); }
+function plural(n, word) { return `${n} ${word}${n === 1 ? "" : "s"}`; }
 
-function createWidget() {
+function getStats(now) {
   const start = parseKey(START_DATE);
   const end = parseKey(END_DATE);
-  const now = new Date();
   const today = startOfDay(now);
   const dayFraction = (now - today) / 86400000; // 0 at midnight, 1 at next midnight
-
   const total = daysBetween(end, start) + 1;
   const elapsed = Math.min(total, Math.max(0, daysBetween(today, start) + 1)); // includes today
   const daysLeft = Math.max(0, daysBetween(end, today));
-  const pct = Math.round(Math.min(1, Math.max(0, (elapsed - 1 + dayFraction) / total)) * 100);
-  const weeksLeft = Math.floor(daysLeft / 7);
+  const progress = Math.min(1, Math.max(0, (elapsed - 1 + dayFraction) / total));
+  return { start, end, today, dayFraction, total, elapsed, daysLeft, progress,
+    pct: Math.round(progress * 100), weeksLeft: Math.floor(daysLeft / 7) };
+}
+// Weekdays and weekend days from tomorrow to the end date.
+function splitLeft(s) {
+  let weekdays = 0, weekend = 0;
+  for (let d = addDays(s.today, 1); d <= s.end; d = addDays(d, 1)) {
+    if (d.getDay() === 0 || d.getDay() === 6) weekend++; else weekdays++;
+  }
+  return { weekdays, weekend };
+}
+// The day each quarter of the range is reached.
+function milestones(s) {
+  return [25, 50, 75, 100].map(p => {
+    const date = addDays(s.start, Math.max(0, Math.ceil(s.total * p / 100) - 1));
+    return { p, date, inDays: daysBetween(date, s.today) };
+  });
+}
+
+function addBar(stack, width, progress, color) {
+  const bar = stack.addStack();
+  bar.layoutHorizontally();
+  bar.size = new Size(width, 6);
+  bar.cornerRadius = 3;
+  bar.backgroundColor = C(REMAINING_COLOR, setting("appearance", "futureOpacity", 0.12));
+  const fill = bar.addStack();
+  fill.size = new Size(Math.max(1, width * progress), 6);
+  fill.cornerRadius = 3;
+  fill.backgroundColor = color;
+  bar.addSpacer();
+}
+
+function smallWidget(widget, s) {
+  const title = widget.addText(TITLE);
+  title.font = MENLO_BOLD;
+  title.textColor = C(TEXT_COLOR);
+  title.lineLimit = 1;
+  title.minimumScaleFactor = 0.7;
+  widget.addSpacer();
+  const big = widget.addText(String(s.daysLeft));
+  big.font = new Font("Menlo-Bold", 36);
+  big.textColor = C(DONE_COLOR);
+  big.minimumScaleFactor = 0.5;
+  const unit = widget.addText(s.daysLeft === 1 ? "day left" : "days left");
+  unit.font = MENLO;
+  unit.textColor = C(TEXT_COLOR, 0.5);
+  widget.addSpacer(8);
+  addBar(widget, SMALL_WIDTH - 2 * SIDE_PADDING, s.progress, C(DONE_COLOR));
+  widget.addSpacer(6);
+  const sub = widget.addText(`${s.pct}% • Day ${s.elapsed}/${s.total}`);
+  sub.font = new Font("Menlo", 10);
+  sub.textColor = C(TEXT_COLOR, 0.5);
+  sub.lineLimit = 1;
+  sub.minimumScaleFactor = 0.7;
+  return widget;
+}
+
+function createWidget(family = config.widgetFamily, now = new Date()) {
+  const s = getStats(now);
+  const { start, end, today, dayFraction, total, elapsed, daysLeft, pct, weeksLeft } = s;
 
   const widget = new ListWidget();
-  widget.backgroundColor = new Color(BG_COLOR);
+  widget.backgroundColor = C(BG_COLOR);
   widget.setPadding(12, SIDE_PADDING, 12, SIDE_PADDING);
   widget.refreshAfterDate = new Date(Date.now() + 15 * 60000);
+  widget.url = runURL();
+  if (family === "small") return smallWidget(widget, s);
 
   // Grid covering the whole range (column-major, like GitHub)
   const cols = Math.ceil(total / ROWS);
@@ -160,13 +238,13 @@ function createWidget() {
 
       const diff = daysBetween(date, today);
       if (diff < 0) {
-        cell.backgroundColor = new Color(DONE_COLOR, 1);
+        cell.backgroundColor = C(DONE_COLOR, 1);
       } else if (diff === 0) {
         // today is white and fades in from the dim "remaining" level to full across the 24h day
         const opacity = REMAINING_OPACITY + dayFraction * (1 - REMAINING_OPACITY);
-        cell.backgroundColor = new Color(TODAY_COLOR, opacity);
+        cell.backgroundColor = C(TODAY_COLOR, opacity);
       } else {
-        cell.backgroundColor = new Color(REMAINING_COLOR, REMAINING_OPACITY);
+        cell.backgroundColor = C(REMAINING_COLOR, REMAINING_OPACITY);
       }
     }
     if (row < ROWS - 1) widget.addSpacer(PADDING);
@@ -181,27 +259,86 @@ function createWidget() {
 
   const titleText = footer.addText(TITLE);
   titleText.font = MENLO_BOLD;
-  titleText.textColor = new Color(TEXT_COLOR);
+  titleText.textColor = C(TEXT_COLOR);
   titleText.lineLimit = 1;
 
   footer.addSpacer();
 
   const countText = footer.addText(`${daysLeft} days left`);
   countText.font = MENLO_BOLD;
-  countText.textColor = new Color(DONE_COLOR);
+  countText.textColor = C(DONE_COLOR);
 
   const sub = widget.addText(`${pct}% done  •  Day ${elapsed}/${total}  •  ${weeksLeft} weeks left`);
   sub.font = MENLO;
-  sub.textColor = new Color(TEXT_COLOR, 0.5);
+  sub.textColor = C(TEXT_COLOR, 0.5);
   sub.lineLimit = 1;
 
+  if (family === "large") addDetails(widget, s);
   return widget;
+}
+
+// Large widget: the same grid and footer, then a progress bar, what's left and the milestones.
+function addDetails(widget, s) {
+  widget.addSpacer(14);
+  addBar(widget, WIDGET_WIDTH - 2 * SIDE_PADDING, s.progress, C(DONE_COLOR));
+  widget.addSpacer(12);
+  const left = splitLeft(s);
+  const line = (label, value, color) => {
+    const row = widget.addStack();
+    row.layoutHorizontally();
+    const a = row.addText(label);
+    a.font = MENLO;
+    a.textColor = C(TEXT_COLOR, 0.5);
+    row.addSpacer();
+    const b = row.addText(value);
+    b.font = MENLO_BOLD;
+    b.textColor = color || C(TEXT_COLOR);
+    widget.addSpacer(5);
+  };
+  line("Weekdays left", String(left.weekdays));
+  line("Weekend days left", String(left.weekend));
+  for (const m of milestones(s)) {
+    line(`${m.p}%  ${fmt(m.date, "EEE, MMM d")}`, m.inDays < 0 ? "passed" : m.inDays === 0 ? "today" : `in ${m.inDays}d`,
+      m.inDays < 0 ? C(DONE_COLOR) : undefined);
+  }
+  widget.addSpacer();
+}
+
+// ---------- in the app: details, then an optional preview ----------
+async function showDetails() {
+  const s = getStats(new Date());
+  const left = splitLeft(s);
+  const table = new UITable();
+  table.showSeparators = true;
+  const head = new UITableRow();
+  head.isHeader = true;
+  head.addText(TITLE, `${s.daysLeft} days left`);
+  table.addRow(head);
+  const row = (title, subtitle, onSelect) => {
+    const r = new UITableRow();
+    r.height = 56;
+    r.addText(title, subtitle);
+    if (onSelect) { r.onSelect = onSelect; r.dismissOnSelect = true; }
+    table.addRow(r);
+  };
+  row(`${s.pct}% done`, `Day ${s.elapsed} of ${s.total}  •  ${fmt(s.start, "MMM d, yyyy")} → ${fmt(s.end, "MMM d, yyyy")}`);
+  row(`${plural(s.weeksLeft, "week")}, ${plural(s.daysLeft % 7, "day")} left`, `${left.weekdays} weekdays  •  ${left.weekend} weekend days`);
+  for (const m of milestones(s)) {
+    row(`${m.p}%  ${fmt(m.date, "EEE, MMM d")}`, m.inDays < 0 ? "Passed" : m.inDays === 0 ? "Today" : `In ${plural(m.inDays, "day")}`);
+  }
+  let preview = null;
+  for (const size of ["small", "medium", "large"]) row(`Preview ${size} widget`, "", () => { preview = size; });
+  await table.present(false);
+  if (preview) {
+    const w = createWidget(preview);
+    await (preview === "small" ? w.presentSmall() : preview === "large" ? w.presentLarge() : w.presentMedium());
+  }
 }
 
 const widget = createWidget();
 if (config.runsInWidget) {
   Script.setWidget(widget);
 } else {
-  await widget.presentMedium();
+  await showDetails();
 }
 Script.complete();
