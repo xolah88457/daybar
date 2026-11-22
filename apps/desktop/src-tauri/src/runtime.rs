@@ -113,6 +113,11 @@ pub fn apply_os_preferences(app: &AppHandle, old: &Preferences, new: &Preference
         }
         return Err(e.to_string());
     }
+    // Windows: "hide the Dock icon" becomes "no taskbar button"; the tray icon stays.
+    #[cfg(windows)]
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_skip_taskbar(new.hide_dock);
+    }
     Ok(())
 }
 fn rollback_shortcut(app: &AppHandle, old: &Preferences, new: &Preferences) {
@@ -590,12 +595,28 @@ pub fn start(app: AppHandle, store: Store) -> Result<Backend> {
     app.manage(features::away::AwayState::default());
     features::radar::init(app.clone());
     let (tx, rx) = mpsc::channel();
-    let tray = TrayIconBuilder::with_id("daybar")
+    let mut builder = TrayIconBuilder::with_id("daybar")
         .title("Daybar")
         .tooltip("Daybar")
-        .on_menu_event(|app, e| on_menu(app, e.id.as_ref()))
-        .build(&app)
-        .map_err(|e| e.to_string())?;
+        .on_menu_event(|app, e| on_menu(app, e.id.as_ref()));
+    // The macOS menu bar shows the text label alone. The Windows notification area shows only an
+    // icon (the label goes in its tooltip), and a double click opens the window.
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(icon) = app.default_window_icon().cloned() {
+            builder = builder.icon(icon);
+        }
+        builder = builder.on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::DoubleClick {
+                button: tauri::tray::MouseButton::Left,
+                ..
+            } = event
+            {
+                open(tray.app_handle());
+            }
+        });
+    }
+    let tray = builder.build(&app).map_err(|e| e.to_string())?;
     let prefs = store.preferences()?;
     let mut initial = prefs.clone();
     initial.global_shortcut.clear();
@@ -754,6 +775,11 @@ fn worker(
             let next = tray_title(s, now);
             if next != title {
                 if let Err(e) = tray.set_title(Some(&next)) {
+                    error(&app, &store, "tray", e.to_string());
+                }
+                // Windows has no tray text, so the label is what hovering the icon shows.
+                #[cfg(windows)]
+                if let Err(e) = tray.set_tooltip(Some(format!("Daybar · {next}"))) {
                     error(&app, &store, "tray", e.to_string());
                 }
                 title = next;

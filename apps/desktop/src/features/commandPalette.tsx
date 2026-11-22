@@ -302,7 +302,7 @@ export function Overlay(props: FeatureOverlayProps) {
         onKeyDown={onKeyDown}
       >
         <div className={styles.top}>
-          <span className={styles.glyph} aria-hidden="true">⌘</span>
+          <span className={styles.glyph} aria-hidden="true">{isMac() ? '⌘' : '›'}</span>
           <input
             ref={input}
             className={styles.input}

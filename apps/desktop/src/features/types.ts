@@ -67,6 +67,8 @@ export interface FeatureDef {
   isModule: boolean;
   /** No switch: always on once `requires` is on (see `builtInFeatureIds` in core). */
   builtIn: boolean;
+  /** Needs something only macOS has (Shortcuts), so the Windows app does not list it. */
+  macOnly?: boolean;
   nav?: FeatureNav;
   Config?: ComponentType<FeatureConfigProps>;
   View?: ComponentType<FeatureViewProps>;

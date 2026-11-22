@@ -22,6 +22,7 @@ pub mod autocycle;
 pub mod away;
 pub mod checkins;
 pub mod clock;
+pub mod drive;
 pub mod chime;
 pub mod export;
 pub mod nudges;

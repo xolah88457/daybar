@@ -1,8 +1,9 @@
-//! Deadline Radar: calendar events and due reminders from EventKit, a process-wide cache of them,
-//! the "due tomorrow" alert and the menu-bar "next deadline" label.
+//! Deadline Radar: calendar events and due reminders from EventKit and Google, a process-wide cache
+//! of them, the "due tomorrow" alert and the menu-bar (or tray) "next deadline" label.
 //!
 //! * `radar_mac.rs` (imported as `native`) is the only code that touches EventKit; on other
-//!   platforms it is a stub that reports "unsupported".
+//!   platforms it is a stub that reports "unsupported". On Windows, Google Calendar and Google Tasks
+//!   (`google.rs`) are the whole radar.
 //! * Nothing asks for permission at startup. [`radar_request_access`] does, and the frontend calls it
 //!   when Radar is switched on and access is still undetermined.
 //! * The cache refreshes every [`TTL_MS`] while Radar is on, when the configuration that shapes the
@@ -67,6 +68,8 @@ pub struct RadarStatus {
     pub reminders: AccessState,
     /// Signed in to Google Calendar (read without macOS Calendar access).
     pub google: bool,
+    /// Google sign-in is available here (the Mac and Windows apps).
+    pub google_supported: bool,
 }
 impl RadarStatus {
     fn current() -> Self {
@@ -76,6 +79,7 @@ impl RadarStatus {
             events: events.into(),
             reminders: reminders.into(),
             google: google_connected(),
+            google_supported: google::SUPPORTED,
         }
     }
 }
@@ -327,6 +331,8 @@ struct Cache {
     native: Vec<RadarItem>,
     google: Vec<RadarItem>,
     google_calendars: Vec<RadarCalendar>,
+    /// Google Tasks lists, shown with the reminder lists.
+    google_lists: Vec<RadarCalendar>,
     calendars: RadarCalendars,
     fetched_at: Option<i64>,
     error: Option<String>,
@@ -339,6 +345,7 @@ impl Cache {
             native: Vec::new(),
             google: Vec::new(),
             google_calendars: Vec::new(),
+            google_lists: Vec::new(),
             calendars: RadarCalendars {
                 events: Vec::new(),
                 reminders: Vec::new(),
@@ -421,7 +428,14 @@ fn ensure_fresh_within(
     } else {
         Some(RadarCalendars::default())
     };
-    let google = google_fetch(query.from_ms, query.to_ms, &cfg.calendars);
+    let google = google_fetch(&google::Window {
+        from_ms: query.from_ms,
+        to_ms: query.to_ms,
+        calendars: &cfg.calendars,
+        tasks_from_ms: query.reminders_from_ms,
+        task_lists: &cfg.reminder_lists,
+        include_tasks: cfg.include_reminders,
+    });
     let mut c = cache();
     let before = (c.items.clone(), c.calendars.clone(), c.error.clone());
     let same_key = c.key == key;
@@ -439,23 +453,26 @@ fn ensure_fresh_within(
         None => {
             c.google.clear();
             c.google_calendars.clear();
+            c.google_lists.clear();
         }
         Some(Ok(g)) => {
             c.google = g.items;
             c.google_calendars = g.calendars;
+            c.google_lists = g.lists;
         }
         // Offline or a hiccup: keep the last good Google items for the same window.
         Some(Err(e)) => {
             if !same_key {
                 c.google.clear();
             }
-            errors.push(format!("Google Calendar: {e}"));
+            errors.push(format!("Google: {e}"));
         }
     }
     c.items = google::merge(c.native.clone(), c.google.clone());
     c.error = (!errors.is_empty()).then(|| errors.join(" · "));
     if let Some(mut lists) = lists {
         lists.events.extend(c.google_calendars.iter().cloned());
+        lists.reminders.extend(c.google_lists.iter().cloned());
         c.calendars = lists;
     }
     c.key = key;
@@ -465,15 +482,15 @@ fn ensure_fresh_within(
 
 /// Google events for the window, or `None` when not signed in. Tests substitute their own.
 #[cfg(not(test))]
-fn google_fetch(from_ms: i64, to_ms: i64, wanted: &[String]) -> Option<Result<google::Fetched, String>> {
-    google::fetch(from_ms, to_ms, wanted)
+fn google_fetch(window: &google::Window) -> Option<Result<google::Fetched, String>> {
+    google::fetch(window)
 }
 #[cfg(not(test))]
 fn google_connected() -> bool {
     google::status().connected
 }
 #[cfg(test)]
-fn google_fetch(_: i64, _: i64, _: &[String]) -> Option<Result<google::Fetched, String>> {
+fn google_fetch(_: &google::Window) -> Option<Result<google::Fetched, String>> {
     testing::GOOGLE.lock().unwrap_or_else(|e| e.into_inner()).take()
 }
 #[cfg(test)]
@@ -614,7 +631,9 @@ pub async fn radar_calendars() -> CommandResult<RadarCalendars> {
         let mut lists = native::calendars()
             .map(RadarCalendars::from)
             .unwrap_or_default();
-        lists.events.extend(cache().google_calendars.iter().cloned());
+        let c = cache();
+        lists.events.extend(c.google_calendars.iter().cloned());
+        lists.reminders.extend(c.google_lists.iter().cloned());
         lists
     })
     .await
@@ -940,10 +959,12 @@ mod tests {
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn off_mac_everything_reports_unsupported() {
+        // Windows signs in to Google instead; elsewhere (Linux tests) there is nothing at all.
+        assert_eq!(google::SUPPORTED, cfg!(windows));
         let status = RadarStatus::current();
         assert_eq!(
             serde_json::to_value(status).unwrap(),
-            json!({"supported": false, "events": "unsupported", "reminders": "unsupported", "google": false})
+            json!({"supported": false, "events": "unsupported", "reminders": "unsupported", "google": false, "googleSupported": google::SUPPORTED})
         );
         assert!(native::request_access(true, true).is_err());
         assert!(native::fetch(&native::Query {
@@ -985,23 +1006,26 @@ mod tests {
         set(Some(Ok(google::Fetched {
             items: vec![event("Board meeting", soon, "Team")],
             calendars: vec![RadarCalendar { title: "Team".into(), account: "Google · me@example.com".into() }],
+            lists: vec![RadarCalendar { title: "My Tasks".into(), account: "Google · me@example.com".into() }],
         })));
         ensure_fresh(&c, true, now);
         assert_eq!(titles(&items_for(&c, now).items), ["Board meeting"]);
         assert!(cache().calendars.events.iter().any(|cal| cal.title == "Team"));
+        assert!(cache().calendars.reminders.iter().any(|l| l.title == "My Tasks"));
 
         // Offline: the last Google items stay, with an error that names Google.
         set(Some(Err("Could not reach Google".into())));
         ensure_fresh(&c, true, now);
         let out = items_for(&c, now);
         assert_eq!(titles(&out.items), ["Board meeting"]);
-        assert!(out.error.unwrap().contains("Google Calendar: Could not reach Google"));
+        assert!(out.error.unwrap().contains("Google: Could not reach Google"));
 
         // Signed out: they go.
         set(None);
         ensure_fresh(&c, true, now);
         assert!(items_for(&c, now).items.is_empty());
         assert!(!cache().calendars.events.iter().any(|cal| cal.title == "Team"));
+        assert!(!cache().calendars.reminders.iter().any(|l| l.title == "My Tasks"));
         testing::clear();
     }
 
@@ -1022,6 +1046,7 @@ mod tests {
                 events: AccessState::FullAccess,
                 reminders: AccessState::NotDetermined,
                 google: false,
+                google_supported: true,
             },
             refreshed_at: Some(7),
             error: None,
@@ -1029,7 +1054,7 @@ mod tests {
         let json = serde_json::to_value(&all).unwrap();
         assert_eq!(
             json["status"],
-            json!({"supported":true,"events":"fullAccess","reminders":"notDetermined","google":false})
+            json!({"supported":true,"events":"fullAccess","reminders":"notDetermined","google":false,"googleSupported":true})
         );
         assert_eq!(json["refreshedAt"], 7);
         assert_eq!(json["error"], serde_json::Value::Null);

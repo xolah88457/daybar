@@ -29,6 +29,7 @@ import { theme, layoutTheme, dayProjectedSettings } from './primitives';
 import { SettingsPanel } from './settings';
 import { Overview, SpacePage } from './spaces';
 import { placeholderTasks, SetupWizard } from './setup';
+import { device, isWindows } from '../lib/platform';
 
 function message(error: unknown) {
   return error instanceof Error
@@ -204,7 +205,7 @@ export function Dashboard({
       client
         ? perform(
             () => client.setPreferences(preferences),
-            'Mac preferences saved.'
+            `${device()} preferences saved.`
           )
         : false,
     [client, perform]
@@ -481,7 +482,7 @@ export function Dashboard({
         ))}
         {snapshot?.conflicts.map((conflict) => (
           <div className="notice warning" key={conflict.file}>
-            <strong>iCloud conflict · {conflict.file}</strong>
+            <strong>{isWindows() ? 'Sync conflict' : 'iCloud conflict'} · {conflict.file}</strong>
             <p>
               Canonical: {conflict.canonical}. Review the files before choosing.
               Nothing is silently discarded.

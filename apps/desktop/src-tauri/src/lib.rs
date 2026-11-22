@@ -91,6 +91,8 @@ pub fn run() {
             //
             features::export::export_history,
             //
+            features::drive::google_drive_folder,
+            //
             features::shortcuts::run_focus_shortcut,
             //
             features::radar::radar_status,

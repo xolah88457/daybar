@@ -1,6 +1,6 @@
 [package]
 name = "daybar"
-version = "0.3.4"
+version = "0.4.0"
 edition = "2021"
 
 [lib]
@@ -16,7 +16,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = "0.4"
 notify = "8"
-libc = "0.2"
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
@@ -28,6 +27,13 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 ring = "0.17"
 url = "2"
 base64 = "0.23"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# Windows: Credential Manager for the Google sign-in, the browser for it, and the idle time.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_System_SystemInformation", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

@@ -158,7 +158,7 @@ describe('Deadline Radar view', () => {
   it('explains that Radar needs the Mac app when EventKit is unavailable', async () => {
     use(createDemoRadarClient({ status: { supported: false, events: 'unsupported', reminders: 'unsupported' } }));
     render(<View {...viewProps(radarOn())} />);
-    expect(await screen.findByText(/works in the Daybar app on a Mac only/)).toBeInTheDocument();
+    expect(await screen.findByText(/works in the app for Mac and Windows only/)).toBeInTheDocument();
   });
   it('shows a native read error', async () => {
     const client = createDemoRadarClient({ clock: () => now });
@@ -292,7 +292,7 @@ describe('Radar settings', () => {
   });
   it('saves includeReminders and hides the list picker without it', async () => {
     const { save, rerender, props } = setup();
-    fireEvent.click(await screen.findByRole('checkbox', { name: /Include Reminders/ }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Include reminders/ }));
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(lastSaved(save).includeReminders).toBe(false);
     rerender(<Config {...props} value={{ ...props.value, includeReminders: false }} />);
@@ -371,8 +371,8 @@ describe('Radar settings', () => {
     const client = createDemoRadarClient({ clock: () => now });
     const connect = vi.spyOn(client, 'googleConnect');
     setup(defaultFeatures.radar, client);
-    const google = within(await screen.findByRole('group', { name: 'Google Calendar' }));
-    const submit = google.getByRole('button', { name: 'Connect Google Calendar' });
+    const google = within(await screen.findByRole('group', { name: 'Google Calendar and Tasks' }));
+    const submit = google.getByRole('button', { name: 'Connect Google' });
     expect(submit).toBeDisabled();
     fireEvent.change(google.getByLabelText('Client ID'), { target: { value: 'not-an-id' } });
     fireEvent.change(google.getByLabelText('Client secret'), { target: { value: 'shh' } });
@@ -388,17 +388,17 @@ describe('Radar settings', () => {
     expect(calendars.getByRole('checkbox', { name: /Home/ })).toBeInTheDocument();
 
     fireEvent.click(google.getByRole('button', { name: 'Disconnect' }));
-    expect(await google.findByRole('button', { name: 'Connect Google Calendar' })).toBeInTheDocument();
+    expect(await google.findByRole('button', { name: 'Connect Google' })).toBeInTheDocument();
     await waitFor(() => expect(calendars.queryByRole('checkbox', { name: /Team/ })).toBeNull());
   });
   it('shows why a Google sign-in failed', async () => {
     const client = createDemoRadarClient({ clock: () => now });
     vi.spyOn(client, 'googleConnect').mockRejectedValue('Google Calendar was not connected: access was declined.');
     setup(defaultFeatures.radar, client);
-    const google = within(await screen.findByRole('group', { name: 'Google Calendar' }));
+    const google = within(await screen.findByRole('group', { name: 'Google Calendar and Tasks' }));
     fireEvent.change(google.getByLabelText('Client ID'), { target: { value: '12-ab.apps.googleusercontent.com' } });
     fireEvent.change(google.getByLabelText('Client secret'), { target: { value: 'shh' } });
-    fireEvent.click(google.getByRole('button', { name: 'Connect Google Calendar' }));
+    fireEvent.click(google.getByRole('button', { name: 'Connect Google' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('access was declined');
   });
   it('hides the Google section outside the Mac app', async () => {
@@ -406,7 +406,7 @@ describe('Radar settings', () => {
     vi.spyOn(client, 'googleStatus').mockResolvedValue({ supported: false, connected: false, account: null });
     setup(defaultFeatures.radar, client);
     await screen.findByRole('group', { name: 'Calendars' });
-    expect(screen.queryByRole('group', { name: 'Google Calendar' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Google Calendar and Tasks' })).toBeNull();
   });
   it('disables every control while a save is in flight', async () => {
     const client = createDemoRadarClient({ clock: () => now });

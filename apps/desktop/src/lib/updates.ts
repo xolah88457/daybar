@@ -1,4 +1,5 @@
 import pkg from '../../package.json';
+import { device } from './platform';
 
 export interface UpdateInfo {
   version: string;
@@ -124,7 +125,7 @@ export function friendlyCheckError(error: unknown): string {
       'was not found in the response `platforms`'
     )
   )
-    return 'There’s no update published for this Mac.';
+    return `There’s no update published for this ${device()}.`;
   if (
     has(
       'error sending request',

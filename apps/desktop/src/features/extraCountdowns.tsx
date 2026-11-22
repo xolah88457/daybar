@@ -10,6 +10,7 @@ import type { ExtraCountdown, ExtraCountdownsConfig } from '@daybar/core/contrac
 import { Progress, Section } from '../components/primitives';
 import styles from './extraCountdowns.module.css';
 import type { FeatureCardProps, FeatureConfigProps } from './types';
+import { isWindows } from '../lib/platform';
 
 const MAX_ITEMS = 12;
 const schema = featuresSchema.shape.extraCountdowns;
@@ -97,8 +98,11 @@ export function Config({ value, save, busy }: FeatureConfigProps<'extraCountdown
     <div>
       <p className={styles.help}>
         Extra countdowns appear as a card on Today, under the main countdown, with the days left and
-        how far along you are. They live on this Mac only: your phone widgets keep showing just the
-        main countdown. Up to {MAX_ITEMS}.
+        how far along you are.{' '}
+        {isWindows()
+          ? 'They are kept on this PC only, not in the shared data folder.'
+          : 'They live on this Mac only: your phone widgets keep showing just the main countdown.'}{' '}
+        Up to {MAX_ITEMS}.
       </p>
       {draft.length > 0 && (
         <ol className={styles.list} aria-label="Extra countdowns">

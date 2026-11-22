@@ -21,6 +21,7 @@ import type {
 } from './radarClient';
 import { useAutoRequest, useRadarItems, useRadarStatus } from './radarState';
 import styles from './radar.module.css';
+import { isWindows } from '../lib/platform';
 import type { FeatureCardProps, FeatureConfigProps, FeatureViewProps } from './types';
 
 const settingsPath = (pane: 'Calendars' | 'Reminders') => `System Settings → Privacy & Security → ${pane}`;
@@ -69,11 +70,25 @@ function AccessNotice({
   onGrant: () => void;
   disabled?: boolean;
 }) {
+  if (!status.supported && status.googleSupported) {
+    // The Windows app: Google is the radar, so the only thing to ask for is a sign-in.
+    if (status.google) return null;
+    return (
+      <div className="notice warning" role="status">
+        <div className={styles.access}>
+          <p>
+            Deadline Radar reads Google Calendar and Google Tasks. Sign in with Google to see your
+            upcoming events and tasks with a due date.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (!status.supported)
     return (
       <div className="notice warning" role="status">
         <div className={styles.access}>
-          <p>Deadline Radar reads Calendar and Reminders through macOS, so it works in the Daybar app on a Mac only.</p>
+          <p>Deadline Radar reads your calendars from the Daybar app, so it works in the app for Mac and Windows only.</p>
         </div>
       </div>
     );
@@ -174,7 +189,11 @@ export function View({ snapshot, now }: FeatureViewProps) {
       title="Deadline Radar"
       aside={
         <span className="tag">
-          {status?.google ? 'CALENDAR + REMINDERS + GOOGLE' : 'CALENDAR + REMINDERS · THIS MAC'}
+          {status && !status.supported && status.googleSupported
+            ? 'GOOGLE CALENDAR + TASKS'
+            : status?.google
+              ? 'CALENDAR + REMINDERS + GOOGLE'
+              : 'CALENDAR + REMINDERS · THIS MAC'}
         </span>
       }
     >
@@ -193,6 +212,9 @@ export function View({ snapshot, now }: FeatureViewProps) {
           onGrant={() => void radar.requestAccess()}
           disabled={radar.loading}
         />
+      )}
+      {status && !status.supported && status.googleSupported && !status.google && (
+        <GoogleCalendar client={getRadarClient()} disabled={radar.loading} />
       )}
       {radar.error && (
         <div className="notice error" role="alert">
@@ -220,7 +242,11 @@ export function TodayCard({ snapshot, now }: FeatureCardProps) {
     <Section title="Deadlines" aside={<span className="tag">NEXT 3</span>}>
       {!radar.data ? (
         <p className="muted">Reading your calendar…</p>
-      ) : blocked || (status && !status.supported) ? (
+      ) : status && !status.supported && status.googleSupported && !status.google ? (
+        <p className="muted">
+          Deadline Radar reads Google Calendar and Google Tasks. Open Deadline Radar in the sidebar to sign in.
+        </p>
+      ) : blocked || (status && !status.supported && !status.google) ? (
         <p className="muted">
           Deadline Radar needs access to Calendar. Open Deadline Radar in the sidebar to set it up.
         </p>
@@ -297,7 +323,10 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : typeof e === 'string' ? e : 'Something went wrong.';
 }
 
-/** Direct sign-in to Google Calendar, read alongside whatever macOS Calendar has (iCloud and others). */
+/**
+ * Direct sign-in to Google Calendar and Google Tasks: read alongside whatever macOS Calendar has
+ * (iCloud and others) on a Mac, and the whole radar on Windows.
+ */
 function GoogleCalendar({ client, disabled }: { client: RadarClient; disabled?: boolean }) {
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [clientId, setClientId] = useState('');
@@ -315,6 +344,7 @@ function GoogleCalendar({ client, disabled }: { client: RadarClient; disabled?: 
     };
   }, [client]);
   if (!google?.supported) return null;
+  const windows = isWindows();
 
   const act = async (kind: 'connect' | 'disconnect') => {
     setError('');
@@ -339,18 +369,23 @@ function GoogleCalendar({ client, disabled }: { client: RadarClient; disabled?: 
 
   return (
     <fieldset className={styles.google}>
-      <legend>Google Calendar</legend>
+      <legend>Google Calendar and Tasks</legend>
       {google.connected ? (
         <div className={styles.googleRow}>
           <p>
-            Connected as <strong>{google.account}</strong>. Its calendars are in the list below, next to
-            iCloud and the rest of macOS Calendar.
+            Connected as <strong>{google.account}</strong>.{' '}
+            {windows
+              ? 'Its calendars and task lists are in the lists below.'
+              : 'Its calendars and task lists are in the lists below, next to iCloud and the rest of macOS Calendar and Reminders.'}
+            {google.tasks === false && (
+              <> Google Tasks are not included yet: disconnect and connect again to add them.</>
+            )}
           </p>
           <button
             type="button"
             disabled={disabled || !!working}
             onClick={() => {
-              if (window.confirm('Disconnect Google Calendar? Its events leave the radar.'))
+              if (window.confirm('Disconnect Google? Its events and tasks leave the radar.'))
                 void act('disconnect');
             }}
           >
@@ -366,13 +401,17 @@ function GoogleCalendar({ client, disabled }: { client: RadarClient; disabled?: 
           }}
         >
           <p className={styles.hint}>
-            Read Google Calendar directly, alongside iCloud. Daybar asks for read-only access, keeps the
-            sign-in in your Keychain and talks only to Google.
+            {windows
+              ? 'Read Google Calendar events and Google Tasks with a due date. Daybar asks for read-only access, keeps the sign-in in Windows Credential Manager and talks only to Google.'
+              : 'Read Google Calendar and Google Tasks directly, alongside iCloud. Daybar asks for read-only access, keeps the sign-in in your Keychain and talks only to Google.'}
           </p>
           <details className={styles.howto}>
             <summary>Where do I get a client ID?</summary>
             <ol>
-              <li>In console.cloud.google.com, create a project and enable the Google Calendar API.</li>
+              <li>
+                In console.cloud.google.com, create a project and enable the Google Calendar API and the
+                Google Tasks API.
+              </li>
               <li>Under Google Auth Platform, set up the consent screen (External) and add yourself as a test user.</li>
               <li>Under Clients, create an OAuth client of type Desktop app.</li>
               <li>Copy its client ID and client secret here.</li>
@@ -406,7 +445,7 @@ function GoogleCalendar({ client, disabled }: { client: RadarClient; disabled?: 
             type="submit"
             disabled={disabled || !!working || !clientId.trim() || !secret.trim() || !!idProblem}
           >
-            {working === 'connect' ? 'Waiting for Google in your browser…' : 'Connect Google Calendar'}
+            {working === 'connect' ? 'Waiting for Google in your browser…' : 'Connect Google'}
           </button>
         </form>
       )}
@@ -502,11 +541,11 @@ export function Config({ value, save, busy }: FeatureConfigProps<'radar'>) {
           disabled={busy}
           onChange={(e) => patch({ includeReminders: e.target.checked })}
         />
-        Include Reminders with a due date
+        {status && !status.supported ? 'Include Google Tasks with a due date' : 'Include reminders and tasks with a due date'}
       </label>
       {value.includeReminders && (
         <CalendarChecklist
-          legend="Reminder lists"
+          legend={status && !status.supported ? 'Task lists' : 'Reminder lists'}
           all={calendars.reminders}
           selected={value.reminderLists}
           disabled={busy}

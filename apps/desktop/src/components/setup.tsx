@@ -8,6 +8,7 @@ import { settingsSchema } from '@daybar/core/contracts';
 import type { Preferences, Settings } from '@daybar/core/contracts';
 import type { Actions } from './modules';
 import styles from './setup.module.css';
+import { device, isWindows } from '../lib/platform';
 
 const steps = ['Welcome', 'Tasks', 'Countdown', 'Spaces', 'Modules', 'Done'] as const;
 type Step = (typeof steps)[number];
@@ -209,7 +210,7 @@ export function SetupWizard({
                 <p>
                   {snapshot.preferences.dataFolder.startsWith('Browser memory')
                     ? 'This demo is filled with sample tasks and history.'
-                    : 'This Mac has tasks and history in it already, perhaps sample data from an earlier version.'}{' '}
+                    : `This ${device()} has tasks and history in it already, perhaps sample data from an earlier version.`}{' '}
                   Start blank?
                 </p>
                 <button type="button" disabled={busy} onClick={() => void clearSample()}>
@@ -404,15 +405,30 @@ export function SetupWizard({
           <div className={styles.body}>
             <p>That is it. A few things you can turn on later:</p>
             <ul className={styles.tips}>
-              <li>
-                <strong>Your iPhone.</strong> Settings → On this Mac → “Use my iPhone’s Scriptable folder” shares
-                tasks with the phone widgets.
-              </li>
-              <li>
-                <strong>Calendars.</strong> Settings → Features → Deadline Radar shows upcoming events from the
-                calendars on this Mac (iCloud and any account added there) and, if you sign in, Google
-                Calendar.
-              </li>
+              {isWindows() ? (
+                <>
+                  <li>
+                    <strong>Google Drive.</strong> Settings → On this PC → “Use a Google Drive folder” keeps
+                    your data in Google Drive, so your other computers can share it.
+                  </li>
+                  <li>
+                    <strong>Google Calendar and Tasks.</strong> Settings → Features → Deadline Radar shows
+                    upcoming events and tasks with a due date once you sign in with Google.
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <strong>Your iPhone.</strong> Settings → On this Mac → “Use my iPhone’s Scriptable folder”
+                    shares tasks with the phone widgets.
+                  </li>
+                  <li>
+                    <strong>Calendars.</strong> Settings → Features → Deadline Radar shows upcoming events from
+                    the calendars on this Mac (iCloud and any account added there) and, if you sign in, Google
+                    Calendar and Google Tasks.
+                  </li>
+                </>
+              )}
               <li>
                 <strong>Spaces.</strong> The Overview page shows every space and lets you add more.
               </li>

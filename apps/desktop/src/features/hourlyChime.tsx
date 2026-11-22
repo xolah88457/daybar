@@ -3,6 +3,7 @@
 import { describeNext, nextHourlyChime, parseClock } from '@daybar/core';
 import { NotifyForm, TimeField, useConfigDraft } from './notifyForm';
 import type { FeatureConfigProps } from './types';
+import { osName } from '../lib/platform';
 
 export function Config({ value, save, busy }: FeatureConfigProps<'hourlyChime'>) {
   const { draft, set, dirty, error, submit } = useConfigDraft(value, save, (d) =>
@@ -38,7 +39,7 @@ export function Config({ value, save, busy }: FeatureConfigProps<'hourlyChime'>)
         Play a sound
       </label>
       <small className="field">
-        Off sends the notification without asking for a sound. macOS decides the rest, so a chime can still be
+        Off sends the notification without asking for a sound. {osName()} decides the rest, so a chime can still be
         audible if Daybar’s notification settings allow it.
       </small>
     </NotifyForm>

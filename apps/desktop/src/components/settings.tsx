@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { isTauri } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { preferencesSchema, settingsSchema } from '@daybar/core/contracts';
 import type { Preferences, Settings, Snapshot } from '@daybar/core/contracts';
 import type { Actions } from './modules';
@@ -9,6 +9,7 @@ import { FeaturesPanel } from '../features/panel';
 import { visibleViews } from '../features/views';
 import { Section } from './primitives';
 import { UpdatesPanel } from './updates';
+import { device, isWindows, osName, trayName } from '../lib/platform';
 
 const label = (name: string) =>
   name.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
@@ -457,16 +458,29 @@ function PreferencesPanel({
       changedFolder &&
       (!consent ||
         !(await confirm(
-          'Connect this real data folder? Daybar will read its JSON files and back up managed files before its first write. The phone and Mac will share changes.'
+          isWindows()
+            ? 'Connect this real data folder? Daybar will read its JSON files and back up managed files before its first write. Every computer that uses this folder will share changes.'
+            : 'Connect this real data folder? Daybar will read its JSON files and back up managed files before its first write. The phone and Mac will share changes.'
         )))
     )
       return;
     setError('');
     await save({ ...parsed.data, features: snapshot.preferences.features });
   };
+  const windows = isWindows();
+  const useGoogleDrive = () => {
+    void (async () => {
+      set('dataFolder', await invoke<string>('google_drive_folder'));
+      set('realData', true);
+      setConsent(false);
+      setError('');
+    })().catch((e: unknown) =>
+      setError(e instanceof Error ? e.message : typeof e === 'string' ? e : 'Could not find Google Drive.')
+    );
+  };
   return (
     <Section
-      title="On this Mac"
+      title={`On this ${device()}`}
       collapsible
       aside={<span className="tag">APP-LOCAL PREFERENCES</span>}
     >
@@ -490,12 +504,19 @@ function PreferencesPanel({
               <option value="night">Night</option>
               <option value="auto">Auto · follow system appearance</option>
             </select>
-            <small>Auto follows macOS appearance. Set macOS to Auto for its scheduled day/night changes; Daybar uses no location access, and uses the network only when you click Check for updates.</small>
+            <small>
+              Auto follows {osName()} appearance.{' '}
+              {windows
+                ? 'Choose light or dark under Settings → Personalization → Colors in Windows'
+                : 'Set macOS to Auto for its scheduled day/night changes'}
+              ; Daybar uses no location access, and uses the network only when you click Check for
+              updates or sign in with Google.
+            </small>
           </label>
           <label className="field">
-            Menu-bar label
+            {windows ? 'Tray label' : 'Menu-bar label'}
             <select
-              aria-label="Menu-bar label"
+              aria-label={windows ? 'Tray label' : 'Menu-bar label'}
               value={draft.trayDisplay}
               onChange={(e) =>
                 set('trayDisplay', e.target.value as Preferences['trayDisplay'])
@@ -519,7 +540,12 @@ function PreferencesPanel({
                 )
               )}
             </select>
-            <small>Mac-only display. Focus totals count credited minutes only; the browser demo cannot change the menu bar.</small>
+            <small>
+              {windows
+                ? 'Shown when you point at Daybar’s icon in the notification area.'
+                : 'Mac-only display.'}{' '}
+              Focus totals count credited minutes only; the browser demo cannot change the {trayName()}.
+            </small>
           </label>
           <label className="field">
             Data folder path
@@ -534,11 +560,20 @@ function PreferencesPanel({
             />
             <small>
               {snapshot.preferences.realData
-                ? 'Connected: the iPhone widgets and this Mac share these files.'
-                : 'Not synced: Daybar keeps its data in a private folder on this Mac until you connect your iPhone’s Scriptable folder.'}
+                ? windows
+                  ? 'Connected: every computer that uses this folder shares these files.'
+                  : 'Connected: the iPhone widgets and this Mac share these files.'
+                : windows
+                  ? 'Not synced: Daybar keeps its data in a private folder on this PC until you connect a Google Drive folder.'
+                  : 'Not synced: Daybar keeps its data in a private folder on this Mac until you connect your iPhone’s Scriptable folder.'}
             </small>
           </label>
           {inDesktopApp() && !snapshot.preferences.realData && (
+            <button type="button" onClick={useGoogleDrive}>
+              Use a Google Drive folder
+            </button>
+          )}
+          {inDesktopApp() && !snapshot.preferences.realData && !windows && (
             <button
               type="button"
               onClick={() => {
@@ -565,14 +600,29 @@ function PreferencesPanel({
             This is my real shared data (explicit opt-in)
           </label>
           <div className="notice warning">
-            <strong>Your iCloud data stays yours.</strong>
-            <p>
-              Back up iCloud Drive → Scriptable before you connect it. Once
-              connected, Daybar reads and writes the same files as the iPhone
-              widgets and makes a timestamped backup before its first write.
-              Invalid files are never silently replaced. In Finder, choose Keep
-              Downloaded for the Scriptable folder.
-            </p>
+            {windows ? (
+              <>
+                <strong>Your Google Drive data stays yours.</strong>
+                <p>
+                  “Use a Google Drive folder” needs Google Drive for desktop. It makes a Daybar folder in
+                  My Drive; point your other computers at the same folder to share tasks and history.
+                  Daybar makes a timestamped backup before its first write, and invalid files are never
+                  silently replaced. Avoid editing on two computers at the same moment.
+                </p>
+              </>
+            ) : (
+              <>
+                <strong>Your iCloud data stays yours.</strong>
+                <p>
+                  Back up iCloud Drive → Scriptable before you connect it. Once
+                  connected, Daybar reads and writes the same files as the iPhone
+                  widgets and makes a timestamped backup before its first write.
+                  Invalid files are never silently replaced. In Finder, choose Keep
+                  Downloaded for the Scriptable folder. A Google Drive folder works
+                  too, and shares your data with Daybar on Windows.
+                </p>
+              </>
+            )}
             {draft.realData && changedFolder && (
               <label className="toggle">
                 <input
@@ -580,7 +630,9 @@ function PreferencesPanel({
                   checked={consent}
                   onChange={(e) => setConsent(e.target.checked)}
                 />
-                I understand this connects real data, shared with my phone.
+                {windows
+                  ? 'I understand this connects real data, shared with my other computers.'
+                  : 'I understand this connects real data, shared with my phone.'}
               </label>
             )}
           </div>
@@ -602,7 +654,9 @@ function PreferencesPanel({
                 set('hideDock', e.target.checked)
               }
             />
-            Hide Dock icon (keep Daybar in the menu bar)
+            {windows
+              ? 'Hide taskbar button (keep Daybar in the notification area)'
+              : 'Hide Dock icon (keep Daybar in the menu bar)'}
           </label>
           <label className="field">
             Global focus shortcut
@@ -624,11 +678,11 @@ function PreferencesPanel({
             className="primary"
             disabled={draft.realData && changedFolder && !consent}
           >
-            Save Mac preferences ↗
+            Save {device()} preferences ↗
           </button>
           <p className="caption">
             Browser demo cannot connect folders or change OS preferences; appearance changes stay in memory.
-            Notification scheduling, menu bar, and global keys run only in the
+            Notification scheduling, the {trayName()}, and global keys run only in the
             desktop shell.
           </p>
         </fieldset>

@@ -735,7 +735,7 @@ dependencies = [
 
 [[package]]
 name = "daybar"
-version = "0.3.4"
+version = "0.4.0"
 dependencies = [
  "base64 0.23.1",
  "block2",
@@ -760,6 +760,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

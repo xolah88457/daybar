@@ -21,6 +21,7 @@ import { countdownProgress } from '../features/extraCountdowns';
 import { type Actions, confirmFocusStart, Habits } from './modules';
 import { Progress, Section, TimerDisplay } from './primitives';
 import styles from './spaces.module.css';
+import { isWindows } from '../lib/platform';
 
 const MAX_SPACES = 12;
 
@@ -155,9 +156,15 @@ function NewSpace({ snapshot, now, busy, run, navigate }: SpaceActions) {
   return (
     <Section title="New space" aside={<span className="tag">WORK · SIDE PROJECT · STUDY</span>}>
       <p className="caption">
-        A space has its own task list, history, countdowns and focus time. Sleep stays shared. Spaces
-        live on this Mac and in your shared folder; the phone widgets keep showing your{' '}
-        {snapshot.spaces.main.name} space.
+        A space has its own task list, history, countdowns and focus time. Sleep stays shared.{' '}
+        {isWindows() ? (
+          <>Spaces live in your data folder, so a computer that shares it sees them too.</>
+        ) : (
+          <>
+            Spaces live on this Mac and in your shared folder; the phone widgets keep showing your{' '}
+            {snapshot.spaces.main.name} space.
+          </>
+        )}
       </p>
       <form
         className="button-row"
