@@ -24,6 +24,7 @@ import type {
   FeatureNav,
   FeatureOverlayProps
 } from './types';
+import { device, isWindows } from '../lib/platform';
 
 /** Settings → Features lists these as collapsible sections, in this order, with a one-line hint. */
 export const featureGroups: readonly { group: FeatureGroup; hint: string }[] = [
@@ -34,7 +35,7 @@ export const featureGroups: readonly { group: FeatureGroup; hint: string }[] = [
   { group: 'Tools', hint: 'Always available; nothing to switch on.' }
 ];
 
-type Meta = Pick<FeatureDef, 'label' | 'description' | 'group' | 'permission' | 'cardWhen'> & {
+type Meta = Pick<FeatureDef, 'label' | 'description' | 'group' | 'permission' | 'cardWhen' | 'macOnly'> & {
   nav?: FeatureNav;
 };
 // The one place that widens a feature's typed Config to the registry's generic shape.
@@ -87,9 +88,12 @@ export const featureRegistry: readonly FeatureDef[] = [
     'radar',
     {
       label: 'Deadline Radar',
-      description: 'See upcoming calendar events and due reminders in one place.',
+      description: isWindows()
+        ? 'See upcoming Google Calendar events and Google Tasks with a due date in one place.'
+        : 'See upcoming calendar events and due reminders in one place.',
       group: 'Deadline Radar',
-      permission: 'Calendars & Reminders',
+      // Windows reads Google after a sign-in instead of asking the system for access.
+      permission: isWindows() ? undefined : 'Calendars & Reminders',
       nav: {
         label: 'Deadline Radar',
         symbol: '⌖',
@@ -147,7 +151,7 @@ export const featureRegistry: readonly FeatureDef[] = [
     'awayDetection',
     {
       label: 'Away detection',
-      description: 'Notices when you step away from the Mac during a session.',
+      description: `Notices when you step away from the ${device()} during a session.`,
       group: 'Focus sessions'
     },
     awayDetection
@@ -166,7 +170,8 @@ export const featureRegistry: readonly FeatureDef[] = [
     {
       label: 'Focus shortcuts',
       description: 'Runs a macOS Shortcut when a focus session starts or ends.',
-      group: 'Focus sessions'
+      group: 'Focus sessions',
+      macOnly: true
     },
     focusShortcuts
   ),

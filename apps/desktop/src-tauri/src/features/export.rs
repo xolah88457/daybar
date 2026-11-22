@@ -1,4 +1,5 @@
-//! Export history: writes a copy of the user's data to `~/Downloads/Daybar export YYYY-MM-DD/`.
+//! Export history: writes a copy of the user's data to `~/Downloads/Daybar export YYYY-MM-DD/`
+//! (`%USERPROFILE%\Downloads` on Windows).
 //!
 //! The export only ever reads. It takes its data from [`Store::inspect`], which loads the files
 //! without the recovery step that `snapshot()` runs (that step may rewrite a data file), and it
@@ -281,7 +282,14 @@ pub fn export_to(
 fn reveal(path: &Path) {
     let _ = std::process::Command::new("open").arg("-R").arg(path).status();
 }
-#[cfg(not(target_os = "macos"))]
+/// Shows the folder in File Explorer, selected. Explorer's exit code is meaningless, so it is ignored.
+#[cfg(windows)]
+fn reveal(path: &Path) {
+    let mut select = std::ffi::OsString::from("/select,");
+    select.push(path.as_os_str());
+    let _ = std::process::Command::new("explorer.exe").arg(select).spawn();
+}
+#[cfg(not(any(target_os = "macos", windows)))]
 fn reveal(_path: &Path) {}
 
 /// Tauri command: `export_history(format: "csv" | "json")` resolves with the new folder's path.
@@ -319,9 +327,12 @@ fn check_data(snapshot: &Snapshot) -> Result<(), String> {
 /// Everything after the read: gating, folder choice, writing and revealing.
 fn run(snapshot: &Snapshot, format: Format) -> Result<String, String> {
     check_data(snapshot)?;
-    let home = std::env::var_os("HOME")
+    // Windows sets USERPROFILE rather than HOME.
+    let home = ["HOME", "USERPROFILE"]
+        .into_iter()
+        .filter_map(std::env::var_os)
         .map(PathBuf::from)
-        .filter(|h| !h.as_os_str().is_empty())
+        .find(|h| !h.as_os_str().is_empty())
         .ok_or("Could not find your home folder.")?;
     let now = Local::now();
     let folder = export_to(

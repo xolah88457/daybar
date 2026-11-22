@@ -4,6 +4,7 @@ import type { Features, Preferences, Snapshot } from '@daybar/core/contracts';
 import { Section } from '../components/primitives';
 import { featureGroups, featureRegistry } from './registry';
 import type { ConfigFeatureId, FeatureDef } from './types';
+import { device, isWindows } from '../lib/platform';
 
 /**
  * Settings → Features: one collapsible section per group, closed until opened. A feature with a
@@ -25,15 +26,17 @@ export function FeaturesPanel({
     <Section
       title="Features"
       collapsible
-      aside={<span className="tag">APP-LOCAL · THIS MAC ONLY</span>}
+      aside={<span className="tag">APP-LOCAL · THIS {device().toUpperCase()} ONLY</span>}
     >
       <p className="muted">
-        Most features start on. Open a section to change them. These choices live on this Mac only
-        and never change the settings your phone widgets share.
+        Most features start on. Open a section to change them. These choices live on this {device()} only
+        and never change the settings {isWindows() ? 'in your shared data folder' : 'your phone widgets share'}.
       </p>
       <div className="feature-groups">
         {featureGroups.map(({ group, hint }) => {
-          const defs = featureRegistry.filter((def) => def.group === group);
+          const defs = featureRegistry.filter(
+            (def) => def.group === group && !(def.macOnly && isWindows())
+          );
           const switches = defs.filter((def) => !def.builtIn);
           const on = switches.filter((def) => featureSwitch(features, def.id)).length;
           return (

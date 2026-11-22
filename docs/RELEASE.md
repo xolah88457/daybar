@@ -22,6 +22,16 @@ From v0.2.1 the app is ad-hoc signed (`signingIdentity: "-"`) but not Developer 
 
 In-app updates do not show this warning: the updater downloads and verifies the archive itself, so nothing is quarantined. Removing the first-open warning entirely needs an Apple Developer ID certificate and notarization, which are not configured. These steps are untested on a downloaded release build.
 
+### Opening the app on Windows
+
+From 0.4.0 each release also has `Daybar_X.Y.Z_x64-setup.exe`, an NSIS installer for 64-bit Windows 10 and 11. It installs for the current user only (no administrator prompt) into `%LOCALAPPDATA%\Daybar` and adds a Start menu entry. If Microsoft Edge WebView2 is missing (Windows 10 without recent updates), the installer downloads it. The installer is not Authenticode-signed, so:
+
+1. Check it first in PowerShell: `Get-FileHash .\Daybar_X.Y.Z_x64-setup.exe -Algorithm SHA256` and compare with `SHA256SUMS.txt`.
+2. Run it. SmartScreen says **Windows protected your PC**: choose **More info → Run anyway**. Some browsers also ask you to keep the download.
+3. Daybar opens its window and adds an icon to the notification area (tray). Closing the window keeps Daybar running there: double-click the icon to bring the window back, and use **Quit** in the tray menu to exit.
+
+In-app updates on Windows download the next installer, verify its updater signature and run it in passive mode (a small progress window, no questions); Daybar then restarts. Removing the SmartScreen warning needs a code-signing certificate, which is not configured. These steps are untested on a downloaded release build.
+
 ## Reproduce locally
 
 Prerequisites and sandbox commands are in the [README](../README.md#run-locally--sandbox-first).
@@ -32,16 +42,17 @@ pnpm typecheck
 pnpm test:tz
 pnpm test:rust
 pnpm build
-pnpm tauri build --no-sign --bundles app,dmg
+pnpm tauri build --no-sign --bundles app,dmg   # on a Mac
+pnpm tauri build --no-sign --bundles nsis      # on Windows
 ```
 
 Use `--no-sign` for local builds without the updater key: without it, a build with a public key configured fails with "A public key has been found, but no private key". Release builds in CI omit it because it also skips updater signing.
 
-Bundles land in `apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app` and `bundle/dmg/`; the Tauri build runs the static export first. Do not point development or tests at personal data.
+Bundles land in `apps/desktop/src-tauri/target/release/bundle/macos/Daybar.app` and `bundle/dmg/` on a Mac, or `bundle/nsis/` on Windows; the Tauri build runs the static export first. Do not point development or tests at personal data.
 
 ## Publishing a release and in-app updates
 
-Daybar can update itself, but only when you ask: **Settings → Check for updates** fetches `latest.json` from the newest published GitHub Release (`https://github.com/xolah88457/daybar/releases/latest/download/latest.json`), then downloads, verifies and installs the update and offers **Restart now**. There are no automatic or background checks, and the app makes no other network requests. The update archive is verified against the public key in `plugins.updater.pubkey` in [`tauri.conf.json`](../apps/desktop/src-tauri/tauri.conf.json); this is Tauri's own updater signature and is unrelated to Apple code signing; the app is ad-hoc signed and not notarized.
+Daybar can update itself, but only when you ask: **Settings → Check for updates** fetches `latest.json` from the newest published GitHub Release (`https://github.com/xolah88457/daybar/releases/latest/download/latest.json`), then downloads, verifies and installs the update and offers **Restart now**. There are no automatic or background checks, and the app makes no other network requests. The update archive is verified against the public key in `plugins.updater.pubkey` in [`tauri.conf.json`](../apps/desktop/src-tauri/tauri.conf.json); this is Tauri's own updater signature and is unrelated to Apple or Windows code signing; the Mac app is ad-hoc signed and not notarized, and the Windows installer is not code-signed. One key and one `latest.json` serve both platforms.
 
 **0.1.0 has no updater.** Anyone on v0.1.0 installs v0.2.0 manually once (the [README](../README.md#download-the-mac-app) download links); from then on Settings can fetch later releases.
 
@@ -56,11 +67,11 @@ Daybar can update itself, but only when you ask: **Settings → Check for update
 
 1. Bump the version to the same `X.Y.Z` in `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml` and `apps/desktop/package.json` (keep the root `package.json` in step). Refresh `apps/desktop/src-tauri/Cargo.lock` with `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`; CI's `cargo test --locked` fails if the lockfile is stale. Merge to `main`.
 2. Tag that commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. Tags must look like `vX.Y.Z`.
-3. The [CI workflow](../.github/workflows/ci.yml) first fails fast if the tag does not match the three versions or the signing secret is missing. It then runs every check, builds the app and DMG with `pnpm tauri build --bundles app,dmg` (no `--no-sign`, since that would also skip updater signing; the bundle is ad-hoc signed via `signingIdentity: "-"`, with no Apple certificate and no notarization) and creates a **draft** GitHub Release. Only that final job has write access to the repository.
-4. Open the draft under **Releases**. It should hold: `Daybar_X.Y.Z_aarch64.dmg`, `Daybar_X.Y.Z_aarch64.app.zip`, `Daybar_X.Y.Z_aarch64.app.tar.gz` and its `.sig` (the updater archive and signature), `latest.json` and `SHA256SUMS.txt`. Review the generated notes and edit them if you like. The `notes` in `latest.json` are not copied from the release page: they are a one-line version plus a link to it.
+3. The [CI workflow](../.github/workflows/ci.yml) first fails fast if the tag does not match the three versions or the signing secret is missing. It then runs every check, builds the app and DMG with `pnpm tauri build --bundles app,dmg` (no `--no-sign`, since that would also skip updater signing; the bundle is ad-hoc signed via `signingIdentity: "-"`, with no Apple certificate and no notarization). In parallel a Windows runner repeats the Rust tests and builds the installer with `pnpm tauri build --bundles nsis`. When both succeed, the last job merges their updater entries into one `latest.json`, writes `SHA256SUMS.txt` and creates a **draft** GitHub Release; if either build fails, no release is created. Only that final job has write access to the repository.
+4. Open the draft under **Releases**. It should hold: `Daybar_X.Y.Z_aarch64.dmg`, `Daybar_X.Y.Z_aarch64.app.zip`, `Daybar_X.Y.Z_aarch64.app.tar.gz` and its `.sig` (the Mac updater archive and signature), `Daybar_X.Y.Z_x64-setup.exe` and its `.sig` (the Windows installer, which is also its updater file), `latest.json` and `SHA256SUMS.txt`. Review the generated notes and edit them if you like. The `notes` in `latest.json` are not copied from the release page: they are a one-line version plus a link to it.
 5. Publish it as a normal release: leave **Set as a pre-release** unchecked and **Set as the latest release** checked. `/releases/latest/download/latest.json` serves only the newest published, non-prerelease, non-draft release, so a draft or prerelease is invisible to the updater.
 
-`latest.json` lists only `darwin-aarch64` because the macOS runner builds Apple Silicon only, as v0.1.0 did. Intel Macs get no update until an Intel or universal build is added.
+`latest.json` lists `darwin-aarch64` and, from 0.4.0, `windows-x86_64`. The macOS runner builds Apple Silicon only, as v0.1.0 did, so Intel Macs get no update until an Intel or universal build is added; Windows on ARM runs the x64 build under emulation and is untested.
 
 ### Verify an update end to end
 
@@ -69,7 +80,7 @@ Nothing here has been run on a real tag yet.
 1. Install the previous updater-enabled release (v0.2.0 or later) in Applications and note its version under **Settings → Updates**.
 2. Publish the newer release as above, then in that older app click **Check for updates**. Confirm it shows the new version, installs, and **Restart now** reopens it at the new version.
 3. Confirm the failure paths do not crash: check again while on the newest version (it should say you are up to date), and check with the network off (it should show an error with a retry).
-4. Optionally compare downloads with `shasum -a 256 -c SHA256SUMS.txt` and inspect `latest.json` in the published release. Its `url` must point at the `.app.tar.gz` asset of the same tag and its `version` must match the new version.
+4. Optionally compare downloads with `shasum -a 256 -c SHA256SUMS.txt` and inspect `latest.json` in the published release. Its `darwin-aarch64` `url` must point at the `.app.tar.gz` asset of the same tag, its `windows-x86_64` `url` at the `_x64-setup.exe`, and its `version` must match the new version.
 
 ## What was verified
 
@@ -87,6 +98,7 @@ Typing, composition and dialog guards for bare navigation keys were checked in a
 - Developer ID signing/notarization, a Mac opening a downloaded ad-hoc signed build, Intel/universal builds, older macOS, a tag-built artifact download, and a real in-app update from one published release to the next.
 - An owner-supplied iPhone screenshot ([media notes](screenshots/README.md)).
 - For the 0.3.0 optional features, everything that needs a real Mac: the Calendars/Reminders permission prompts (macOS 14+ and 12.3–13) and whether macOS asks again after an update; real calendar data in Deadline Radar; notification delivery and the chime sound; running a named Shortcut; idle detection; Finder reveal after export; ⌘K inside the native window. These are covered by unit tests and a macOS type-check only.
+- For 0.4.0, everything that needs a real Windows PC: installing and SmartScreen, the tray icon, tooltip and double-click, hiding the taskbar button, Credential Manager storage and the Google sign-in in the default browser, idle detection, Explorer reveal after export, notifications, launch at login, Google Drive for desktop folder detection and conflict copies, and an in-app update. The Windows code is type-checked by cross-compiling and its Rust tests run on the CI Windows runner; the frontend is tested with a Windows user agent.
 - For 0.3.1, the one-time upgrade of a real 0.3.0 `preferences.json` to the new defaults, and that Settings no longer prompts for Calendar access while the Radar page still does on first visit.
 
 To check any of these yourself, do it in a disposable sandbox (`pnpm seed`, then `pnpm tauri dev`): confirm the **THIS MAC ONLY / NOT SYNCED** badge, exercise one case at a time, and compare the managed JSON files before and after.

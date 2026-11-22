@@ -52,12 +52,45 @@ pub fn no_symlinks(path: &Path) -> Result<()> {
             "Unsafe path component",
         )?;
         part.push(c);
+        // A Windows drive prefix (`C:`, `\\?\C:`) on its own is not something to stat.
+        if matches!(c, Component::Prefix(_)) {
+            continue;
+        }
         match fs::symlink_metadata(&part) {
             Ok(m) => ensure(!m.file_type().is_symlink(), "Symlinks are not allowed")?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
             Err(e) => return Err(io(e)),
         }
     }
+    Ok(())
+}
+/// Renames `temp` over `path`. Windows refuses while another program (an antivirus scan, Google
+/// Drive uploading the old copy) briefly has the target open, so it retries for about a second.
+fn replace(temp: &Path, path: &Path) -> Result<()> {
+    let mut tries = 0;
+    loop {
+        match fs::rename(temp, path) {
+            Ok(()) => return Ok(()),
+            Err(e)
+                if cfg!(windows)
+                    && tries < 10
+                    && e.kind() == std::io::ErrorKind::PermissionDenied =>
+            {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(e) => return Err(io(e)),
+        }
+    }
+}
+/// Flushes a directory's entries (renames, new files) to disk. Windows cannot open a directory as a
+/// file and journals NTFS metadata itself, so there it is a no-op.
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> Result<()> {
+    fs::File::open(dir).and_then(|d| d.sync_all()).map_err(io)
+}
+#[cfg(not(unix))]
+fn sync_dir(_dir: &Path) -> Result<()> {
     Ok(())
 }
 fn bytes(path: &Path) -> Result<Option<Vec<u8>>> {
@@ -98,10 +131,8 @@ fn atomic(path: &Path, content: &[u8]) -> Result<()> {
         f.write_all(content).map_err(io)?;
         f.sync_all().map_err(io)?;
         no_symlinks(path)?;
-        fs::rename(&temp, path).map_err(io)?;
-        fs::File::open(parent)
-            .and_then(|d| d.sync_all())
-            .map_err(io)
+        replace(&temp, path)?;
+        sync_dir(parent)
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temp);
@@ -179,9 +210,7 @@ fn retire_sample_data(sandbox: &Path, stamp: &str) -> Result<()> {
     for name in found {
         fs::rename(sandbox.join(&name), folder.join(&name)).map_err(io)?;
     }
-    fs::File::open(sandbox)
-        .and_then(|d| d.sync_all())
-        .map_err(io)
+    sync_dir(sandbox)
 }
 
 fn managed(name: &str) -> bool {
@@ -623,12 +652,8 @@ impl Store {
                 atomic(&dest.join(name), &content)?;
             }
         }
-        fs::File::open(&base)
-            .and_then(|d| d.sync_all())
-            .map_err(io)?;
-        fs::File::open(&root)
-            .and_then(|d| d.sync_all())
-            .map_err(io)?;
+        sync_dir(&base)?;
+        sync_dir(&root)?;
         Ok(dest)
     }
     fn first_backup(&self, state: &mut Inner) -> Result<()> {

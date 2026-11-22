@@ -291,6 +291,7 @@ fn conflict_sessions_deduplicate_and_baselines_must_agree() {
 }
 #[test]
 fn path_traversal_symlinks_and_unconsented_folder_are_rejected() {
+    #[cfg_attr(not(unix), allow(unused_variables))]
     let (_d, store, root) = sandbox();
     for file in ["../focus-timer.json", "/tmp/focus-timer 2.json", ".", ".."] {
         assert!(store

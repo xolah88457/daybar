@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { addDays, startOfDay } from '@daybar/core';
 import type { RadarItem } from '@daybar/core';
+import { isWindows } from '../lib/platform';
 
 /** Authorization for one kind of data, as reported by EventKit. */
 export type Access =
@@ -16,16 +17,20 @@ export interface RadarStatus {
   supported: boolean;
   events: Access;
   reminders: Access;
-  /** Signed in to Google Calendar, which is read without macOS Calendar access. */
+  /** Signed in to Google, which is read without macOS Calendar access. */
   google?: boolean;
+  /** Google sign-in is available (the Mac and Windows apps). On Windows it is the whole radar. */
+  googleSupported?: boolean;
 }
-/** The Google Calendar sign-in, kept in the macOS Keychain. */
+/** The Google sign-in, kept in the macOS Keychain or the Windows Credential Manager. */
 export interface GoogleStatus {
-  /** False outside the Mac app. */
+  /** False outside the Mac and Windows apps. */
   supported: boolean;
   connected: boolean;
   /** The signed-in address, when connected. */
   account: string | null;
+  /** The sign-in includes Google Tasks (false for one made before 0.4.0). */
+  tasks?: boolean;
 }
 export interface RadarCalendar {
   title: string;
@@ -82,7 +87,19 @@ export const tauriRadarClient: RadarClient = {
 /** The client ID shape Google issues for OAuth clients. */
 export const googleClientIdPattern = /^[\w.-]+\.apps\.googleusercontent\.com$/;
 
-const fullAccess: RadarStatus = { supported: true, events: 'fullAccess', reminders: 'fullAccess' };
+const fullAccess: RadarStatus = {
+  supported: true,
+  events: 'fullAccess',
+  reminders: 'fullAccess',
+  googleSupported: true
+};
+/** What the Windows app reports: no EventKit, Google only. */
+export const googleOnly: RadarStatus = {
+  supported: false,
+  events: 'unsupported',
+  reminders: 'unsupported',
+  googleSupported: true
+};
 const demoGoogleAccount = 'you@gmail.com';
 
 /** A realistic spread, from overdue to 40 days out, relative to the clock. Kept in memory only. */
@@ -141,19 +158,24 @@ export function createDemoRadarClient(
   } = {}
 ): RadarClient {
   const clock = options.clock ?? (() => new Date());
-  let status = options.status ?? fullAccess;
-  let google = options.google ?? false;
+  // A demo opened on Windows looks like the Windows app: Google only, already signed in.
+  const windowsDemo = !options.status && isWindows();
+  let status = options.status ?? (windowsDemo ? googleOnly : fullAccess);
+  let google = options.google ?? windowsDemo;
   const listeners = new Set<() => void>();
   const googleStatus = (): GoogleStatus => ({
-    supported: true,
+    supported: status.googleSupported !== false,
     connected: google,
-    account: google ? demoGoogleAccount : null
+    account: google ? demoGoogleAccount : null,
+    tasks: google
   });
   const googleItems = (): RadarItem[] => {
     const d = addDays(startOfDay(clock()), 3);
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 11).getTime();
+    const due = addDays(startOfDay(clock()), 5).getTime();
     return [
-      { id: 'google:demo-standup', title: 'Team offsite planning', date: start, end: start + 3600000, allDay: false, source: 'Team', kind: 'event' }
+      { id: 'google:demo-standup', title: 'Team offsite planning', date: start, end: start + 3600000, allDay: false, source: 'Team', kind: 'event' },
+      { id: 'google-task:demo-expenses', title: 'Submit expense report', date: due, allDay: true, source: 'My Tasks', kind: 'reminder' }
     ];
   };
   return {
@@ -169,11 +191,18 @@ export function createDemoRadarClient(
     },
     async calendars() {
       const lists = structuredClone(options.calendars ?? sampleCalendars);
-      if (google) lists.events.push({ title: 'Team', account: `Google · ${demoGoogleAccount}` });
+      if (windowsDemo)
+        for (const c of [...lists.events, ...lists.reminders]) c.account = `Google · ${demoGoogleAccount}`;
+      if (google) {
+        lists.events.push({ title: 'Team', account: `Google · ${demoGoogleAccount}` });
+        lists.reminders.push({ title: 'My Tasks', account: `Google · ${demoGoogleAccount}` });
+      }
       return lists;
     },
     async items() {
-      const readable = status.events === 'fullAccess' || status.reminders === 'fullAccess';
+      // The Windows demo shows the sample spread as if it came from Google.
+      const readable =
+        status.events === 'fullAccess' || status.reminders === 'fullAccess' || (windowsDemo && google);
       const own = readable ? structuredClone(options.items ?? sampleItems(clock())) : [];
       return {
         items: google ? [...own, ...googleItems()].sort((a, b) => a.date - b.date) : own,
